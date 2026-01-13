@@ -22,6 +22,9 @@
 #   db:restore  Restore database from backup
 #   db:shell    Open SQLite shell
 #
+#   sandbox     Manage sandbox container for Claude Code
+#   exec        Run command in sandbox container
+#
 #   clean       Remove containers, volumes, and build cache
 #   help        Show this help message
 
@@ -348,6 +351,75 @@ cmd_db_shell() {
 }
 
 # ===========================================
+# Commands: Sandbox (Claude Code Operations)
+# ===========================================
+
+cmd_sandbox() {
+    require_docker
+    action="${1:-help}"
+    shift 2>/dev/null || true
+
+    case "$action" in
+        start)
+            info "Starting sandbox container..."
+            docker compose --profile sandbox up -d sandbox
+            success "Sandbox ready"
+            echo ""
+            echo "  Run commands: ./tc exec <command>"
+            echo "  Open shell:   ./tc sandbox shell"
+            echo "  Stop:         ./tc sandbox stop"
+            ;;
+        stop)
+            info "Stopping sandbox container..."
+            docker compose --profile sandbox stop sandbox
+            success "Sandbox stopped"
+            ;;
+        shell)
+            if ! docker compose ps sandbox 2>/dev/null | grep -q "running"; then
+                info "Starting sandbox container..."
+                docker compose --profile sandbox up -d sandbox
+            fi
+            info "Opening shell in sandbox..."
+            docker compose exec sandbox sh
+            ;;
+        status)
+            docker compose ps sandbox
+            ;;
+        help|*)
+            echo "Sandbox Commands:"
+            echo ""
+            echo "  ./tc sandbox start    Start the sandbox container"
+            echo "  ./tc sandbox stop     Stop the sandbox container"
+            echo "  ./tc sandbox shell    Open interactive shell"
+            echo "  ./tc sandbox status   Show container status"
+            echo ""
+            echo "  ./tc exec <command>   Run command in sandbox"
+            echo ""
+            echo "The sandbox provides an isolated environment for Claude Code"
+            echo "operations. All commands run inside the container with only"
+            echo "the project directory accessible."
+            ;;
+    esac
+}
+
+cmd_exec() {
+    require_docker
+
+    if [ $# -eq 0 ]; then
+        error "Usage: ./tc exec <command> [args...]"
+    fi
+
+    # Start sandbox if not running
+    if ! docker compose ps sandbox 2>/dev/null | grep -q "running"; then
+        info "Starting sandbox container..."
+        docker compose --profile sandbox up -d sandbox
+    fi
+
+    # Execute command in sandbox
+    docker compose exec sandbox "$@"
+}
+
+# ===========================================
 # Commands: Cleanup
 # ===========================================
 
@@ -421,6 +493,12 @@ Database:
 Cleanup:
   clean [level]          Cleanup (containers, volumes, all)
 
+Sandbox (Claude Code):
+  sandbox start          Start sandbox container
+  sandbox stop           Stop sandbox container
+  sandbox shell          Open shell in sandbox
+  exec <cmd>             Run command in sandbox
+
 Other:
   help                   Show this help message
 
@@ -460,6 +538,9 @@ case "$command" in
     db:shell)   cmd_db_shell "$@" ;;
 
     clean)      cmd_clean "$@" ;;
+
+    sandbox)    cmd_sandbox "$@" ;;
+    exec)       cmd_exec "$@" ;;
 
     help|--help|-h)
         cmd_help

@@ -51,6 +51,9 @@ The `tc` script provides convenient commands for all common operations:
 ./tc db:shell           # SQLite shell
 ./tc clean              # Remove containers
 ./tc clean volumes      # Remove containers + volumes
+./tc sandbox start      # Start sandbox container
+./tc sandbox shell      # Shell into sandbox
+./tc exec <cmd>         # Run command in sandbox
 ./tc help               # Show all commands
 ```
 
@@ -131,6 +134,34 @@ pnpm install
 # Run services
 pnpm dev
 ```
+
+### Sandbox for Claude Code
+
+The project includes a sandbox container for running Claude Code operations in isolation:
+
+```bash
+# Start the sandbox container
+./tc sandbox start
+
+# Run any command inside the sandbox
+./tc exec pnpm test
+./tc exec node scripts/check-boundaries.js
+./tc exec ls -la packages/
+
+# Interactive shell
+./tc sandbox shell
+
+# Stop when done
+./tc sandbox stop
+```
+
+The sandbox container:
+- Mounts the project directory at `/app`
+- Has all development tools (node, pnpm, git, etc.)
+- Cannot access anything outside the project directory
+- Auto-starts when you use `./tc exec`
+
+Additionally, Claude Code's native sandbox is enabled in `.claude/settings.json` with pre-allowed commands for common development operations.
 
 ---
 

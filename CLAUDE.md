@@ -182,3 +182,41 @@ export TRAVEL_API_URL=http://localhost:3000
 # Stop
 docker compose down
 ```
+
+## Sandbox Configuration
+
+This project is configured to minimize permission prompts for Claude Code.
+
+### Native Sandbox (Enabled by Default)
+
+Claude Code's built-in sandbox is enabled in `.claude/settings.json`:
+- Commands run in macOS sandbox-exec isolation
+- `autoAllowBashIfSandboxed: true` - safe commands auto-execute
+- Docker and git commands are excluded (run normally)
+- Common development commands are pre-allowed
+
+### Docker Sandbox (Optional)
+
+For complete container isolation, use the sandbox container:
+
+```bash
+# Start sandbox container
+./tc sandbox start
+
+# Run commands inside the sandbox
+./tc exec pnpm test
+./tc exec node scripts/check-boundaries.js
+./tc exec ls -la
+
+# Interactive shell
+./tc sandbox shell
+
+# Stop when done
+./tc sandbox stop
+```
+
+The sandbox container:
+- Mounts the project directory at `/app`
+- Has all development tools (node, pnpm, git, etc.)
+- Cannot access anything outside the project
+- Is ideal for untrusted or exploratory operations
