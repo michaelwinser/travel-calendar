@@ -19,13 +19,39 @@ git clone git@github.com:michaelwinser/travel-calendar.git
 cd travel-calendar
 
 # Build and start all services
-docker compose build
-docker compose up
+./tc build
+./tc start
 
 # Services available at:
 # - Backend API: http://localhost:3000
 # - Frontend UI: http://localhost:5173
-# - MCP Server: http://localhost:3001 (with --profile mcp)
+# - MCP Server: http://localhost:3001 (with --mcp flag)
+```
+
+### Helper Script (`./tc`)
+
+The `tc` script provides convenient commands for all common operations:
+
+```bash
+./tc start              # Start services (background)
+./tc start --mcp        # Start with MCP server
+./tc start --fg         # Start in foreground
+./tc stop               # Stop all services
+./tc restart            # Restart services
+./tc logs               # Follow all logs
+./tc logs backend       # Follow specific service
+./tc status             # Show container status
+./tc shell backend      # Shell into container
+./tc test               # Run all tests
+./tc test e2e           # Run E2E tests only
+./tc lint               # Run linters
+./tc db:reset           # Reset database
+./tc db:backup          # Backup database
+./tc db:restore <file>  # Restore from backup
+./tc db:shell           # SQLite shell
+./tc clean              # Remove containers
+./tc clean volumes      # Remove containers + volumes
+./tc help               # Show all commands
 ```
 
 ### Docker Commands
