@@ -10,9 +10,9 @@
 #   docker compose build --no-cache      # Rebuild images
 #
 # Services:
-#   backend   - REST API (Hono + SQLite) on http://localhost:3000
+#   backend   - REST API (Go + Chi + SQLite) on http://localhost:3000
 #   frontend  - Web UI (SvelteKit) on http://localhost:5173
-#   mcp       - MCP Server (HTTP) on http://localhost:3001
+#   mcp       - MCP Server (Go + HTTP) on http://localhost:3001
 #
 # First-time setup:
 #   docker compose build
@@ -20,32 +20,36 @@
 
 services:
   # ===========================================
-  # Backend - REST API
+  # Backend - REST API (Go)
   # ===========================================
   backend:
     build:
       context: .
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile.go
     container_name: travel-backend
-    command: pnpm --filter @travel-calendar/backend dev
+    command: go run ./cmd/server
+    working_dir: /app/packages/backend
     ports:
       - "3000:3000"
     volumes:
-      # Source code - bind mount for hot reload
-      - ./packages/backend/src:/app/packages/backend/src
-      - ./packages/shared/src:/app/packages/shared/src
+      # Source code
+      - ./packages/backend:/app/packages/backend
+      - ./packages/api:/app/packages/api
       # Data persistence
       - ./data:/app/data
+      # Go module cache for faster rebuilds
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
     environment:
-      - NODE_ENV=development
       - DATABASE_PATH=/app/data/travel.db
       - PORT=3000
+      - CGO_ENABLED=1
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 30s
 
   # ===========================================
   # Frontend - SvelteKit Web UI
@@ -73,23 +77,27 @@ services:
         condition: service_healthy
 
   # ===========================================
-  # MCP Server - LLM Interface
+  # MCP Server - LLM Interface (Go)
   # ===========================================
   mcp:
     build:
       context: .
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile.go
     container_name: travel-mcp
-    command: pnpm --filter @travel-calendar/mcp-server dev
+    command: go run ./cmd/mcp
+    working_dir: /app/packages/mcp-server
     ports:
       - "3001:3001"
     volumes:
-      - ./packages/mcp-server/src:/app/packages/mcp-server/src
-      - ./packages/shared/src:/app/packages/shared/src
+      - ./packages/mcp-server:/app/packages/mcp-server
+      - ./packages/api:/app/packages/api
+      # Share Go caches with backend
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
     environment:
-      - NODE_ENV=development
       - BACKEND_URL=http://backend:3000
       - PORT=3001
+      - CGO_ENABLED=1
     depends_on:
       backend:
         condition: service_healthy
@@ -125,22 +133,33 @@ services:
       - sandbox  # Start with: docker compose --profile sandbox up -d
 
   # ===========================================
-  # Test Runner (on-demand)
+  # Test Runner - Go Tests (on-demand)
   # ===========================================
   test:
     build:
       context: .
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile.go
     container_name: travel-test
-    command: pnpm test
+    command: sh -c "cd /app/packages/backend && go test ./... && cd /app/packages/mcp-server && go test ./..."
     volumes:
       - ./packages:/app/packages
       - ./tests:/app/tests
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
     environment:
-      - NODE_ENV=test
+      - CGO_ENABLED=1
       - TRAVEL_API_URL=http://backend:3000
     depends_on:
       backend:
         condition: service_healthy
     profiles:
       - test  # Only start with: docker compose --profile test up
+
+# ===========================================
+# Named Volumes
+# ===========================================
+volumes:
+  go-mod-cache:
+    name: travel-go-mod-cache
+  go-build-cache:
+    name: travel-go-build-cache

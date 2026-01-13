@@ -205,9 +205,17 @@ cmd_test() {
             export TRAVEL_API_URL="http://localhost:3000"
             ./tests/e2e/run-all.sh
             ;;
-        backend|frontend|mcp)
-            info "Running $target tests..."
-            docker compose exec "$target" pnpm test
+        backend)
+            info "Running backend tests (Go)..."
+            docker compose exec backend sh -c "go test ./..."
+            ;;
+        mcp)
+            info "Running MCP server tests (Go)..."
+            docker compose exec mcp sh -c "go test ./..."
+            ;;
+        frontend)
+            info "Running frontend tests..."
+            docker compose exec frontend pnpm test
             ;;
         *)
             error "Unknown test target: $target. Use: all, e2e, backend, frontend, mcp"
@@ -420,6 +428,55 @@ cmd_exec() {
 }
 
 # ===========================================
+# Commands: Go Development
+# ===========================================
+
+cmd_go() {
+    require_docker
+
+    service="${1:-backend}"
+    shift 2>/dev/null || true
+
+    if [ $# -eq 0 ]; then
+        echo "Usage: ./tc go [service] <go-command>"
+        echo ""
+        echo "  service: backend (default), mcp"
+        echo ""
+        echo "Examples:"
+        echo "  ./tc go test ./...              # Run tests in backend"
+        echo "  ./tc go mcp test ./...          # Run tests in mcp-server"
+        echo "  ./tc go build ./...             # Build backend"
+        echo "  ./tc go mod tidy                # Tidy backend dependencies"
+        return 0
+    fi
+
+    # Check if first arg is a service name
+    case "$service" in
+        backend|mcp)
+            # service is valid, args are the rest
+            ;;
+        *)
+            # First arg is actually a go command, default to backend
+            set -- "$service" "$@"
+            service="backend"
+            ;;
+    esac
+
+    # Ensure service is running
+    if ! docker compose ps "$service" 2>/dev/null | grep -q "running"; then
+        info "Starting $service container..."
+        if [ "$service" = "mcp" ]; then
+            docker compose --profile mcp up -d "$service"
+        else
+            docker compose up -d "$service"
+        fi
+    fi
+
+    info "Running: go $*"
+    docker compose exec "$service" go "$@"
+}
+
+# ===========================================
 # Commands: Cleanup
 # ===========================================
 
@@ -484,6 +541,12 @@ Testing & Quality:
   test [target]          Run tests (all, e2e, backend, frontend, mcp)
   lint [target]          Run linting (all, boundaries, commits, or service)
 
+Go Development:
+  go [service] <cmd>     Run go command in service (default: backend)
+                         Examples: ./tc go test ./...
+                                   ./tc go mcp build ./...
+                                   ./tc go mod tidy
+
 Database:
   db:reset               Delete database (with backup)
   db:backup [label]      Backup database to data/backups/
@@ -507,6 +570,8 @@ Examples:
   ./tc start --mcp              # Start with MCP server
   ./tc logs backend             # Follow backend logs
   ./tc test e2e                 # Run E2E tests
+  ./tc go test ./...            # Run Go tests in backend
+  ./tc go mod tidy              # Tidy Go dependencies
   ./tc db:backup before-refactor  # Create named backup
   ./tc shell backend            # Shell into backend container
   ./tc clean volumes            # Remove containers and node_modules
@@ -541,6 +606,7 @@ case "$command" in
 
     sandbox)    cmd_sandbox "$@" ;;
     exec)       cmd_exec "$@" ;;
+    go)         cmd_go "$@" ;;
 
     help|--help|-h)
         cmd_help
