@@ -183,21 +183,57 @@ export TRAVEL_API_URL=http://localhost:3000
 docker compose down
 ```
 
+## Command Execution Rules
+
+**All development commands MUST run through the sandbox container.** This ensures operations are scoped to the project directory.
+
+### Run in Container (via `./tc exec`)
+
+```bash
+# Testing
+./tc exec pnpm test
+./tc exec pnpm test:backend
+./tc exec pnpm test:frontend
+
+# Linting
+./tc exec pnpm lint
+./tc exec node scripts/check-boundaries.js
+
+# Node/pnpm operations
+./tc exec pnpm install
+./tc exec node scripts/validate-map.js
+```
+
+### Run on Host (directly)
+
+These commands require host access:
+```bash
+# Git (needs SSH keys, .git directory)
+git status
+git add .
+git commit -m "..."
+git push
+
+# Docker (needs socket)
+docker compose up
+./tc start
+./tc build
+
+# GitHub CLI (needs auth)
+gh issue create
+gh pr create
+```
+
+### Rule of Thumb
+
+- **If it runs Node.js or accesses node_modules** → use `./tc exec`
+- **If it accesses .git, Docker, or external services** → run on host
+
 ## Sandbox Configuration
 
 This project is configured to minimize permission prompts for Claude Code.
 
-### Native Sandbox (Enabled by Default)
-
-Claude Code's built-in sandbox is enabled in `.claude/settings.json`:
-- Commands run in macOS sandbox-exec isolation
-- `autoAllowBashIfSandboxed: true` - safe commands auto-execute
-- Docker and git commands are excluded (run normally)
-- Common development commands are pre-allowed
-
-### Docker Sandbox (Optional)
-
-For complete container isolation, use the sandbox container:
+### Sandbox Container (Primary)
 
 ```bash
 # Start sandbox container
@@ -219,4 +255,13 @@ The sandbox container:
 - Mounts the project directory at `/app`
 - Has all development tools (node, pnpm, git, etc.)
 - Cannot access anything outside the project
-- Is ideal for untrusted or exploratory operations
+- Auto-starts when you use `./tc exec`
+
+### Permission Settings
+
+Permissions are configured in `.claude/settings.json`:
+- `./tc` commands are pre-allowed (including `./tc exec`)
+- Git and Docker commands are pre-allowed
+- Dangerous commands (`rm -rf /`, etc.) are blocked
+
+**Restart Claude Code** after modifying settings for changes to take effect.

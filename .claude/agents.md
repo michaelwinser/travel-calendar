@@ -211,6 +211,64 @@ Components: backend, frontend, mcp-server
 
 ---
 
+## Infra Agent
+
+**Scope**: Docker, containers, toolchain, CI/CD
+
+**Responsibilities**:
+- Container configuration (Dockerfile.dev, docker-compose.yml)
+- Development environment setup
+- Build and test infrastructure
+- Toolchain management
+
+**Execution Rules**:
+
+1. **Always use the sandbox container for development commands**:
+   ```bash
+   # CORRECT - run in sandbox
+   ./tc exec pnpm test
+   ./tc exec node scripts/check-boundaries.js
+   ./tc exec pnpm lint
+
+   # INCORRECT - runs on host
+   pnpm test
+   node scripts/check-boundaries.js
+   ```
+
+2. **Host-only commands** (these MUST run on host, not in container):
+   - `git` - needs SSH keys, .git directory
+   - `docker` / `docker compose` - needs Docker socket
+   - `./tc` - wrapper script
+   - `gh` - GitHub CLI with auth
+
+3. **Before committing infra changes**:
+   - [ ] Run `./tc build` successfully
+   - [ ] Run `./tc start` successfully
+   - [ ] Verify health check passes: `curl http://localhost:3000/health`
+   - [ ] Run `./tc stop` to clean up
+
+4. **Sandbox container management**:
+   ```bash
+   ./tc sandbox start   # Start sandbox (auto-starts on ./tc exec)
+   ./tc exec <cmd>      # Run any command in sandbox
+   ./tc sandbox shell   # Interactive shell
+   ./tc sandbox stop    # Stop when done
+   ```
+
+**Checklist before infra changes**:
+- [ ] Understand current container state
+- [ ] Plan changes carefully
+- [ ] Test in sandbox first
+
+**Checklist after infra changes**:
+- [ ] `./tc build` succeeds
+- [ ] `./tc start` succeeds
+- [ ] Health checks pass
+- [ ] Hot reload works
+- [ ] Then and only then commit
+
+---
+
 ## E2E Test Agent
 
 **Scope**: `tests/e2e/`
