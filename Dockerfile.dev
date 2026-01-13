@@ -1,0 +1,41 @@
+# Development Dockerfile for Travel Calendar
+#
+# This image is used for local development with hot reload.
+# All services share this base image.
+#
+# Usage:
+#   docker compose up              # Start all services
+#   docker compose up backend      # Start specific service
+#   docker compose exec backend sh # Shell into container
+
+FROM node:20-alpine
+
+# Install pnpm via corepack (built into Node 20+)
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Install useful dev tools
+RUN apk add --no-cache \
+    git \
+    curl \
+    bash \
+    jq
+
+# Set working directory
+WORKDIR /app
+
+# Copy workspace configuration
+COPY package.json pnpm-workspace.yaml ./
+
+# Copy all package.json files for dependency resolution
+# Using a glob-friendly approach - copy what exists
+COPY packages/*/package.json ./packages/
+
+# Install dependencies
+# Note: --ignore-scripts prevents postinstall from failing on missing code
+RUN pnpm install --ignore-scripts || echo "Initial install - some packages may not exist yet"
+
+# Source code will be mounted as volumes for hot reload
+# See docker-compose.yml for volume configuration
+
+# Default command (overridden per-service in docker-compose.yml)
+CMD ["pnpm", "dev"]

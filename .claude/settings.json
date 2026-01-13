@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/schemas/settings.json",
+  "hooks": {
+    "postConversation": {
+      "command": "bash .claude/hooks/save-conversation.sh",
+      "description": "Save conversation for later analysis"
+    }
+  },
+  "contextFiles": [
+    "CLAUDE.md",
+    "PROJECT_MAP.md"
+  ]
+}

@@ -1,0 +1,289 @@
+#!/bin/bash
+# Travel Calendar CLI
+# Usage: travel <resource> <command> [options]
+#
+# Resources:
+#   trips       Manage trips
+#   items       Manage trip items (flights, hotels, etc.)
+#   documents   Manage documents
+#
+# Examples:
+#   travel trips list --upcoming
+#   travel trips create --name "FOSDEM" --purpose conference --start 2025-01-29 --end 2025-02-02
+#   travel trips get abc123
+#   travel items add abc123 flight --from EWR --to BRU --date 2025-01-29
+#
+# Use --json flag for machine-readable output
+
+set -e
+
+# Configuration
+API_BASE="${TRAVEL_API_URL:-http://localhost:3000/api}"
+
+# Colors (disabled with --json or NO_COLOR)
+if [[ -z "$NO_COLOR" && ! " $* " =~ " --json " ]]; then
+  RED='\033[0;31m'
+  GREEN='\033[0;32m'
+  YELLOW='\033[0;33m'
+  NC='\033[0m' # No Color
+else
+  RED=''
+  GREEN=''
+  YELLOW=''
+  NC=''
+fi
+
+# Helpers
+json_output=false
+for arg in "$@"; do
+  if [[ "$arg" == "--json" ]]; then
+    json_output=true
+    break
+  fi
+done
+
+error() {
+  if $json_output; then
+    echo "{\"error\": \"$1\"}" >&2
+  else
+    echo -e "${RED}Error: $1${NC}" >&2
+  fi
+  exit 1
+}
+
+success() {
+  if ! $json_output; then
+    echo -e "${GREEN}$1${NC}"
+  fi
+}
+
+# API call helper
+api() {
+  local method=$1
+  local endpoint=$2
+  shift 2
+  local data=""
+
+  for arg in "$@"; do
+    if [[ "$arg" == --data=* ]]; then
+      data="${arg#--data=}"
+    fi
+  done
+
+  if [[ -n "$data" ]]; then
+    curl -s -X "$method" \
+      -H "Content-Type: application/json" \
+      -d "$data" \
+      "${API_BASE}${endpoint}"
+  else
+    curl -s -X "$method" "${API_BASE}${endpoint}"
+  fi
+}
+
+# Parse common options
+parse_trip_options() {
+  local name=""
+  local purpose=""
+  local start=""
+  local end=""
+  local status=""
+  local notes=""
+
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --name) name="$2"; shift 2 ;;
+      --purpose) purpose="$2"; shift 2 ;;
+      --start) start="$2"; shift 2 ;;
+      --end) end="$2"; shift 2 ;;
+      --status) status="$2"; shift 2 ;;
+      --notes) notes="$2"; shift 2 ;;
+      --json) shift ;;
+      *) shift ;;
+    esac
+  done
+
+  local json="{"
+  local first=true
+
+  add_field() {
+    if [[ -n "$2" ]]; then
+      if $first; then first=false; else json+=","; fi
+      json+="\"$1\":\"$2\""
+    fi
+  }
+
+  add_field "name" "$name"
+  add_field "purpose" "$purpose"
+  add_field "startDate" "$start"
+  add_field "endDate" "$end"
+  add_field "status" "$status"
+  add_field "notes" "$notes"
+
+  json+="}"
+  echo "$json"
+}
+
+# Commands
+cmd_trips_list() {
+  local params=""
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --upcoming) params+="upcoming=true&"; shift ;;
+      --past) params+="past=true&"; shift ;;
+      --purpose) params+="purpose=$2&"; shift 2 ;;
+      --json) shift ;;
+      *) shift ;;
+    esac
+  done
+
+  local endpoint="/trips"
+  if [[ -n "$params" ]]; then
+    endpoint="/trips?${params%&}"
+  fi
+
+  api GET "$endpoint"
+}
+
+cmd_trips_get() {
+  local id=$1
+  [[ -z "$id" ]] && error "Trip ID required"
+  api GET "/trips/$id"
+}
+
+cmd_trips_create() {
+  local data=$(parse_trip_options "$@")
+  api POST "/trips" --data="$data"
+}
+
+cmd_trips_update() {
+  local id=$1
+  shift
+  [[ -z "$id" ]] && error "Trip ID required"
+  local data=$(parse_trip_options "$@")
+  api PATCH "/trips/$id" --data="$data"
+}
+
+cmd_trips_delete() {
+  local id=$1
+  [[ -z "$id" ]] && error "Trip ID required"
+  api DELETE "/trips/$id"
+  success "Trip deleted"
+}
+
+cmd_trips_search() {
+  local query=$1
+  [[ -z "$query" ]] && error "Search query required"
+  api GET "/trips/search?q=$(urlencode "$query")"
+}
+
+cmd_items_add() {
+  local trip_id=$1
+  local type=$2
+  shift 2
+
+  [[ -z "$trip_id" ]] && error "Trip ID required"
+  [[ -z "$type" ]] && error "Item type required (flight, hotel, train, drive, event)"
+
+  local json="{\"type\":\"$type\""
+
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --from) json+=",\"from\":\"$2\""; shift 2 ;;
+      --to) json+=",\"to\":\"$2\""; shift 2 ;;
+      --date) json+=",\"date\":\"$2\""; shift 2 ;;
+      --time) json+=",\"time\":\"$2\""; shift 2 ;;
+      --name) json+=",\"name\":\"$2\""; shift 2 ;;
+      --location) json+=",\"location\":\"$2\""; shift 2 ;;
+      --checkin) json+=",\"checkIn\":\"$2\""; shift 2 ;;
+      --checkout) json+=",\"checkOut\":\"$2\""; shift 2 ;;
+      --carrier) json+=",\"carrier\":\"$2\""; shift 2 ;;
+      --flight) json+=",\"flightNumber\":\"$2\""; shift 2 ;;
+      --confirmation) json+=",\"confirmation\":\"$2\""; shift 2 ;;
+      --json) shift ;;
+      *) shift ;;
+    esac
+  done
+
+  json+="}"
+  api POST "/trips/$trip_id/items" --data="$json"
+}
+
+cmd_items_list() {
+  local trip_id=$1
+  [[ -z "$trip_id" ]] && error "Trip ID required"
+  api GET "/trips/$trip_id/items"
+}
+
+cmd_items_delete() {
+  local item_id=$1
+  [[ -z "$item_id" ]] && error "Item ID required"
+  api DELETE "/items/$item_id"
+  success "Item deleted"
+}
+
+cmd_documents_list() {
+  local params=""
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --trip) params+="tripId=$2&"; shift 2 ;;
+      --unassociated) params+="unassociated=true&"; shift ;;
+      --json) shift ;;
+      *) shift ;;
+    esac
+  done
+
+  local endpoint="/documents"
+  if [[ -n "$params" ]]; then
+    endpoint="/documents?${params%&}"
+  fi
+
+  api GET "$endpoint"
+}
+
+# URL encode helper
+urlencode() {
+  python3 -c "import urllib.parse; print(urllib.parse.quote('$1'))"
+}
+
+# Main dispatcher
+main() {
+  local resource=$1
+  local command=$2
+  shift 2 2>/dev/null || true
+
+  case "$resource" in
+    trips)
+      case "$command" in
+        list) cmd_trips_list "$@" ;;
+        get) cmd_trips_get "$@" ;;
+        create) cmd_trips_create "$@" ;;
+        update) cmd_trips_update "$@" ;;
+        delete) cmd_trips_delete "$@" ;;
+        search) cmd_trips_search "$@" ;;
+        *) error "Unknown trips command: $command" ;;
+      esac
+      ;;
+    items)
+      case "$command" in
+        add) cmd_items_add "$@" ;;
+        list) cmd_items_list "$@" ;;
+        delete) cmd_items_delete "$@" ;;
+        *) error "Unknown items command: $command" ;;
+      esac
+      ;;
+    documents)
+      case "$command" in
+        list) cmd_documents_list "$@" ;;
+        *) error "Unknown documents command: $command" ;;
+      esac
+      ;;
+    --help|-h|help)
+      head -20 "$0" | tail -n +2 | sed 's/^# //'
+      ;;
+    *)
+      error "Unknown resource: $resource. Use: trips, items, documents"
+      ;;
+  esac
+}
+
+main "$@"

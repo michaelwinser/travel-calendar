@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+**/dist/
+.svelte-kit/
+**/.svelte-kit/
+
+# Data
+data/
+*.db
+*.sqlite
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation (not needed in container)
+docs/
+mocks/
+*.md
+!README.md
+
+# Test artifacts
+coverage/
+.nyc_output/
+
+# Claude Code
+.claude/conversations/
+
+# Environment files (use docker-compose environment instead)
+.env
+.env.local
+.env.*.local

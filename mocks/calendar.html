@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Travel Calendar</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .trip-bar {
+      height: 24px;
+      border-radius: 4px;
+      font-size: 11px;
+      line-height: 24px;
+      padding: 0 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .trip-bar:hover {
+      opacity: 0.85;
+    }
+    .trip-conference { background: #fed7aa; color: #9a3412; }
+    .trip-vacation { background: #bfdbfe; color: #1e40af; }
+    .trip-work { background: #fde68a; color: #92400e; }
+    .trip-family { background: #bbf7d0; color: #166534; }
+    .trip-personal { background: #e9d5ff; color: #6b21a8; }
+
+    .month-grid {
+      display: grid;
+      grid-template-columns: repeat(31, minmax(28px, 1fr));
+      gap: 1px;
+    }
+    .day-header {
+      text-align: center;
+      font-size: 10px;
+      color: #9ca3af;
+      padding: 2px 0;
+    }
+    .day-header.weekend { color: #d1d5db; }
+    .day-header.today {
+      background: #3b82f6;
+      color: white;
+      border-radius: 9999px;
+      width: 20px;
+      height: 20px;
+      line-height: 20px;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <!-- Header -->
+  <header class="bg-white border-b sticky top-0 z-20">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-4">
+      <h1 class="text-xl font-semibold">Travel Calendar</h1>
+      <div class="flex-1"></div>
+      <div class="flex items-center gap-2">
+        <button class="px-3 py-1.5 text-sm hover:bg-gray-100 rounded">
+          <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <span class="font-medium px-2">2025</span>
+        <button class="px-3 py-1.5 text-sm hover:bg-gray-100 rounded">
+          <svg class="w-4 h-4 inline ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
+      <button class="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded">Today</button>
+      <a href="trips.html" class="px-3 py-1.5 text-sm hover:bg-gray-100 rounded">All Trips</a>
+      <button class="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded">
+        + New Trip
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-6">
+    <!-- Legend -->
+    <div class="flex gap-4 mb-6 text-xs">
+      <div class="flex items-center gap-1.5">
+        <span class="w-3 h-3 rounded trip-conference"></span>
+        <span class="text-gray-600">Conference</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="w-3 h-3 rounded trip-work"></span>
+        <span class="text-gray-600">Work</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="w-3 h-3 rounded trip-vacation"></span>
+        <span class="text-gray-600">Vacation</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="w-3 h-3 rounded trip-family"></span>
+        <span class="text-gray-600">Family</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="w-3 h-3 rounded trip-personal"></span>
+        <span class="text-gray-600">Personal</span>
+      </div>
+    </div>
+
+    <!-- Months -->
+    <div class="space-y-6">
+
+      <!-- January -->
+      <div class="bg-white rounded-lg shadow-sm border overflow-hidden">
+        <div class="px-4 py-2 bg-gray-50 border-b font-medium text-gray-700">January</div>
+        <div class="p-3">
+          <!-- Day numbers -->
+          <div class="month-grid mb-1">
+            <div class="day-header">1</div>
+            <div class="day-header">2</div>
+            <div class="day-header">3</div>
+            <div class="day-header weekend">4</div>
+            <div class="day-header weekend">5</div>
+            <div class="day-header">6</div>
+            <div class="day-header">7</div>
+            <div class="day-header">8</div>
+            <div class="day-header">9</div>
+            <div class="day-header">10</div>
+            <div class="day-header weekend">11</div>
+            <div class="day-header weekend">12</div>
+            <div class="day-header today">13</div>
+            <div class="day-header">14</div>
+            <div class="day-header">15</div>
+            <div class="day-header">16</div>
+            <div class="day-header">17</div>
+            <div class="day-header weekend">18</div>
+            <div class="day-header weekend">19</div>
+            <div class="day-header">20</div>
+            <div class="day-header">21</div>
+            <div class="day-header">22</div>
+            <div class="day-header">23</div>
+            <div class="day-header">24</div>
+            <div class="day-header weekend">25</div>
+            <div class="day-header weekend">26</div>
+            <div class="day-header">27</div>
+            <div class="day-header">28</div>
+            <div class="day-header">29</div>
+            <div class="day-header">30</div>
+            <div class="day-header">31</div>
+          </div>
+          <!-- Trip bars -->
+          <div class="relative" style="height: 60px;">
+            <!-- NYC CTO Club: Jan 6 (day 6) -->
+            <a href="trip.html" class="trip-bar trip-work absolute" style="left: calc((5/31)*100%); width: calc((1/31)*100%); top: 0;">
+              NYC
+            </a>
+            <!-- La Ventana: Jan 10-21 (days 10-21) -->
+            <a href="#" class="trip-bar trip-vacation absolute" style="left: calc((9/31)*100%); width: calc((12/31)*100%); top: 0;">
+              La Ventana Vacation
+            </a>
+            <!-- FOSDEM: Jan 29 - Feb 2 (starts Jan 29) -->
+            <a href="trip.html" class="trip-bar trip-conference absolute" style="left: calc((28/31)*100%); width: calc((3/31)*100%); top: 28px;">
+              FOSDEM →
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- February -->
+      <div class="bg-white rounded-lg shadow-sm border overflow-hidden">
+        <div class="px-4 py-2 bg-gray-50 border-b font-medium text-gray-700">February</div>
+        <div class="p-3">
+          <div class="month-grid mb-1">
+            <div class="day-header weekend">1</div>
+            <div class="day-header weekend">2</div>
+            <div class="day-header">3</div>
+            <div class="day-header">4</div>
+            <div class="day-header">5</div>
+            <div class="day-header">6</div>
+            <div class="day-header">7</div>
+            <div class="day-header weekend">8</div>
+            <div class="day-header weekend">9</div>
+            <div class="day-header">10</div>
+            <div class="day-header">11</div>
+            <div class="day-header">12</div>
+            <div class="day-header">13</div>
+            <div class="day-header">14</div>
+            <div class="day-header weekend">15</div>
+            <div class="day-header weekend">16</div>
+            <div class="day-header">17</div>
+            <div class="day-header">18</div>
+            <div class="day-header">19</div>
+            <div class="day-header">20</div>
+            <div class="day-header">21</div>
+            <div class="day-header weekend">22</div>
+            <div class="day-header weekend">23</div>
+            <div class="day-header">24</div>
+            <div class="day-header">25</div>
+            <div class="day-header">26</div>
+            <div class="day-header">27</div>
+            <div class="day-header">28</div>
+          </div>
+          <div class="relative" style="height: 60px;">
+            <!-- FOSDEM continues: Feb 1-2 -->
+            <a href="trip.html" class="trip-bar trip-conference absolute" style="left: 0; width: calc((2/28)*100%); top: 0;">
+              ← FOSDEM
+            </a>
+            <!-- Hartford: Feb 17 -->
+            <a href="#" class="trip-bar trip-personal absolute" style="left: calc((16/28)*100%); width: calc((1/28)*100%); top: 0;">
+              Hartford
+            </a>
+            <!-- Westport: Feb 18-20 -->
+            <a href="#" class="trip-bar trip-family absolute" style="left: calc((17/28)*100%); width: calc((3/28)*100%); top: 0;">
+              Westport
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- March -->
+      <div class="bg-white rounded-lg shadow-sm border overflow-hidden">
+        <div class="px-4 py-2 bg-gray-50 border-b font-medium text-gray-700">March</div>
+        <div class="p-3">
+          <div class="month-grid mb-1">
+            <div class="day-header weekend">1</div>
+            <div class="day-header weekend">2</div>
+            <div class="day-header">3</div>
+            <div class="day-header">4</div>
+            <div class="day-header">5</div>
+            <div class="day-header">6</div>
+            <div class="day-header">7</div>
+            <div class="day-header weekend">8</div>
+            <div class="day-header weekend">9</div>
+            <div class="day-header">10</div>
+            <div class="day-header">11</div>
+            <div class="day-header">12</div>
+            <div class="day-header">13</div>
+            <div class="day-header">14</div>
+            <div class="day-header weekend">15</div>
+            <div class="day-header weekend">16</div>
+            <div class="day-header">17</div>
+            <div class="day-header">18</div>
+            <div class="day-header">19</div>
+            <div class="day-header">20</div>
+            <div class="day-header">21</div>
+            <div class="day-header weekend">22</div>
+            <div class="day-header weekend">23</div>
+            <div class="day-header">24</div>
+            <div class="day-header">25</div>
+            <div class="day-header">26</div>
+            <div class="day-header">27</div>
+            <div class="day-header">28</div>
+            <div class="day-header weekend">29</div>
+            <div class="day-header weekend">30</div>
+            <div class="day-header">31</div>
+          </div>
+          <div class="relative" style="height: 60px;">
+            <!-- Westport Dentist: Mar 3 -->
+            <a href="#" class="trip-bar trip-personal absolute" style="left: calc((2/31)*100%); width: calc((1/31)*100%); top: 0;">
+              Westport
+            </a>
+            <!-- Raleigh SSCS: Mar 4-5 -->
+            <a href="#" class="trip-bar trip-conference absolute" style="left: calc((3/31)*100%); width: calc((2/31)*100%); top: 0;">
+              Raleigh SSCS
+            </a>
+            <!-- Turks & Caicos: Mar 12-18 -->
+            <a href="#" class="trip-bar trip-vacation absolute" style="left: calc((11/31)*100%); width: calc((7/31)*100%); top: 0;">
+              Turks & Caicos Vacation
+            </a>
+            <!-- NYC Dashlane: Mar 31 -->
+            <a href="#" class="trip-bar trip-work absolute" style="left: calc((30/31)*100%); width: calc((1/31)*100%); top: 28px;">
+              NYC →
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- April -->
+      <div class="bg-white rounded-lg shadow-sm border overflow-hidden">
+        <div class="px-4 py-2 bg-gray-50 border-b font-medium text-gray-700">April</div>
+        <div class="p-3">
+          <div class="month-grid mb-1">
+            <div class="day-header">1</div>
+            <div class="day-header">2</div>
+            <div class="day-header">3</div>
+            <div class="day-header">4</div>
+            <div class="day-header weekend">5</div>
+            <div class="day-header weekend">6</div>
+            <div class="day-header">7</div>
+            <div class="day-header">8</div>
+            <div class="day-header">9</div>
+            <div class="day-header">10</div>
+            <div class="day-header">11</div>
+            <div class="day-header weekend">12</div>
+            <div class="day-header weekend">13</div>
+            <div class="day-header">14</div>
+            <div class="day-header">15</div>
+            <div class="day-header">16</div>
+            <div class="day-header">17</div>
+            <div class="day-header">18</div>
+            <div class="day-header weekend">19</div>
+            <div class="day-header weekend">20</div>
+            <div class="day-header">21</div>
+            <div class="day-header">22</div>
+            <div class="day-header">23</div>
+            <div class="day-header">24</div>
+            <div class="day-header">25</div>
+            <div class="day-header weekend">26</div>
+            <div class="day-header weekend">27</div>
+            <div class="day-header">28</div>
+            <div class="day-header">29</div>
+            <div class="day-header">30</div>
+          </div>
+          <div class="relative" style="height: 60px;">
+            <!-- NYC Dashlane continues: Apr 1 -->
+            <a href="#" class="trip-bar trip-work absolute" style="left: 0; width: calc((1/30)*100%); top: 0;">
+              ← NYC
+            </a>
+            <!-- Raleigh VulnConf: Apr 7-11 -->
+            <a href="#" class="trip-bar trip-conference absolute" style="left: calc((6/30)*100%); width: calc((5/30)*100%); top: 0;">
+              Raleigh VulnConf
+            </a>
+            <!-- NJ Easter: Apr 17-20 -->
+            <a href="#" class="trip-bar trip-family absolute" style="left: calc((16/30)*100%); width: calc((4/30)*100%); top: 0;">
+              NJ Easter Family
+            </a>
+            <!-- NYC: Apr 28 -->
+            <a href="#" class="trip-bar trip-work absolute" style="left: calc((27/30)*100%); width: calc((1/30)*100%); top: 28px;">
+              NYC
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- May -->
+      <div class="bg-white rounded-lg shadow-sm border overflow-hidden">
+        <div class="px-4 py-2 bg-gray-50 border-b font-medium text-gray-700">May</div>
+        <div class="p-3">
+          <div class="month-grid mb-1">
+            <div class="day-header">1</div>
+            <div class="day-header">2</div>
+            <div class="day-header weekend">3</div>
+            <div class="day-header weekend">4</div>
+            <div class="day-header">5</div>
+            <div class="day-header">6</div>
+            <div class="day-header">7</div>
+            <div class="day-header">8</div>
+            <div class="day-header">9</div>
+            <div class="day-header weekend">10</div>
+            <div class="day-header weekend">11</div>
+            <div class="day-header">12</div>
+            <div class="day-header">13</div>
+            <div class="day-header">14</div>
+            <div class="day-header">15</div>
+            <div class="day-header">16</div>
+            <div class="day-header weekend">17</div>
+            <div class="day-header weekend">18</div>
+            <div class="day-header">19</div>
+            <div class="day-header">20</div>
+            <div class="day-header">21</div>
+            <div class="day-header">22</div>
+            <div class="day-header">23</div>
+            <div class="day-header weekend">24</div>
+            <div class="day-header weekend">25</div>
+            <div class="day-header">26</div>
+            <div class="day-header">27</div>
+            <div class="day-header">28</div>
+            <div class="day-header">29</div>
+            <div class="day-header">30</div>
+            <div class="day-header weekend">31</div>
+          </div>
+          <div class="relative" style="height: 90px;">
+            <!-- NYC CTO Club: May 6-7 -->
+            <a href="#" class="trip-bar trip-work absolute" style="left: calc((5/31)*100%); width: calc((2/31)*100%); top: 0;">
+              NYC CTO Club
+            </a>
+            <!-- Pittsburgh PyCon: May 14-15 -->
+            <a href="#" class="trip-bar trip-conference absolute" style="left: calc((13/31)*100%); width: calc((2/31)*100%); top: 0;">
+              Pittsburgh PyCon
+            </a>
+            <!-- Raleigh S3C: May 20 + May 27 -->
+            <a href="#" class="trip-bar trip-conference absolute" style="left: calc((19/31)*100%); width: calc((1/31)*100%); top: 0;">
+              Raleigh
+            </a>
+            <a href="#" class="trip-bar trip-conference absolute" style="left: calc((26/31)*100%); width: calc((1/31)*100%); top: 0;">
+              Raleigh
+            </a>
+            <!-- Westport Memorial Day: May 24-27 -->
+            <a href="#" class="trip-bar trip-family absolute" style="left: calc((23/31)*100%); width: calc((4/31)*100%); top: 28px;">
+              Westport Memorial Day
+            </a>
+            <!-- Westport JohnRG: May 30-31 -->
+            <a href="#" class="trip-bar trip-family absolute" style="left: calc((29/31)*100%); width: calc((2/31)*100%); top: 56px;">
+              Westport →
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- June -->
+      <div class="bg-white rounded-lg shadow-sm border overflow-hidden">
+        <div class="px-4 py-2 bg-gray-50 border-b font-medium text-gray-700">June</div>
+        <div class="p-3">
+          <div class="month-grid mb-1">
+            <div class="day-header weekend">1</div>
+            <div class="day-header">2</div>
+            <div class="day-header">3</div>
+            <div class="day-header">4</div>
+            <div class="day-header">5</div>
+            <div class="day-header">6</div>
+            <div class="day-header weekend">7</div>
+            <div class="day-header weekend">8</div>
+            <div class="day-header">9</div>
+            <div class="day-header">10</div>
+            <div class="day-header">11</div>
+            <div class="day-header">12</div>
+            <div class="day-header">13</div>
+            <div class="day-header weekend">14</div>
+            <div class="day-header weekend">15</div>
+            <div class="day-header">16</div>
+            <div class="day-header">17</div>
+            <div class="day-header">18</div>
+            <div class="day-header">19</div>
+            <div class="day-header">20</div>
+            <div class="day-header weekend">21</div>
+            <div class="day-header weekend">22</div>
+            <div class="day-header">23</div>
+            <div class="day-header">24</div>
+            <div class="day-header">25</div>
+            <div class="day-header">26</div>
+            <div class="day-header">27</div>
+            <div class="day-header weekend">28</div>
+            <div class="day-header weekend">29</div>
+            <div class="day-header">30</div>
+          </div>
+          <div class="relative" style="height: 90px;">
+            <!-- Westport continues: Jun 1-3 -->
+            <a href="#" class="trip-bar trip-family absolute" style="left: 0; width: calc((3/30)*100%); top: 0;">
+              ← Westport
+            </a>
+            <!-- Ottawa BSDCan: Jun 10-12 -->
+            <a href="#" class="trip-bar trip-conference absolute" style="left: calc((9/30)*100%); width: calc((3/30)*100%); top: 0;">
+              Ottawa BSDCan
+            </a>
+            <!-- Westport Eileen Wedding: Jun 14-15 -->
+            <a href="#" class="trip-bar trip-family absolute" style="left: calc((13/30)*100%); width: calc((2/30)*100%); top: 0;">
+              Westport Wedding
+            </a>
+            <!-- NYC UN Open Source: Jun 16-17 -->
+            <a href="#" class="trip-bar trip-conference absolute" style="left: calc((15/30)*100%); width: calc((2/30)*100%); top: 28px;">
+              NYC UN OSS
+            </a>
+            <!-- Denver Open Source Summit: Jun 22-27 -->
+            <a href="#" class="trip-bar trip-conference absolute" style="left: calc((21/30)*100%); width: calc((6/30)*100%); top: 0;">
+              Denver Open Source Summit NA
+            </a>
+            <!-- Westport: Jun 30 -->
+            <a href="#" class="trip-bar trip-family absolute" style="left: calc((29/30)*100%); width: calc((1/30)*100%); top: 28px;">
+              →
+            </a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</body>
+</html>
