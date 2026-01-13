@@ -18,7 +18,8 @@ RUN apk add --no-cache \
     git \
     curl \
     bash \
-    jq
+    jq \
+    sqlite
 
 # Set working directory
 WORKDIR /app
@@ -26,13 +27,18 @@ WORKDIR /app
 # Copy workspace configuration
 COPY package.json pnpm-workspace.yaml ./
 
-# Copy all package.json files for dependency resolution
-# Using a glob-friendly approach - copy what exists
-COPY packages/*/package.json ./packages/
+# Create package directories and copy package.json files
+# Must preserve directory structure for pnpm workspace
+RUN mkdir -p packages/backend packages/frontend packages/mcp-server packages/shared
+
+COPY packages/backend/package.json ./packages/backend/
+COPY packages/frontend/package.json ./packages/frontend/
+COPY packages/mcp-server/package.json ./packages/mcp-server/
+COPY packages/shared/package.json ./packages/shared/
 
 # Install dependencies
-# Note: --ignore-scripts prevents postinstall from failing on missing code
-RUN pnpm install --ignore-scripts || echo "Initial install - some packages may not exist yet"
+# pnpm will create node_modules at workspace root and symlinks in packages
+RUN pnpm install
 
 # Source code will be mounted as volumes for hot reload
 # See docker-compose.yml for volume configuration

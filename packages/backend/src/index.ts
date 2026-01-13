@@ -5,6 +5,7 @@
  * See ARCHITECTURE.md for patterns and conventions.
  */
 
+import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 
@@ -36,7 +37,9 @@ const port = parseInt(process.env.PORT || '3000');
 
 console.log(`Starting backend on port ${port}...`);
 
-export default {
-  port,
+serve({
   fetch: app.fetch,
-};
+  port,
+}, (info) => {
+  console.log(`Backend listening on http://localhost:${info.port}`);
+});
