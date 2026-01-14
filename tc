@@ -477,6 +477,85 @@ cmd_go() {
 }
 
 # ===========================================
+# Commands: Health & Diagnostics
+# ===========================================
+
+cmd_health() {
+    require_docker
+
+    service="${1:-all}"
+
+    check_endpoint() {
+        local name=$1
+        local url=$2
+        local result
+
+        result=$(docker compose exec backend curl -sf "$url" 2>/dev/null)
+        if [ $? -eq 0 ]; then
+            printf "${GREEN}✓${NC} %s: %s\n" "$name" "$result"
+            return 0
+        else
+            printf "${RED}✗${NC} %s: not responding\n" "$name"
+            return 1
+        fi
+    }
+
+    case "$service" in
+        all)
+            info "Checking service health..."
+            check_endpoint "Backend" "http://localhost:3000/health"
+            # Add more services as needed
+            ;;
+        backend)
+            check_endpoint "Backend" "http://localhost:3000/health"
+            ;;
+        mcp)
+            check_endpoint "MCP" "http://localhost:3001/health"
+            ;;
+        frontend)
+            # Frontend doesn't have a health endpoint, check if container is up
+            if docker compose ps frontend 2>/dev/null | grep -q "running"; then
+                printf "${GREEN}✓${NC} Frontend: container running\n"
+            else
+                printf "${RED}✗${NC} Frontend: not running\n"
+            fi
+            ;;
+        *)
+            echo "Usage: ./tc health [service]"
+            echo ""
+            echo "  all      - Check all services (default)"
+            echo "  backend  - Check backend health"
+            echo "  mcp      - Check MCP server health"
+            echo "  frontend - Check frontend status"
+            ;;
+    esac
+}
+
+cmd_curl() {
+    require_docker
+
+    if [ $# -eq 0 ]; then
+        echo "Usage: ./tc curl <url> [curl-options...]"
+        echo ""
+        echo "Run curl inside the backend container."
+        echo ""
+        echo "Examples:"
+        echo "  ./tc curl http://localhost:3000/health"
+        echo "  ./tc curl -X POST http://localhost:3000/api/trips -d '{\"name\":\"test\"}'"
+        return 0
+    fi
+
+    # Ensure backend is running (has curl installed)
+    if ! docker compose ps backend 2>/dev/null | grep -q "running"; then
+        info "Starting backend container..."
+        docker compose up -d backend
+        sleep 3
+    fi
+
+    docker compose exec backend curl "$@"
+}
+
+# ===========================================
 # Commands: Cleanup
 # ===========================================
 
@@ -547,6 +626,10 @@ Go Development:
                                    ./tc go mcp build ./...
                                    ./tc go mod tidy
 
+Health & Diagnostics:
+  health [service]       Check service health (all, backend, mcp, frontend)
+  curl <url> [opts]      Run curl inside backend container
+
 Database:
   db:reset               Delete database (with backup)
   db:backup [label]      Backup database to data/backups/
@@ -569,6 +652,8 @@ Examples:
   ./tc start                    # Start backend and frontend
   ./tc start --mcp              # Start with MCP server
   ./tc logs backend             # Follow backend logs
+  ./tc health                   # Check all service health
+  ./tc curl http://localhost:3000/api/trips  # Call API endpoint
   ./tc test e2e                 # Run E2E tests
   ./tc go test ./...            # Run Go tests in backend
   ./tc go mod tidy              # Tidy Go dependencies
@@ -607,6 +692,9 @@ case "$command" in
     sandbox)    cmd_sandbox "$@" ;;
     exec)       cmd_exec "$@" ;;
     go)         cmd_go "$@" ;;
+
+    health)     cmd_health "$@" ;;
+    curl)       cmd_curl "$@" ;;
 
     help|--help|-h)
         cmd_help

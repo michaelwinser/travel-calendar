@@ -2,24 +2,20 @@
 
 This document is the constitution for AI agents working on this codebase. Read this file completely before making any changes.
 
-## Quick Reference Files
+---
 
-| File | Purpose | When to Read |
-|------|---------|--------------|
-| `CLAUDE.md` | This file - constitution | Always (start here) |
-| `PROJECT_MAP.md` | Component overview, lexicon | Understanding codebase |
-| `.claude/agents.md` | Specialized agent definitions | Before component work |
-| `.claude/reviewer.md` | Pushback/review criteria | Evaluating requests |
-| `packages/*/ARCHITECTURE.md` | Component-specific rules | Before component changes |
+## Part 1: Universal Principles
 
-## Project Philosophy
+These principles apply to ALL agents. Every agent inherits and must follow these rules.
+
+### Project Philosophy
 
 This codebase is designed for **AI-assisted development** with strong component boundaries. Every component has:
 1. Clear architectural principles
 2. Automated tests enforcing those principles
 3. Local documentation the agent must read before changes
 
-## Component Architecture
+### Component Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -55,33 +51,6 @@ This codebase is designed for **AI-assisted development** with strong component 
 | `mcp-server` | MCP tools/resources, LLM-facing API | UI code, direct DB writes |
 | `shared` | TypeScript types, constants | Logic, runtime code, dependencies |
 
-## Task Decomposition Protocol
-
-**BEFORE writing any code**, determine which components are affected:
-
-1. **Single component** → Proceed directly, follow component's ARCHITECTURE.md
-2. **Multiple components** → STOP. Create a plan document at `docs/plans/{issue-number}.md` that:
-   - Lists each component affected
-   - Describes changes to each component separately
-   - Defines the integration points
-   - Requires explicit user approval before proceeding
-
-### Example Decomposition
-
-```
-Task: "Add expense tracking to trips"
-
-Components affected:
-- backend: New Expense entity, API endpoints
-- frontend: ExpenseCard component, TripDetail updates
-- mcp-server: New get_expenses tool
-- shared: Expense types
-
-→ This requires a plan document and component-by-component implementation
-```
-
-## Engineering Principles
-
 ### Git Workflow
 
 1. **Every commit references an issue**: `feat(backend): add expense entity (#42)`
@@ -96,25 +65,9 @@ Components affected:
 1. **Read before write**: Always read the relevant ARCHITECTURE.md before changes
 2. **Tests first for bugs**: Bug fixes require a failing test first
 3. **No cross-component imports** except from `shared`
-4. **Run component tests** after changes: `pnpm test:backend` or `pnpm test:frontend`
+4. **Run component tests** after changes
 
-### PRD → Tests Pipeline
-
-PRDs in `docs/prd/` contain use cases that become tests:
-- Use cases have `[UC-XXX]` identifiers
-- Each use case maps to a test in `tests/e2e/`
-- Tests are shell scripts using the CLI client
-
-## Component-Specific Instructions
-
-Each component has an `ARCHITECTURE.md` file. **You must read it before making changes.**
-
-- `packages/backend/ARCHITECTURE.md` - REST API patterns, entity design
-- `packages/frontend/ARCHITECTURE.md` - MVC patterns, component rules
-- `packages/mcp-server/ARCHITECTURE.md` - Tool design, resource patterns
-- `packages/shared/ARCHITECTURE.md` - Type conventions
-
-## Locality of Knowledge
+### Locality of Knowledge
 
 When working on a file, check for:
 1. **Component ARCHITECTURE.md** - overall patterns
@@ -122,7 +75,7 @@ When working on a file, check for:
 3. **Adjacent test files** - `*.test.ts` shows expected behavior
 4. **Type definitions** - in `shared/` for the entity you're touching
 
-## Pushback Protocol
+### Pushback Protocol
 
 Before executing requests, evaluate them against project principles. See `.claude/reviewer.md` for full criteria.
 
@@ -141,7 +94,7 @@ Before executing requests, evaluate them against project principles. See `.claud
 
 **Don't just execute**. Think critically. The user benefits from honest evaluation.
 
-## Automated Enforcement
+### Automated Enforcement
 
 The following are automatically checked:
 
@@ -153,115 +106,122 @@ The following are automatically checked:
 | `test:e2e` | Use case journeys | CI |
 | `lint:commits` | Commit message format | Pre-commit |
 
-## Quick Reference
+### Docker Operations
 
-**All development is container-based.** See `CONTRIBUTING.md` for full Docker workflow.
+**All Docker operations MUST go through the `./tc` script.**
 
-```bash
-# Start development environment (Docker)
-docker compose up               # Start all services
-docker compose up -d            # Start in background
-docker compose logs -f backend  # View logs
-
-# Read component docs before changes
-cat packages/{component}/ARCHITECTURE.md
-
-# Run tests
-docker compose exec backend pnpm test  # In container
-docker compose --profile test up       # Full test suite
-
-# Linting
-docker compose exec backend pnpm lint
-
-# CLI (against containerized backend)
-export TRAVEL_API_URL=http://localhost:3000
-./cli/travel trips list
-./cli/travel trips get <id>
-./cli/travel items add <trip> flight
-
-# Stop
-docker compose down
-```
-
-## Command Execution Rules
-
-**All development commands MUST run through the sandbox container.** This ensures operations are scoped to the project directory.
-
-### Run in Container (via `./tc exec`)
+Raw `docker` and `docker-compose` commands are denied in `.claude/settings.json`. This ensures:
+- All Docker operations are auditable through `tc`
+- Consistent interface across all agents
+- No sandbox/permission issues with Docker socket
 
 ```bash
-# Testing
-./tc exec pnpm test
-./tc exec pnpm test:backend
-./tc exec pnpm test:frontend
+# Use these:
+./tc build              # Build containers
+./tc start              # Start services
+./tc health             # Check service health
+./tc curl <url>         # HTTP requests inside container
+./tc go test ./...      # Run Go tests
 
-# Linting
-./tc exec pnpm lint
-./tc exec node scripts/check-boundaries.js
-
-# Node/pnpm operations
-./tc exec pnpm install
-./tc exec node scripts/validate-map.js
+# NOT these (will be denied):
+docker compose up       # DENIED
+docker build .          # DENIED
+curl localhost:3000     # DENIED (use ./tc curl)
 ```
 
-### Run on Host (directly)
+### Protected Files
 
-These commands require host access:
-```bash
-# Git (needs SSH keys, .git directory)
-git status
-git add .
-git commit -m "..."
-git push
+The following files have special ownership rules:
 
-# Docker (needs socket)
-docker compose up
-./tc start
-./tc build
+| File | Owner | Rule |
+|------|-------|------|
+| `tc` | Infra Agent ONLY | Must get user approval before ANY modifications |
+| `Dockerfile.*` | Infra Agent | Standard infra review process |
+| `docker-compose.yml` | Infra Agent | Standard infra review process |
+| `.claude/settings.json` | Infra Agent | Standard infra review process |
 
-# GitHub CLI (needs auth)
-gh issue create
-gh pr create
-```
+**The `tc` script is critical infrastructure.** Only the Infra Agent may modify it, and ONLY after presenting proposed changes to the user and receiving explicit approval.
 
-### Rule of Thumb
+---
 
-- **If it runs Node.js or accesses node_modules** → use `./tc exec`
-- **If it accesses .git, Docker, or external services** → run on host
+## Part 2: Agent Selection & Routing
 
-## Sandbox Configuration
+### Task Decomposition Protocol
 
-This project is configured to minimize permission prompts for Claude Code.
+**BEFORE writing any code**, determine which components are affected:
 
-### Sandbox Container (Primary)
+1. **Single component** → Read the agent file, then proceed
+2. **Multiple components** → Read `.claude/agents/cross-component.md`, create a plan document at `docs/plans/{issue-number}.md`, get approval before proceeding
 
-```bash
-# Start sandbox container
-./tc sandbox start
+### Agent Selection Matrix
 
-# Run commands inside the sandbox
-./tc exec pnpm test
-./tc exec node scripts/check-boundaries.js
-./tc exec ls -la
+| Task Type | Agent File | Scope |
+|-----------|------------|-------|
+| Backend API, entities, services | `.claude/agents/backend.md` | `packages/backend/` |
+| Frontend UI, stores, routes | `.claude/agents/frontend.md` | `packages/frontend/` |
+| MCP tools, LLM resources | `.claude/agents/mcp-server.md` | `packages/mcp-server/` |
+| TypeScript types only | `.claude/agents/shared.md` | `packages/shared/` |
+| Multi-component changes | `.claude/agents/cross-component.md` | Multiple packages |
+| Docker, containers, CI/CD | `.claude/agents/infra.md` | Infrastructure |
+| End-to-end tests | `.claude/agents/e2e-test.md` | `tests/e2e/` |
+| **Pre-commit review** | `.claude/agents/code-review.md` | All changes |
 
-# Interactive shell
-./tc sandbox shell
+### Agent Quick Reference
 
-# Stop when done
-./tc sandbox stop
-```
+Each agent has detailed checklists. Here are the key rules:
 
-The sandbox container:
-- Mounts the project directory at `/app`
-- Has all development tools (node, pnpm, git, etc.)
-- Cannot access anything outside the project
-- Auto-starts when you use `./tc exec`
+#### Backend Agent
+- **Read first**: `packages/backend/ARCHITECTURE.md`
+- **Test**: `./tc go test ./...`
+- **Forbidden**: UI code, frontend imports, direct DB queries in routes
 
-### Permission Settings
+#### Frontend Agent
+- **Read first**: `packages/frontend/ARCHITECTURE.md`
+- **Test**: `./tc exec pnpm test:frontend`
+- **Forbidden**: Direct API calls in components, ID-based lookups, business logic
 
-Permissions are configured in `.claude/settings.json`:
-- `./tc` commands are pre-allowed (including `./tc exec`)
-- Git and Docker commands are pre-allowed
-- Dangerous commands (`rm -rf /`, etc.) are blocked
+#### MCP Server Agent
+- **Read first**: `packages/mcp-server/ARCHITECTURE.md`
+- **Test**: `./tc go mcp test ./...`
+- **Forbidden**: Direct database access, UI code, raw JSON responses
 
-**Restart Claude Code** after modifying settings for changes to take effect.
+#### Shared Agent
+- **Read first**: `packages/shared/ARCHITECTURE.md`
+- **Test**: `./tc exec pnpm build:shared`
+- **Forbidden**: Runtime code (functions, classes), dependencies, default exports
+
+#### Cross-Component Agent
+- **Action**: Create plan at `docs/plans/{issue-number}.md`
+- **Order**: shared → backend → frontend → mcp-server → e2e tests
+- **Requirement**: Get explicit user approval before implementing
+
+#### Infra Agent
+- **Owns**: `tc` script, Dockerfiles, docker-compose.yml, `.claude/settings.json`
+- **Rule**: ONLY agent that can modify `tc`; must get user approval first
+- **Test**: `./tc build && ./tc start && ./tc health`
+- **Verify**: All health checks pass before committing
+
+#### E2E Test Agent
+- **Source**: PRDs in `docs/prd/` with `[UC-XXX]` identifiers
+- **Output**: Shell scripts in `tests/e2e/uc-{number}-{description}.sh`
+- **Test**: Run the script directly
+
+#### Code Review Agent
+- **When**: Before committing, after completing work, or on request
+- **Does**: Identifies changed components, runs tests, checks CLAUDE.md compliance
+- **Spawns**: Component agents to review their specific areas
+- **Output**: Review report with APPROVED, NEEDS FIXES, or NEEDS DISCUSSION
+- **On failure**: Prompts user for guidance on how to proceed
+
+---
+
+## Reference Files
+
+| File | Purpose | When to Read |
+|------|---------|--------------|
+| `CLAUDE.md` | This file - universal principles | Always (start here) |
+| `PROJECT_MAP.md` | Component overview, lexicon | Understanding codebase |
+| `.claude/agents/*.md` | Detailed agent checklists | Before component work |
+| `.claude/agents/code-review.md` | Pre-commit review process | Before committing |
+| `.claude/reviewer.md` | Pushback/review criteria | Evaluating requests |
+| `packages/*/ARCHITECTURE.md` | Component-specific patterns | Before component changes |
