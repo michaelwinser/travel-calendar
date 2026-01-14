@@ -114,7 +114,21 @@ The Tools Agent will:
 
 If the Tools Agent has recommendations, present them to the user.
 
-### Step 8: Push (If Requested)
+### Step 8: Invoke Session Summary Agent
+
+**After Tools Agent**, spawn the Session Summary Agent to update the running summary:
+
+```
+Task: Update the running session summary with this commit.
+Agent: session-summary
+```
+
+The Session Summary Agent will:
+- Append work done to `blog/.current.md`
+- Detect if a session boundary has been reached
+- Offer to finalize the summary as a dated blog entry if appropriate
+
+### Step 9: Push (If Requested)
 
 Only push if the user explicitly requests it:
 
@@ -208,6 +222,12 @@ Agent: I'll prepare a commit for you.
    - Session efficiency: 94%
    - No new recommendations
 
+7. Invoking Session Summary Agent...
+   [Spawns session-summary agent]
+
+   Updated blog/.current.md:
+   - Added trip validation endpoint with date overlap checking
+
 Would you like me to push this to the remote?
 ```
 
@@ -225,6 +245,7 @@ After `git commit` succeeds:
 
 - [ ] Tools Agent invoked for session review
 - [ ] Any tool recommendations presented to user
+- [ ] Session Summary Agent invoked to update running summary
 
 Before executing `git push`:
 

@@ -37,6 +37,9 @@ coverage/
 .claude/conversations/
 .claude/audit.jsonl
 
+# Session summary working file (finalized entries are committed)
+blog/.current.md
+
 # Docker overrides (local customization)
 docker-compose.override.yml
 

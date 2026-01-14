@@ -201,6 +201,7 @@ The following files have special ownership rules:
 | **Pre-commit review** | `.claude/agents/code-review.md` | All changes |
 | **Git commits and pushes** | `.claude/agents/commit.md` | All git operations |
 | **Tool usage & permissions** | `.claude/agents/tools.md` | Session analysis, tc/settings optimization |
+| **Session summaries** | `.claude/agents/session-summary.md` | Progress tracking, blog entries |
 
 ### Agent Quick Reference
 
@@ -267,6 +268,13 @@ Each agent has detailed checklists. Here are the key rules:
 - **Goals**: User confidence, minimize prompts, identify workflow gaps
 - **Works with**: Infra Agent (implements approved changes)
 
+#### Session Summary Agent
+- **When**: After commits (via Commit Agent), on request, or at session end
+- **Does**: Maintains running summary in `blog/.current.md`, detects session boundaries
+- **Output**: Dated blog entries in `blog/YYYY-MM-DD-slug.md` when sessions conclude
+- **Invoked by**: Commit Agent (after Tools Agent step)
+- **Files**: `blog/.current.md` (working file, gitignored), `blog/*.md` (finalized entries)
+
 ---
 
 ## Reference Files
@@ -279,5 +287,6 @@ Each agent has detailed checklists. Here are the key rules:
 | `.claude/agents/commit.md` | Commit workflow (exclusive authority) | Before any commit |
 | `.claude/agents/code-review.md` | Pre-commit review process | Before committing |
 | `.claude/agents/tools.md` | Tool usage analysis and optimization | After commits, on request |
+| `.claude/agents/session-summary.md` | Progress tracking and blog entries | After commits, session end |
 | `.claude/reviewer.md` | Pushback/review criteria | Evaluating requests |
 | `packages/*/ARCHITECTURE.md` | Component-specific patterns | Before component changes |
