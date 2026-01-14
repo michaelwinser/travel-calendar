@@ -7,7 +7,7 @@
 #   ./tc <command> [options]
 #
 # Commands:
-#   start           Start all services
+#   start           Start backend (REST API + MCP on port 3000)
 #   stop            Stop all services
 #   restart         Restart all services
 #   build           Build/rebuild containers
@@ -101,12 +101,10 @@ cmd_start() {
     require_docker
     info "Starting services..."
 
-    profile=""
     detach="-d"
 
     while [ $# -gt 0 ]; do
         case "$1" in
-            --mcp)     profile="--profile mcp" ;;
             --fg|-f)   detach="" ;;
             *)         break ;;
         esac
@@ -114,13 +112,12 @@ cmd_start() {
     done
 
     # shellcheck disable=SC2086
-    docker compose $profile up --remove-orphans $detach "$@"
+    docker compose up --remove-orphans $detach "$@"
 
     if [ -n "$detach" ]; then
         success "Services started"
         echo ""
-        echo "  Backend:  http://localhost:3000"
-        [ -n "$profile" ] && echo "  MCP:      http://localhost:3001"
+        echo "  Backend + MCP:  http://localhost:3000"
         echo ""
         echo "  View logs: ./tc logs"
         echo "  Stop:      ./tc stop"
@@ -130,7 +127,7 @@ cmd_start() {
 cmd_stop() {
     require_docker
     info "Stopping services..."
-    docker compose --profile mcp down "$@"
+    docker compose down "$@"
     success "Services stopped"
 }
 
@@ -156,7 +153,7 @@ cmd_build() {
 
     # Build all services including those in profiles
     # shellcheck disable=SC2086
-    docker compose --profile mcp --profile dev build $no_cache "$@"
+    docker compose --profile dev build $no_cache "$@"
     success "Build complete"
 }
 
@@ -195,7 +192,6 @@ cmd_test() {
         all)
             info "Running all tests..."
             cmd_test_backend
-            cmd_test_mcp
             cmd_test_frontend
             success "All tests passed"
             ;;
@@ -207,14 +203,11 @@ cmd_test() {
         backend)
             cmd_test_backend
             ;;
-        mcp)
-            cmd_test_mcp
-            ;;
         frontend)
             cmd_test_frontend
             ;;
         *)
-            error "Unknown test target: $target. Use: all, e2e, backend, frontend, mcp"
+            error "Unknown test target: $target. Use: all, e2e, backend, frontend"
             ;;
     esac
 }
@@ -224,13 +217,6 @@ cmd_test_backend() {
     info "Running backend tests (Go)..."
     docker compose run --rm --no-deps -T dev sh -c "cd /app/packages/backend && go test ./..."
     success "Backend tests passed"
-}
-
-cmd_test_mcp() {
-    require_docker
-    info "Running MCP server tests (Go)..."
-    docker compose run --rm --no-deps -T dev sh -c "cd /app/packages/mcp-server && go test ./..."
-    success "MCP tests passed"
 }
 
 cmd_test_frontend() {
@@ -246,17 +232,10 @@ cmd_test_precommit() {
 
     failed=0
 
-    # Backend Go tests
+    # Backend Go tests (includes MCP server)
     info "Running backend tests (Go)..."
     if ! docker compose run --rm --no-deps -T dev sh -c "cd /app/packages/backend && go test ./..."; then
         warn "Backend tests failed"
-        failed=1
-    fi
-
-    # MCP server Go tests
-    info "Running MCP server tests (Go)..."
-    if ! docker compose run --rm --no-deps -T dev sh -c "cd /app/packages/mcp-server && go test ./..."; then
-        warn "MCP server tests failed"
         failed=1
     fi
 
@@ -415,23 +394,15 @@ cmd_health() {
     }
 
     case "$service" in
-        all)
+        all|backend)
             info "Checking service health..."
-            check_endpoint "Backend" "http://localhost:3000/health"
-            ;;
-        backend)
-            check_endpoint "Backend" "http://localhost:3000/health"
-            ;;
-        mcp)
-            # Use container hostname since we're checking from inside backend container
-            check_endpoint "MCP" "http://mcp:3001/health"
+            check_endpoint "Backend + MCP" "http://localhost:3000/health"
             ;;
         *)
             echo "Usage: ./tc health [service]"
             echo ""
             echo "  all      - Check all services (default)"
-            echo "  backend  - Check backend health"
-            echo "  mcp      - Check MCP server health"
+            echo "  backend  - Check backend health (includes MCP)"
             ;;
     esac
 }
@@ -473,21 +444,21 @@ cmd_clean() {
         containers)
             if confirm "Remove all containers?"; then
                 info "Removing containers..."
-                docker compose --profile mcp --profile dev down
+                docker compose --profile dev down
                 success "Containers removed"
             fi
             ;;
         volumes)
             if confirm "Remove containers AND volumes (Go cache)?"; then
                 info "Removing containers and volumes..."
-                docker compose --profile mcp --profile dev down -v
+                docker compose --profile dev down -v
                 success "Containers and volumes removed"
             fi
             ;;
         all)
             if confirm "Remove containers, volumes, AND build cache?"; then
                 info "Removing everything..."
-                docker compose --profile mcp --profile dev down -v --rmi local
+                docker compose --profile dev down -v --rmi local
                 docker builder prune -f
                 success "Full cleanup complete"
             fi
@@ -513,7 +484,7 @@ Travel Calendar - Helper Script
 Usage: ./tc <command> [options]
 
 Service Commands:
-  start [--mcp] [--fg]   Start services (--mcp includes MCP server, --fg foreground)
+  start [--fg]           Start services (--fg for foreground mode)
   stop                   Stop all services
   restart                Restart all services
   build [--clean]        Build containers (--clean for fresh build)
@@ -522,11 +493,11 @@ Service Commands:
   shell [service]        Open shell in container (default: backend)
 
 Testing & Quality:
-  test [target]          Run tests (all, e2e, backend, frontend, mcp)
+  test [target]          Run tests (all, e2e, backend, frontend)
   test-precommit         Pre-commit checks (Go tests, type checking)
 
 Health & Diagnostics:
-  health [service]       Check service health (all, backend, mcp)
+  health [service]       Check service health (all, backend)
   curl <url> [opts]      Run curl inside backend container
 
 Database:
@@ -542,8 +513,7 @@ Other:
   help                   Show this help message
 
 Examples:
-  ./tc start                    # Start backend
-  ./tc start --mcp              # Start with MCP server
+  ./tc start                    # Start backend (includes MCP)
   ./tc logs backend             # Follow backend logs
   ./tc health                   # Check all service health
   ./tc curl http://localhost:3000/api/trips  # Call API endpoint

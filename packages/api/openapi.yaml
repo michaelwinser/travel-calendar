@@ -11,6 +11,23 @@ info:
   license:
     name: MIT
     identifier: MIT
+  x-mcp:
+    name: travel-calendar
+    version: "1.0.0"
+    instructions: |
+      Travel Calendar MCP Server. Use these tools to manage trips, items, documents, and location queries.
+
+      Key tools:
+      - get_trips: List and filter trips by upcoming/past/purpose
+      - get_trip: Get detailed trip info including items and locations
+      - create_trip: Create a new trip with optional default location
+      - search_trips: Full-text search across trips
+      - add_item: Add flights, hotels, trains, drives, or events to a trip
+      - get_location_on_date: Find where the user will be on a specific date
+      - get_location_range: Get location timeline for a date range
+
+      All dates use YYYY-MM-DD format. IDs are UUIDs.
+    resources: []
 
 servers:
   - url: http://localhost:3000
@@ -63,6 +80,9 @@ paths:
       tags: [Trips]
       summary: List trips
       description: Returns a list of trips, optionally filtered
+      x-mcp:
+        tool: get_trips
+        description: "Get a list of trips. Filter by upcoming (future trips), past (completed trips), or purpose (business, vacation, conference, family, other)."
       parameters:
         - name: upcoming
           in: query
@@ -98,6 +118,9 @@ paths:
       operationId: createTrip
       tags: [Trips]
       summary: Create a new trip
+      x-mcp:
+        tool: create_trip
+        description: "Create a new trip. Required: name, purpose (business/vacation/conference/family/other). Optional: startDate, endDate (YYYY-MM-DD), status, notes, location (sets default location for all days)."
       requestBody:
         required: true
         content:
@@ -130,6 +153,9 @@ paths:
       tags: [Trips]
       summary: Search trips
       description: Full-text search across trip names, notes, and items
+      x-mcp:
+        tool: search_trips
+        description: "Search trips by text. Searches across trip names, notes, and item details. Returns matching trips."
       parameters:
         - name: q
           in: query
@@ -159,6 +185,10 @@ paths:
       operationId: getTrip
       tags: [Trips]
       summary: Get a trip by ID
+      x-mcp:
+        tool: get_trip
+        description: "Get detailed information about a specific trip including all its items (flights, hotels, etc.) and per-day locations."
+        path_params_as_input: true
       parameters:
         - $ref: '#/components/parameters/TripId'
       responses:
@@ -178,6 +208,10 @@ paths:
       operationId: updateTrip
       tags: [Trips]
       summary: Update a trip
+      x-mcp:
+        tool: update_trip
+        description: "Update an existing trip. All fields are optional: name, purpose, startDate, endDate, status, notes."
+        path_params_as_input: true
       parameters:
         - $ref: '#/components/parameters/TripId'
       requestBody:
@@ -209,6 +243,10 @@ paths:
       operationId: deleteTrip
       tags: [Trips]
       summary: Delete a trip
+      x-mcp:
+        tool: delete_trip
+        description: "Delete a trip and all its items. This action cannot be undone."
+        path_params_as_input: true
       parameters:
         - $ref: '#/components/parameters/TripId'
       responses:
@@ -247,6 +285,10 @@ paths:
       operationId: createTripItem
       tags: [Items]
       summary: Add an item to a trip
+      x-mcp:
+        tool: add_item
+        description: "Add an item to a trip. Type must be: flight, hotel, train, drive, or event. Fields vary by type - flights need from/to/carrier, hotels need name/location/checkIn/checkOut, etc."
+        path_params_as_input: true
       parameters:
         - $ref: '#/components/parameters/TripId'
       requestBody:
@@ -301,6 +343,10 @@ paths:
       operationId: deleteItem
       tags: [Items]
       summary: Delete an item
+      x-mcp:
+        tool: delete_item
+        description: "Delete an item from a trip. This action cannot be undone."
+        path_params_as_input: true
       parameters:
         - $ref: '#/components/parameters/ItemId'
       responses:
@@ -318,6 +364,9 @@ paths:
       operationId: listDocuments
       tags: [Documents]
       summary: List documents
+      x-mcp:
+        tool: get_documents
+        description: "Get a list of documents. Filter by tripId to get documents for a specific trip, or use unassociated=true to get documents not linked to any trip."
       parameters:
         - name: tripId
           in: query
@@ -353,6 +402,9 @@ paths:
       tags: [Config]
       summary: Get base locations
       description: Returns the user's configured base locations (home, work)
+      x-mcp:
+        tool: get_base_locations
+        description: "Get the user's configured base locations (home and work addresses). These are used as defaults when the user is not traveling."
       responses:
         '200':
           description: Base locations
@@ -365,6 +417,9 @@ paths:
       tags: [Config]
       summary: Set base locations
       description: Configure the user's base locations (home, work)
+      x-mcp:
+        tool: set_base_locations
+        description: "Set the user's base locations. Both home and work are optional. Example: home='New York, USA', work='Manhattan, NYC'."
       requestBody:
         required: true
         content:
@@ -395,6 +450,10 @@ paths:
       tags: [Trips]
       summary: Get locations for a trip
       description: Returns per-date location data for a trip
+      x-mcp:
+        tool: get_trip_locations
+        description: "Get the per-day locations for a trip. Shows where the user will be on each day of the trip."
+        path_params_as_input: true
       parameters:
         - $ref: '#/components/parameters/TripId'
       responses:
@@ -417,6 +476,10 @@ paths:
       tags: [Trips]
       summary: Set locations for a trip
       description: Set per-date locations for a trip. Replaces existing location data.
+      x-mcp:
+        tool: set_trip_locations
+        description: "Set locations for a trip. Use defaultLocation for a single location for all days, or locations array for per-day overrides. Dates use YYYY-MM-DD format."
+        path_params_as_input: true
       parameters:
         - $ref: '#/components/parameters/TripId'
       requestBody:
@@ -463,6 +526,10 @@ paths:
         - If the date falls within a trip with explicit location, returns that location
         - If the date falls within a trip without explicit location, returns "Away"
         - If not within any trip, returns the user's home location
+      x-mcp:
+        tool: get_location_on_date
+        description: "Find out where the user will be on a specific date (YYYY-MM-DD). Returns the location(s) and source (home, work, or trip name)."
+        path_params_as_input: true
       parameters:
         - name: date
           in: path
@@ -493,6 +560,9 @@ paths:
       description: |
         Returns a timeline of where the user will be across a date range.
         Consecutive days at the same location are grouped into segments.
+      x-mcp:
+        tool: get_location_range
+        description: "Get a timeline of where the user will be across a date range. Returns location segments with dates and sources. Use from and to parameters (YYYY-MM-DD)."
       parameters:
         - name: from
           in: query

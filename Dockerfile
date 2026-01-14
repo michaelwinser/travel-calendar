@@ -8,8 +8,7 @@
 #   base-go        - Go base with CGO dependencies
 #   deps           - Install pnpm dependencies
 #   frontend-build - Build SvelteKit static site
-#   backend-build  - Build Go backend binary
-#   mcp-build      - Build Go MCP server binary
+#   backend-build  - Build Go backend binary (includes MCP server)
 #   runtime        - Final minimal runtime image
 #
 # Usage:
@@ -102,24 +101,6 @@ COPY --from=frontend-build /app/packages/frontend/build ./cmd/server/dist/
 RUN go build -o /app/bin/server ./cmd/server
 
 # ===========================================
-# Stage: mcp-build - Build Go MCP server
-# ===========================================
-FROM base-go AS mcp-build
-
-# Copy go.mod and go.sum first for caching
-COPY packages/mcp-server/go.mod packages/mcp-server/go.sum ./packages/mcp-server/
-
-# Download MCP dependencies
-WORKDIR /app/packages/mcp-server
-RUN go mod download
-
-# Copy MCP source
-COPY packages/mcp-server ./
-
-# Build the MCP binary
-RUN go build -o /app/bin/mcp ./cmd/mcp
-
-# ===========================================
 # Stage: runtime - Final minimal image
 # ===========================================
 FROM alpine:3.19 AS runtime
@@ -136,9 +117,8 @@ RUN addgroup -g 1000 app && adduser -u 1000 -G app -s /bin/sh -D app
 
 WORKDIR /app
 
-# Copy binaries from build stages
+# Copy binary from build stage
 COPY --from=backend-build /app/bin/server /app/bin/server
-COPY --from=mcp-build /app/bin/mcp /app/bin/mcp
 
 # Create data directory
 RUN mkdir -p /app/data && chown -R app:app /app
@@ -181,8 +161,6 @@ COPY packages ./packages/
 
 # Download Go dependencies
 WORKDIR /app/packages/backend
-RUN go mod download
-WORKDIR /app/packages/mcp-server
 RUN go mod download
 
 WORKDIR /app

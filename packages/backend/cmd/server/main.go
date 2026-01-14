@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/user/travel-calendar/backend/internal/api"
 	"github.com/user/travel-calendar/backend/internal/handler"
+	"github.com/user/travel-calendar/backend/internal/mcp"
 	"github.com/user/travel-calendar/backend/internal/service"
 	"github.com/user/travel-calendar/backend/internal/store"
 )
@@ -40,20 +41,21 @@ func main() {
 	}
 	defer db.Close()
 
-	// Initialize service and handler
+	// Initialize service and handlers
 	svc := service.New(db)
 	h := handler.New(svc)
+	mcpHandler := mcp.NewHandler(svc)
 
 	// Set up router
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	// CORS and Content-Type middleware for API routes only
+	// CORS and Content-Type middleware for API and MCP routes
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			// Only apply JSON content-type and CORS to API routes
-			if strings.HasPrefix(req.URL.Path, "/api/") || req.URL.Path == "/health" {
+			// Apply JSON content-type and CORS to API and MCP routes
+			if strings.HasPrefix(req.URL.Path, "/api/") || req.URL.Path == "/health" || req.URL.Path == "/mcp" {
 				w.Header().Set("Content-Type", "application/json")
 				w.Header().Set("Access-Control-Allow-Origin", "*")
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
@@ -69,6 +71,11 @@ func main() {
 
 	// Register OpenAPI handlers for /api/* and /health
 	api.HandlerFromMux(h, r)
+
+	// Register MCP JSON-RPC handler
+	r.Post("/mcp", mcpHandler.ServeHTTP)
+	r.Head("/mcp", mcpHandler.VersionHandler)
+	r.Get("/mcp", mcpHandler.VersionHandler)
 
 	// Serve embedded static frontend for all other routes
 	r.Handle("/*", staticHandler())

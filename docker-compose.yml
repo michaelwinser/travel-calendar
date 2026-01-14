@@ -4,22 +4,19 @@
 #   docker compose build              # Build images
 #   docker compose up                 # Start backend
 #   docker compose up -d              # Start in background
-#   docker compose --profile mcp up   # Start with MCP server
 #   docker compose logs -f backend    # Follow logs
 #   docker compose down               # Stop all services
 #
 # Testing (via ./tc):
 #   ./tc test backend                 # Run backend tests
-#   ./tc test mcp                     # Run MCP tests
 #   ./tc test frontend                # Run frontend tests
 #
 # Services:
-#   backend - REST API + Static Frontend on http://localhost:3000
-#   mcp     - MCP Server on http://localhost:3001 (profile: mcp)
+#   backend - REST API + Static Frontend + MCP on http://localhost:3000
 
 services:
   # ===========================================
-  # Backend - REST API + Static Frontend
+  # Backend - REST API + Static Frontend + MCP
   # ===========================================
   backend:
     build:
@@ -40,26 +37,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
-
-  # ===========================================
-  # MCP Server - LLM Interface
-  # ===========================================
-  mcp:
-    build:
-      context: .
-      target: runtime
-    container_name: travel-mcp
-    command: ["/app/bin/mcp"]
-    ports:
-      - "3001:3001"
-    environment:
-      - BACKEND_URL=http://backend:3000
-      - PORT=3001
-    depends_on:
-      backend:
-        condition: service_healthy
-    profiles:
-      - mcp
 
   # ===========================================
   # Dev - Development container with all tools

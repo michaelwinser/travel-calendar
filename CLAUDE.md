@@ -22,22 +22,22 @@ This codebase is designed for **AI-assisted development** with strong component 
 │                           COMPONENTS                                     │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐              │
-│  │   backend    │    │   frontend   │    │  mcp-server  │              │
-│  │   (Go)       │    │              │    │   (Go)       │              │
-│  │  REST API    │◄──►│   SvelteKit  │    │  LLM Tools   │              │
-│  │  Entities    │    │   MVC        │    │  JSON-RPC    │              │
-│  │  Services    │    │   Components │    │              │              │
-│  └──────────────┘    └──────────────┘    └──────────────┘              │
-│         ▲                   │                   │                       │
-│         │                   │                   │                       │
-│  ┌──────┴───────┐          │                   │                       │
-│  │    cli       │          │                   │                       │
-│  │   (Go)       │          │                   │                       │
-│  │   Cobra      │          │                   │                       │
-│  └──────────────┘          │                   │                       │
-│         │                   │                   │                       │
-│         └───────────────────┴───────────────────┘                       │
+│  ┌──────────────────────┐    ┌──────────────┐                          │
+│  │       backend        │    │   frontend   │                          │
+│  │        (Go)          │    │              │                          │
+│  │  REST API + MCP      │◄──►│   SvelteKit  │                          │
+│  │  Entities            │    │   MVC        │                          │
+│  │  Services            │    │   Components │                          │
+│  └──────────────────────┘    └──────────────┘                          │
+│         ▲                           │                                   │
+│         │                           │                                   │
+│  ┌──────┴───────┐                   │                                   │
+│  │    cli       │                   │                                   │
+│  │   (Go)       │                   │                                   │
+│  │   Cobra      │                   │                                   │
+│  └──────────────┘                   │                                   │
+│         │                           │                                   │
+│         └───────────────────────────┘                                   │
 │                             │                                           │
 │                    ┌────────▼────────┐                                 │
 │                    │     shared      │                                 │
@@ -61,9 +61,8 @@ This codebase is designed for **AI-assisted development** with strong component 
 | Component | Owns | Never Contains |
 |-----------|------|----------------|
 | `api` | OpenAPI specification | Implementation code |
-| `backend` | REST API, database, business logic (Go) | UI code, frontend imports |
+| `backend` | REST API, MCP server, database, business logic (Go) | UI code, frontend imports |
 | `frontend` | UI components, reactive stores, routing | Direct DB access, business logic |
-| `mcp-server` | MCP tools, LLM-facing API (Go) | UI code, direct DB access |
 | `cli` | Command-line interface (Go) | UI code, business logic |
 | `shared` | TypeScript types (generated from OpenAPI) | Logic, runtime code, manual type definitions |
 
@@ -79,7 +78,7 @@ All other agents must delegate commit/push operations to the Commit Agent. This 
 1. **Every commit references an issue**: `feat(backend): add expense entity (#42)`
 2. **Commit format**: `type(component): description (#issue)`
    - Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
-   - Component: `api`, `backend`, `frontend`, `mcp-server`, `cli`, `shared`, `infra`
+   - Component: `api`, `backend`, `frontend`, `cli`, `shared`, `infra`
 3. **No direct commits to main** - all changes via PR
 4. **PR title matches commit format**
 
@@ -150,11 +149,8 @@ Raw `docker` and `docker-compose` commands are denied in `.claude/settings.json`
 ./tc exec <command>             # Run command in backend container
 ./tc logs [service]             # View service logs
 
-# Backend testing (Go):
+# Backend testing (Go, includes MCP):
 ./tc exec sh -c "cd packages/backend && go test ./..."
-
-# MCP testing (Go):
-./tc exec sh -c "cd packages/mcp-server && go test ./..."
 
 # NOT these (will be denied):
 docker compose up       # DENIED
@@ -191,9 +187,8 @@ The following files have special ownership rules:
 | Task Type | Agent File | Scope |
 |-----------|------------|-------|
 | OpenAPI specification | `.claude/agents/cross-component.md` | `packages/api/` |
-| Backend API, entities, services (Go) | `.claude/agents/backend.md` | `packages/backend/` |
+| Backend API, entities, services, MCP (Go) | `.claude/agents/backend.md` | `packages/backend/` |
 | Frontend UI, stores, routes | `.claude/agents/frontend.md` | `packages/frontend/` |
-| MCP tools, LLM resources (Go) | `.claude/agents/mcp-server.md` | `packages/mcp-server/` |
 | CLI commands (Go) | `.claude/agents/cross-component.md` | `packages/cli/` |
 | TypeScript types (generated) | `.claude/agents/shared.md` | `packages/shared/` |
 | Multi-component changes | `.claude/agents/cross-component.md` | Multiple packages |
@@ -213,16 +208,12 @@ Each agent has detailed checklists. Here are the key rules:
 - **Read first**: `packages/backend/ARCHITECTURE.md`
 - **Test**: `./tc exec sh -c "cd packages/backend && go test ./..."`
 - **Forbidden**: UI code, frontend imports, direct DB queries in handlers
+- **MCP**: Tool definitions auto-generated from OpenAPI `x-mcp` extensions; handlers in `internal/mcp/`
 
 #### Frontend Agent
 - **Read first**: `packages/frontend/ARCHITECTURE.md`
 - **Test**: `./tc exec pnpm test:frontend`
 - **Forbidden**: Direct API calls in components, ID-based lookups, business logic
-
-#### MCP Server Agent (Go)
-- **Read first**: `packages/mcp-server/ARCHITECTURE.md`
-- **Test**: `./tc exec sh -c "cd packages/mcp-server && go test ./..."`
-- **Forbidden**: Direct database access, UI code, raw JSON responses
 
 #### CLI Agent (Go)
 - **Read first**: `packages/cli/ARCHITECTURE.md`
@@ -236,7 +227,7 @@ Each agent has detailed checklists. Here are the key rules:
 
 #### Cross-Component Agent
 - **Action**: Create plan at `docs/plans/{issue-number}.md`
-- **Order**: api → shared → backend → cli → mcp-server → frontend → e2e tests
+- **Order**: api → shared → backend → cli → frontend → e2e tests
 - **Requirement**: Get explicit user approval before implementing
 
 #### Infra Agent
