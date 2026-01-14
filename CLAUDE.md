@@ -69,6 +69,13 @@ This codebase is designed for **AI-assisted development** with strong component 
 
 ### Git Workflow
 
+**CRITICAL: Only the Commit Agent may execute `git commit` or `git push` commands.**
+
+All other agents must delegate commit/push operations to the Commit Agent. This ensures:
+- Code Review Agent is always invoked before commits
+- Pre-commit checks (`./tc test-precommit`) always run
+- Consistent commit message formatting
+
 1. **Every commit references an issue**: `feat(backend): add expense entity (#42)`
 2. **Commit format**: `type(component): description (#issue)`
    - Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
@@ -192,6 +199,7 @@ The following files have special ownership rules:
 | Docker, containers, CI/CD | `.claude/agents/infra.md` | Infrastructure |
 | End-to-end tests | `.claude/agents/e2e-test.md` | `tests/e2e/` |
 | **Pre-commit review** | `.claude/agents/code-review.md` | All changes |
+| **Git commits and pushes** | `.claude/agents/commit.md` | All git operations |
 
 ### Agent Quick Reference
 
@@ -245,6 +253,12 @@ Each agent has detailed checklists. Here are the key rules:
 - **Output**: Review report with APPROVED, NEEDS FIXES, or NEEDS DISCUSSION
 - **On failure**: Prompts user for guidance on how to proceed
 
+#### Commit Agent
+- **Exclusive authority**: ONLY agent allowed to run `git commit` or `git push`
+- **Mandatory steps**: Run `./tc test-precommit`, invoke Code Review Agent
+- **Workflow**: Pre-commit checks → Code Review → Stage → Commit → (Push if requested)
+- **Forbidden**: Committing without Code Review approval, force-push to main/master
+
 ---
 
 ## Reference Files
@@ -254,6 +268,7 @@ Each agent has detailed checklists. Here are the key rules:
 | `CLAUDE.md` | This file - universal principles | Always (start here) |
 | `PROJECT_MAP.md` | Component overview, lexicon | Understanding codebase |
 | `.claude/agents/*.md` | Detailed agent checklists | Before component work |
+| `.claude/agents/commit.md` | Commit workflow (exclusive authority) | Before any commit |
 | `.claude/agents/code-review.md` | Pre-commit review process | Before committing |
 | `.claude/reviewer.md` | Pushback/review criteria | Evaluating requests |
 | `packages/*/ARCHITECTURE.md` | Component-specific patterns | Before component changes |

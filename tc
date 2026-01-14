@@ -7,15 +7,16 @@
 #   ./tc <command> [options]
 #
 # Commands:
-#   start       Start all services
-#   stop        Stop all services
-#   restart     Restart all services
-#   build       Build/rebuild containers
-#   logs        View logs (follow mode)
-#   status      Show service status
-#   shell       Open shell in a container
-#   test        Run tests
-#   lint        Run linting
+#   start           Start all services
+#   stop            Stop all services
+#   restart         Restart all services
+#   build           Build/rebuild containers
+#   logs            View logs (follow mode)
+#   status          Show service status
+#   shell           Open shell in a container
+#   test            Run tests
+#   test-precommit  Fast pre-commit checks
+#   lint            Run linting
 #
 #   db:reset    Reset database (delete and recreate)
 #   db:backup   Backup database to file
@@ -221,6 +222,53 @@ cmd_test() {
             error "Unknown test target: $target. Use: all, e2e, backend, frontend, mcp"
             ;;
     esac
+}
+
+cmd_test_precommit() {
+    require_docker
+    info "Running pre-commit checks..."
+
+    # Ensure backend is healthy (test container depends on it)
+    if ! docker compose ps backend 2>/dev/null | grep -q "running"; then
+        info "Starting backend container..."
+        docker compose up -d backend
+        info "Waiting for backend to be healthy..."
+        sleep 5
+    fi
+
+    failed=0
+
+    # Backend Go tests (use test container which has all packages mounted)
+    info "Running backend tests (Go)..."
+    if ! docker compose run --rm --no-deps test sh -c "cd /app/packages/backend && go test ./..."; then
+        warn "Backend tests failed"
+        failed=1
+    fi
+
+    # MCP server Go tests
+    info "Running MCP server tests (Go)..."
+    if ! docker compose run --rm --no-deps test sh -c "cd /app/packages/mcp-server && go test ./..."; then
+        warn "MCP server tests failed"
+        failed=1
+    fi
+
+    # Frontend type checking (optional - only if sandbox is available)
+    if docker compose ps sandbox 2>/dev/null | grep -q "running"; then
+        info "Running frontend type check..."
+        if ! docker compose exec sandbox sh -c "cd packages/frontend && pnpm exec svelte-check --threshold warning" 2>/dev/null; then
+            warn "Frontend type check failed"
+            failed=1
+        fi
+    else
+        info "Skipping frontend type check (sandbox not running)"
+    fi
+
+    if [ $failed -eq 0 ]; then
+        success "All pre-commit checks passed"
+        return 0
+    else
+        error "Pre-commit checks failed"
+    fi
 }
 
 cmd_lint() {
@@ -618,6 +666,7 @@ Service Commands:
 
 Testing & Quality:
   test [target]          Run tests (all, e2e, backend, frontend, mcp)
+  test-precommit         Fast pre-commit checks (Go tests, type checking)
   lint [target]          Run linting (all, boundaries, commits, or service)
 
 Go Development:
@@ -680,6 +729,7 @@ case "$command" in
     shell|sh)   cmd_shell "$@" ;;
 
     test)       cmd_test "$@" ;;
+    test-precommit)  cmd_test_precommit "$@" ;;
     lint)       cmd_lint "$@" ;;
 
     db:reset)   cmd_db_reset "$@" ;;
