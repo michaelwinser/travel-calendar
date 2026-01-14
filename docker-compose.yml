@@ -3,15 +3,14 @@
 # Usage:
 #   docker compose up                    # Start all services
 #   docker compose up -d                 # Start in background
-#   docker compose up backend frontend   # Start specific services
 #   docker compose logs -f backend       # Follow logs
 #   docker compose exec backend sh       # Shell into container
 #   docker compose down                  # Stop all services
 #   docker compose build --no-cache      # Rebuild images
 #
 # Services:
-#   backend   - REST API (Go + Chi + SQLite) on http://localhost:3000
-#   frontend  - Web UI (SvelteKit) on http://localhost:5173
+#   backend   - REST API + Static Frontend (Go + Chi + SQLite) on http://localhost:3000
+#               Serves API at /api/* and embedded static files at /*
 #   mcp       - MCP Server (Go + HTTP) on http://localhost:3001
 #
 # First-time setup:
@@ -20,7 +19,8 @@
 
 services:
   # ===========================================
-  # Backend - REST API (Go)
+  # Backend - REST API + Static Frontend (Go)
+  # Static files are embedded via go:embed from cmd/server/dist/
   # ===========================================
   backend:
     build:
@@ -50,31 +50,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
-
-  # ===========================================
-  # Frontend - SvelteKit Web UI
-  # ===========================================
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    container_name: travel-frontend
-    command: pnpm --filter @travel-calendar/frontend dev --host 0.0.0.0
-    ports:
-      - "5173:5173"
-    volumes:
-      # Source code - bind mount for hot reload
-      - ./packages/frontend/src:/app/packages/frontend/src
-      - ./packages/frontend/static:/app/packages/frontend/static
-      - ./packages/shared/src:/app/packages/shared/src
-    environment:
-      - NODE_ENV=development
-      - PUBLIC_API_URL=http://localhost:3000
-      # Vite needs this to detect file changes in Docker on macOS
-      - CHOKIDAR_USEPOLLING=true
-    depends_on:
-      backend:
-        condition: service_healthy
 
   # ===========================================
   # MCP Server - LLM Interface (Go)

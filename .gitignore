@@ -5,6 +5,8 @@ node_modules/
 # Build outputs
 dist/
 .svelte-kit/
+packages/frontend/build/
+packages/backend/server
 packages/cli/travel
 
 # Data (SQLite database)

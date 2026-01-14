@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -47,24 +48,30 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.SetHeader("Content-Type", "application/json"))
 
-	// Enable CORS for frontend
+	// CORS and Content-Type middleware for API routes only
 	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-			if r.Method == "OPTIONS" {
-				w.WriteHeader(http.StatusOK)
-				return
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			// Only apply JSON content-type and CORS to API routes
+			if strings.HasPrefix(req.URL.Path, "/api/") || req.URL.Path == "/health" {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+				if req.Method == "OPTIONS" {
+					w.WriteHeader(http.StatusOK)
+					return
+				}
 			}
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(w, req)
 		})
 	})
 
-	// Register OpenAPI handlers
+	// Register OpenAPI handlers for /api/* and /health
 	api.HandlerFromMux(h, r)
+
+	// Serve embedded static frontend for all other routes
+	r.Handle("/*", staticHandler())
 
 	addr := fmt.Sprintf(":%s", port)
 	log.Printf("Backend server starting on %s", addr)
