@@ -24,11 +24,18 @@ This codebase is designed for **AI-assisted development** with strong component 
 │                                                                          │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐              │
 │  │   backend    │    │   frontend   │    │  mcp-server  │              │
-│  │              │    │              │    │              │              │
+│  │   (Go)       │    │              │    │   (Go)       │              │
 │  │  REST API    │◄──►│   SvelteKit  │    │  LLM Tools   │              │
-│  │  Entities    │    │   MVC        │    │              │              │
+│  │  Entities    │    │   MVC        │    │  JSON-RPC    │              │
 │  │  Services    │    │   Components │    │              │              │
 │  └──────────────┘    └──────────────┘    └──────────────┘              │
+│         ▲                   │                   │                       │
+│         │                   │                   │                       │
+│  ┌──────┴───────┐          │                   │                       │
+│  │    cli       │          │                   │                       │
+│  │   (Go)       │          │                   │                       │
+│  │   Cobra      │          │                   │                       │
+│  └──────────────┘          │                   │                       │
 │         │                   │                   │                       │
 │         └───────────────────┴───────────────────┘                       │
 │                             │                                           │
@@ -36,7 +43,14 @@ This codebase is designed for **AI-assisted development** with strong component 
 │                    │     shared      │                                 │
 │                    │                 │                                 │
 │                    │  Types only     │                                 │
-│                    │  No logic       │                                 │
+│                    │  (generated)    │                                 │
+│                    └─────────────────┘                                 │
+│                             ▲                                           │
+│                    ┌────────┴────────┐                                 │
+│                    │      api        │                                 │
+│                    │  OpenAPI Spec   │                                 │
+│                    │  (source of     │                                 │
+│                    │   truth)        │                                 │
 │                    └─────────────────┘                                 │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -46,17 +60,19 @@ This codebase is designed for **AI-assisted development** with strong component 
 
 | Component | Owns | Never Contains |
 |-----------|------|----------------|
-| `backend` | REST API, database, business logic | UI code, Svelte imports |
+| `api` | OpenAPI specification | Implementation code |
+| `backend` | REST API, database, business logic (Go) | UI code, frontend imports |
 | `frontend` | UI components, reactive stores, routing | Direct DB access, business logic |
-| `mcp-server` | MCP tools/resources, LLM-facing API | UI code, direct DB writes |
-| `shared` | TypeScript types, constants | Logic, runtime code, dependencies |
+| `mcp-server` | MCP tools, LLM-facing API (Go) | UI code, direct DB access |
+| `cli` | Command-line interface (Go) | UI code, business logic |
+| `shared` | TypeScript types (generated from OpenAPI) | Logic, runtime code, manual type definitions |
 
 ### Git Workflow
 
 1. **Every commit references an issue**: `feat(backend): add expense entity (#42)`
 2. **Commit format**: `type(component): description (#issue)`
    - Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
-   - Component: `backend`, `frontend`, `mcp-server`, `shared`, `infra`
+   - Component: `api`, `backend`, `frontend`, `mcp-server`, `cli`, `shared`, `infra`
 3. **No direct commits to main** - all changes via PR
 4. **PR title matches commit format**
 
@@ -72,8 +88,9 @@ This codebase is designed for **AI-assisted development** with strong component 
 When working on a file, check for:
 1. **Component ARCHITECTURE.md** - overall patterns
 2. **Directory README.md** - specific conventions for that directory
-3. **Adjacent test files** - `*.test.ts` shows expected behavior
-4. **Type definitions** - in `shared/` for the entity you're touching
+3. **Adjacent test files** - `*_test.go` or `*.test.ts` shows expected behavior
+4. **Type definitions** - in `shared/` (generated from OpenAPI) for the entity you're touching
+5. **OpenAPI spec** - `packages/api/openapi.yaml` for API contracts
 
 ### Pushback Protocol
 
@@ -117,16 +134,24 @@ Raw `docker` and `docker-compose` commands are denied in `.claude/settings.json`
 
 ```bash
 # Use these:
-./tc build              # Build containers
-./tc start              # Start services
-./tc health             # Check service health
-./tc curl <url>         # HTTP requests inside container
-./tc go test ./...      # Run Go tests
+./tc build                      # Build containers
+./tc start                      # Start services
+./tc stop                       # Stop services
+./tc health                     # Check service health
+./tc curl <service:port/path>   # HTTP requests inside container
+./tc exec <command>             # Run command in backend container
+./tc logs [service]             # View service logs
+
+# Backend testing (Go):
+./tc exec sh -c "cd packages/backend && go test ./..."
+
+# MCP testing (Go):
+./tc exec sh -c "cd packages/mcp-server && go test ./..."
 
 # NOT these (will be denied):
 docker compose up       # DENIED
 docker build .          # DENIED
-curl localhost:3000     # DENIED (use ./tc curl)
+curl localhost:3000     # DENIED (use ./tc curl backend:3000)
 ```
 
 ### Protected Files
@@ -157,10 +182,12 @@ The following files have special ownership rules:
 
 | Task Type | Agent File | Scope |
 |-----------|------------|-------|
-| Backend API, entities, services | `.claude/agents/backend.md` | `packages/backend/` |
+| OpenAPI specification | `.claude/agents/cross-component.md` | `packages/api/` |
+| Backend API, entities, services (Go) | `.claude/agents/backend.md` | `packages/backend/` |
 | Frontend UI, stores, routes | `.claude/agents/frontend.md` | `packages/frontend/` |
-| MCP tools, LLM resources | `.claude/agents/mcp-server.md` | `packages/mcp-server/` |
-| TypeScript types only | `.claude/agents/shared.md` | `packages/shared/` |
+| MCP tools, LLM resources (Go) | `.claude/agents/mcp-server.md` | `packages/mcp-server/` |
+| CLI commands (Go) | `.claude/agents/cross-component.md` | `packages/cli/` |
+| TypeScript types (generated) | `.claude/agents/shared.md` | `packages/shared/` |
 | Multi-component changes | `.claude/agents/cross-component.md` | Multiple packages |
 | Docker, containers, CI/CD | `.claude/agents/infra.md` | Infrastructure |
 | End-to-end tests | `.claude/agents/e2e-test.md` | `tests/e2e/` |
@@ -170,29 +197,34 @@ The following files have special ownership rules:
 
 Each agent has detailed checklists. Here are the key rules:
 
-#### Backend Agent
+#### Backend Agent (Go)
 - **Read first**: `packages/backend/ARCHITECTURE.md`
-- **Test**: `./tc go test ./...`
-- **Forbidden**: UI code, frontend imports, direct DB queries in routes
+- **Test**: `./tc exec sh -c "cd packages/backend && go test ./..."`
+- **Forbidden**: UI code, frontend imports, direct DB queries in handlers
 
 #### Frontend Agent
 - **Read first**: `packages/frontend/ARCHITECTURE.md`
 - **Test**: `./tc exec pnpm test:frontend`
 - **Forbidden**: Direct API calls in components, ID-based lookups, business logic
 
-#### MCP Server Agent
+#### MCP Server Agent (Go)
 - **Read first**: `packages/mcp-server/ARCHITECTURE.md`
-- **Test**: `./tc go mcp test ./...`
+- **Test**: `./tc exec sh -c "cd packages/mcp-server && go test ./..."`
 - **Forbidden**: Direct database access, UI code, raw JSON responses
+
+#### CLI Agent (Go)
+- **Read first**: `packages/cli/ARCHITECTURE.md`
+- **Build**: `cd packages/cli && go build -o travel ./cmd/travel`
+- **Forbidden**: Direct API calls (use generated client), business logic
 
 #### Shared Agent
 - **Read first**: `packages/shared/ARCHITECTURE.md`
-- **Test**: `./tc exec pnpm build:shared`
-- **Forbidden**: Runtime code (functions, classes), dependencies, default exports
+- **Regenerate**: `./tc exec pnpm --filter @travel-calendar/shared generate`
+- **Forbidden**: Editing api.ts directly, runtime code, manual type definitions
 
 #### Cross-Component Agent
 - **Action**: Create plan at `docs/plans/{issue-number}.md`
-- **Order**: shared → backend → frontend → mcp-server → e2e tests
+- **Order**: api → shared → backend → cli → mcp-server → frontend → e2e tests
 - **Requirement**: Get explicit user approval before implementing
 
 #### Infra Agent

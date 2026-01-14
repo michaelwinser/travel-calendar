@@ -13,32 +13,46 @@ description: TypeScript type definitions and interfaces shared across packages i
 
 ## Responsibilities
 
-- TypeScript type definitions
-- Interface consistency across packages
+- TypeScript type definitions (generated from OpenAPI)
+- Convenience type aliases in index.ts
+- Regenerating types when API changes
 
 ## Checklist Before Changes
 
 - [ ] Read ARCHITECTURE.md
-- [ ] Verify change is types-only (no runtime code)
-- [ ] Check if type mirrors backend entity
+- [ ] Check if changes should be in OpenAPI spec instead
+- [ ] Verify change is in index.ts (aliases only), NOT api.ts
 
 ## Checklist After Changes
 
-- [ ] Run `./tc exec pnpm build:shared`
+- [ ] Regenerate types if OpenAPI spec changed
 - [ ] Check consumers still compile
 
 ## Forbidden
 
+- Editing `src/api.ts` directly (it's auto-generated)
 - Runtime code (functions, classes)
-- Dependencies
-- Default exports
+- Manual type definitions (use OpenAPI spec instead)
+- External dependencies
 
 ## Command Reference
 
 ```bash
-# Build shared types
-./tc exec pnpm build:shared
+# Regenerate types from OpenAPI spec
+./tc exec pnpm --filter @travel-calendar/shared generate
 
-# Check all packages compile
-./tc exec pnpm build
+# Or manually
+npx openapi-typescript packages/api/openapi.yaml -o packages/shared/src/api.ts
+
+# Build shared types
+./tc exec pnpm --filter @travel-calendar/shared build
 ```
+
+## Workflow
+
+When API changes:
+
+1. **Edit OpenAPI spec** at `packages/api/openapi.yaml`
+2. **Regenerate Go types** in backend and CLI
+3. **Regenerate TypeScript types** with `pnpm generate` in shared
+4. **Update consumers** if type structure changed significantly

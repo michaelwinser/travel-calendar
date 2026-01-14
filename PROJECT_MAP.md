@@ -13,11 +13,14 @@ This is the authoritative reference for what exists in this project. Claude Code
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         TRAVEL CALENDAR                                      │
 │                                                                              │
-│  A trip management system with two interfaces:                              │
+│  A trip management system with three interfaces:                            │
+│  • CLI → Command-line trip management                                       │
 │  • MCP Server → LLM queries ("When is my next trip?")                       │
 │  • Web UI → Visual calendar, trip editing                                   │
 │                                                                              │
 │  Core entity: TRIP (contains ITEMS like flights, hotels, events)            │
+│                                                                              │
+│  Architecture: OpenAPI-first (single source of truth for types)             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -25,24 +28,40 @@ This is the authoritative reference for what exists in this project. Claude Code
 
 ## Components
 
-### `backend` - REST API
+### `api` - OpenAPI Specification
 
 | Responsibility | Location |
 |---------------|----------|
-| HTTP server | `src/index.ts` |
-| Trip CRUD | `src/routes/trips.ts` |
-| Item CRUD | `src/routes/items.ts` |
-| Document CRUD | `src/routes/documents.ts` |
-| Business logic | `src/services/*.ts` |
-| Database schema | `src/entities/*.ts` |
-| Validation | `src/lib/validation.ts` |
+| API specification | `packages/api/openapi.yaml` |
 
 **Key patterns**:
-- Routes are thin, services are thick
-- All input validated with Zod
-- Entities are database-only (no business logic)
+- Single source of truth for all types
+- Generates Go server types (backend)
+- Generates Go client types (CLI)
+- Generates TypeScript types (frontend)
 
-**Dependencies**: Hono, Drizzle, better-sqlite3, Zod
+---
+
+### `backend` - REST API (Go)
+
+| Responsibility | Location |
+|---------------|----------|
+| HTTP server | `cmd/server/main.go` |
+| Generated types | `internal/api/openapi.gen.go` |
+| Trip entity | `internal/entity/trip.go` |
+| Item entity | `internal/entity/item.go` |
+| Document entity | `internal/entity/document.go` |
+| Database layer | `internal/store/sqlite.go` |
+| Business logic | `internal/service/service.go` |
+| HTTP handlers | `internal/handler/handler.go` |
+
+**Key patterns**:
+- OpenAPI-first: handlers implement generated ServerInterface
+- Layered: Handler → Service → Store → Entity
+- Entities are internal, converted to/from API types
+- All input validated at handler level
+
+**Dependencies**: Chi router, go-sqlite3, google/uuid, oapi-codegen
 
 ---
 
@@ -66,23 +85,46 @@ This is the authoritative reference for what exists in this project. Claude Code
 
 ---
 
-### `mcp-server` - LLM Interface
+### `mcp-server` - LLM Interface (Go)
 
 | Responsibility | Location |
 |---------------|----------|
-| MCP server setup | `src/index.ts` |
-| Trip tools | `src/tools/trips.ts` |
-| Item tools | `src/tools/items.ts` |
-| Document tools | `src/tools/documents.ts` |
-| Backend client | `src/lib/backend-client.ts` |
-| LLM formatters | `src/lib/formatters.ts` |
+| HTTP server | `cmd/mcp/main.go` |
+| JSON-RPC handler | `internal/handler/mcp.go` |
+| Tool registry | `internal/tools/registry.go` |
+| Trip tools | `internal/tools/trips.go` |
+| Document tools | `internal/tools/documents.go` |
+| LLM formatters | `internal/formatter/markdown.go` |
 
 **Key patterns**:
+- HTTP Streamable transport (JSON-RPC 2.0 over HTTP)
 - Facade over backend API (no direct DB)
-- Responses formatted for LLM consumption
+- Responses formatted as markdown for LLM consumption
 - Tools are verb-oriented (`get_trips`, not `trips`)
 
-**Dependencies**: @modelcontextprotocol/sdk
+**Dependencies**: Standard library only
+
+---
+
+### `cli` - Command Line Interface (Go)
+
+| Responsibility | Location |
+|---------------|----------|
+| Entry point | `cmd/travel/main.go` |
+| Generated client | `internal/client/client.gen.go` |
+| Root command | `internal/cmd/root.go` |
+| Trips commands | `internal/cmd/trips.go` |
+| Items commands | `internal/cmd/items.go` |
+| Documents commands | `internal/cmd/documents.go` |
+| Output formatting | `internal/output/output.go` |
+
+**Key patterns**:
+- OpenAPI-generated HTTP client
+- Cobra command hierarchy
+- `--json` flag for machine-readable output
+- Environment variable configuration (TRAVEL_API_URL)
+
+**Dependencies**: Cobra, Viper, oapi-codegen
 
 ---
 
@@ -90,15 +132,13 @@ This is the authoritative reference for what exists in this project. Claude Code
 
 | Responsibility | Location |
 |---------------|----------|
-| Trip types | `src/trip.ts` |
-| Item types | `src/item.ts` |
-| Document types | `src/document.ts` |
-| API types | `src/api.ts` |
+| Generated types | `src/api.ts` |
+| Type aliases | `src/index.ts` |
 
 **Key patterns**:
-- Types only (no runtime code)
-- No dependencies
-- Mirrors backend entities
+- Types generated from OpenAPI spec
+- No runtime code
+- No dependencies (except openapi-typescript for generation)
 
 ---
 
@@ -106,32 +146,19 @@ This is the authoritative reference for what exists in this project. Claude Code
 
 | Responsibility | Location |
 |---------------|----------|
-| Development Dockerfile | `Dockerfile.dev` |
+| Go development Dockerfile | `Dockerfile.go` |
 | Service orchestration | `docker-compose.yml` |
 | Build exclusions | `.dockerignore` |
 | Data persistence | `data/` |
+| Helper script | `./tc` |
 
 **Key patterns**:
 - All development is container-based
-- Named volumes for node_modules (macOS performance)
-- Bind mounts for source code (hot reload)
-- Profiles for optional services (mcp, test)
+- Go services with CGO (for SQLite)
+- Bind mounts for source code
+- `./tc` script for all Docker operations
 
 **Dependencies**: Docker, Docker Compose
-
----
-
-### `cli` - Command Line Interface
-
-| Responsibility | Location |
-|---------------|----------|
-| Trip commands | `cli/travel` |
-| Test automation | Used by `tests/e2e/*.sh` |
-
-**Key patterns**:
-- Bash script wrapping REST API
-- `--json` flag for machine-readable output
-- Used for E2E testing
 
 ---
 
@@ -141,24 +168,24 @@ This is the authoritative reference for what exists in this project. Claude Code
 User/LLM Request
        │
        ▼
-┌──────────────────┐     ┌──────────────────┐
-│   MCP Server     │     │   Frontend       │
-│   (tools)        │     │   (stores)       │
-└────────┬─────────┘     └────────┬─────────┘
-         │                        │
-         │     HTTP/REST          │
-         └──────────┬─────────────┘
-                    ▼
-         ┌──────────────────┐
-         │     Backend      │
-         │   (services)     │
-         └────────┬─────────┘
-                  │
-                  ▼
-         ┌──────────────────┐
-         │     SQLite       │
-         │   (entities)     │
-         └──────────────────┘
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│   CLI (Go)       │     │   MCP Server     │     │   Frontend       │
+│   (cobra)        │     │   (Go tools)     │     │   (stores)       │
+└────────┬─────────┘     └────────┬─────────┘     └────────┬─────────┘
+         │                        │                        │
+         │           HTTP/REST    │                        │
+         └────────────────────────┼────────────────────────┘
+                                  ▼
+                       ┌──────────────────┐
+                       │     Backend      │
+                       │   (Go services)  │
+                       └────────┬─────────┘
+                                │
+                                ▼
+                       ┌──────────────────┐
+                       │     SQLite       │
+                       │   (entities)     │
+                       └──────────────────┘
 ```
 
 ---
@@ -174,14 +201,15 @@ Precise terminology for this project. **Use these terms consistently.**
 | **Flight** | An Item of type "flight" with origin/destination airports. | Plane, air travel |
 | **Hotel** | An Item of type "hotel" with check-in/check-out dates. | Lodging, accommodation, stay |
 | **Document** | A file (PDF, image) attached to a trip or item. | Attachment, file, receipt |
-| **Purpose** | Trip category: conference, work, vacation, family, personal. | Type, kind, category |
-| **Status** | Trip state: planned, confirmed, completed, cancelled. | State, phase |
+| **Purpose** | Trip category: business, vacation, conference, family, other. | Type, kind, category |
+| **Status** | Trip state: planning, confirmed, in_progress, completed, cancelled. | State, phase |
 | **Store** | Svelte reactive store. Single source of truth for a resource type. | State, cache, model |
 | **Tool** | MCP tool callable by LLM. Verb-oriented action. | Function, endpoint, command |
 | **Resource** | MCP resource readable by LLM. Data endpoint. | Endpoint, API |
 | **Component** | Svelte UI component OR project package (context-dependent). | Widget, module |
-| **Service** | Backend class containing business logic for an entity. | Controller, handler |
-| **Entity** | Database table definition (Drizzle schema). | Model, schema, table |
+| **Service** | Go package containing business logic for an entity. | Controller, handler |
+| **Entity** | Go struct with database tags. Internal representation. | Model, schema, table |
+| **Handler** | Go HTTP handler implementing ServerInterface. | Controller, route |
 
 ---
 
@@ -189,30 +217,33 @@ Precise terminology for this project. **Use these terms consistently.**
 
 | Pattern | Example | Used For |
 |---------|---------|----------|
-| `{resource}.ts` | `trip.ts` | Entity, service, or type file |
+| `{resource}.go` | `trip.go` | Entity, service, or handler file |
 | `{Resource}Card.svelte` | `TripCard.svelte` | List item view |
 | `{Resource}Chip.svelte` | `TripChip.svelte` | Inline reference |
 | `{Resource}Detail.svelte` | `TripDetail.svelte` | Full page view |
 | `{Resource}Form.svelte` | `TripForm.svelte` | Create/edit form |
-| `{resource}.test.ts` | `trip.test.ts` | Unit tests |
-| `test-{feature}.sh` | `test-trip-crud.sh` | E2E test script |
+| `{resource}_test.go` | `trip_test.go` | Go unit tests |
+| `uc-{number}-{description}.sh` | `uc-001-create-trip.sh` | E2E test script |
 
 ---
 
 ## API Endpoints
 
+Defined in `packages/api/openapi.yaml`:
+
 | Method | Endpoint | Returns |
 |--------|----------|---------|
+| `GET` | `/health` | `HealthResponse` |
 | `GET` | `/api/trips` | `Trip[]` |
 | `POST` | `/api/trips` | `Trip` |
-| `GET` | `/api/trips/:id` | `TripWithItems` |
-| `PATCH` | `/api/trips/:id` | `Trip` |
-| `DELETE` | `/api/trips/:id` | `void` |
-| `GET` | `/api/trips/:id/items` | `Item[]` |
-| `POST` | `/api/trips/:id/items` | `Item` |
-| `DELETE` | `/api/items/:id` | `void` |
+| `GET` | `/api/trips/{tripId}` | `Trip` (with items) |
+| `PATCH` | `/api/trips/{tripId}` | `Trip` |
+| `DELETE` | `/api/trips/{tripId}` | `void` |
+| `GET` | `/api/trips/search?q=` | `Trip[]` |
+| `GET` | `/api/trips/{tripId}/items` | `Item[]` |
+| `POST` | `/api/trips/{tripId}/items` | `Item` |
+| `DELETE` | `/api/items/{itemId}` | `void` |
 | `GET` | `/api/documents` | `Document[]` |
-| `POST` | `/api/documents` | `Document` |
 
 ---
 
@@ -226,8 +257,27 @@ Precise terminology for this project. **Use these terms consistently.**
 | `update_trip` | Update trip |
 | `delete_trip` | Delete trip |
 | `search_trips` | Full-text search |
+| `add_item` | Add item to trip |
+| `delete_item` | Delete item |
 | `get_documents` | List documents |
-| `get_calendar_conflicts` | Find conflicting calendar events |
+
+---
+
+## CLI Commands
+
+```
+travel trips list [--upcoming] [--past] [--purpose X]
+travel trips get <id>
+travel trips create --name X --purpose X [--start X] [--end X]
+travel trips update <id> [--name X] [--purpose X] [--status X]
+travel trips delete <id>
+travel trips search <query>
+travel items list <trip-id>
+travel items add <trip-id> <type> [--from X] [--to X] ...
+travel items delete <id>
+travel documents list [--trip X] [--unassociated]
+travel completion [bash|zsh|fish|powershell]
+```
 
 ---
 

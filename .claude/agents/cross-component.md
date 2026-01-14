@@ -1,6 +1,6 @@
 ---
 name: Cross-Component
-description: Multi-package changes requiring coordination across backend, frontend, mcp-server, or shared
+description: Multi-package changes requiring coordination across backend, frontend, mcp-server, cli, or shared
 model: opus
 ---
 
@@ -26,34 +26,44 @@ Task affects more than one component.
 # Plan: {Task Title}
 
 Issue: #{issue-number}
-Components: backend, frontend, mcp-server
+Components: api, backend, cli, mcp-server, frontend
 
 ## Summary
 {Brief description of the change}
 
-## Backend Changes
+## OpenAPI Changes (if any)
+- [ ] {Endpoint/schema modification}
+
+## Backend Changes (Go)
+- [ ] Regenerate types from OpenAPI
 - [ ] {Specific change 1}
 - [ ] {Specific change 2}
+
+## CLI Changes (Go)
+- [ ] Regenerate client from OpenAPI
+- [ ] {Specific change 1}
+
+## MCP Server Changes (Go)
+- [ ] {Specific change 1}
 
 ## Frontend Changes
 - [ ] {Specific change 1}
 - [ ] {Specific change 2}
 
-## MCP Server Changes
-- [ ] {Specific change 1}
-
 ## Shared Types Changes
-- [ ] {New type or modification}
+- [ ] Regenerate from OpenAPI
 
 ## Integration Points
-- API endpoint: `POST /api/trips/:id/items`
-- Store: `items.addItem(tripId, item)`
-- Tool: `add_item`
+- API endpoint: `POST /api/trips/{tripId}/items`
+- CLI command: `travel items add`
+- MCP tool: `add_item`
 
 ## Testing Strategy
-1. Backend unit tests for new endpoint
-2. Frontend component tests
-3. E2E test: `tests/e2e/add-flight-to-trip.sh`
+1. Backend Go tests
+2. CLI build and manual test
+3. MCP tool curl test
+4. Frontend build
+5. E2E test: `tests/e2e/uc-XXX-description.sh`
 
 ## Approval
 - [ ] Plan reviewed and approved
@@ -61,8 +71,31 @@ Components: backend, frontend, mcp-server
 
 ## Execution Order
 
-1. **shared** - Types first (others depend on these)
-2. **backend** - API and data layer
-3. **frontend** - UI consuming the API
-4. **mcp-server** - Tools wrapping the API
-5. **e2e tests** - Verify the integration
+1. **api** - OpenAPI spec first (source of truth)
+2. **shared** - TypeScript types (generated from OpenAPI)
+3. **backend** - Go API and data layer (regenerate types)
+4. **cli** - Go CLI (regenerate client)
+5. **mcp-server** - Go MCP tools (update if needed)
+6. **frontend** - UI consuming the API
+7. **e2e tests** - Verify the integration
+
+## OpenAPI-First Workflow
+
+When adding or modifying API endpoints:
+
+1. **Edit OpenAPI spec** at `packages/api/openapi.yaml`
+2. **Validate** with `npx @redocly/cli lint packages/api/openapi.yaml`
+3. **Regenerate backend types**
+   ```bash
+   ./tc exec sh -c "cd packages/backend && oapi-codegen -generate types,chi-server -package api ../api/openapi.yaml > internal/api/openapi.gen.go"
+   ```
+4. **Regenerate CLI client**
+   ```bash
+   cd packages/cli && oapi-codegen -generate types,client -package client ../api/openapi.yaml > internal/client/client.gen.go
+   ```
+5. **Regenerate TypeScript types**
+   ```bash
+   ./tc exec pnpm --filter @travel-calendar/shared generate
+   ```
+6. **Implement changes** in each component
+7. **Test** at each step

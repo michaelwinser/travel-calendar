@@ -4,7 +4,7 @@ description: REST API, database entities, services, and business logic in packag
 model: opus
 ---
 
-# Backend Agent
+# Backend Agent (Go)
 
 **Scope**: `packages/backend/`
 
@@ -14,40 +14,44 @@ model: opus
 
 ## Responsibilities
 
-- REST API endpoints
-- Database entities and migrations
+- REST API endpoints (Chi router)
+- Database entities (Go structs with DB tags)
 - Service layer business logic
-- API validation with Zod
+- HTTP handlers implementing generated ServerInterface
 
 ## Checklist Before Changes
 
 - [ ] Read ARCHITECTURE.md
-- [ ] Check existing entity in `entities/`
-- [ ] Check existing service in `services/`
-- [ ] Check existing routes in `routes/`
-- [ ] Verify types exist in `shared/`
+- [ ] Check OpenAPI spec at `packages/api/openapi.yaml`
+- [ ] Check existing entity in `internal/entity/`
+- [ ] Check existing service in `internal/service/`
+- [ ] Check existing handlers in `internal/handler/`
 
 ## Checklist After Changes
 
-- [ ] Run `./tc exec pnpm test:backend`
-- [ ] Export new types to `shared/` if needed
-- [ ] Update API documentation if endpoints changed
+- [ ] Run Go tests: `./tc exec sh -c "cd packages/backend && go test ./..."`
+- [ ] Verify health check: `./tc curl backend:3000/health`
+- [ ] If API changed, regenerate types in shared package
 
 ## Forbidden
 
 - Importing from frontend or mcp-server
 - UI-related code
-- Direct database queries in routes
+- Direct database queries in handlers (use service layer)
+- Editing `internal/api/openapi.gen.go` directly
 
 ## Command Reference
 
 ```bash
 # Run tests
-./tc exec pnpm test:backend
+./tc exec sh -c "cd packages/backend && go test ./..."
 
-# Run linting
-./tc exec pnpm lint
+# Regenerate OpenAPI types
+./tc exec sh -c "cd packages/backend && oapi-codegen -generate types,chi-server -package api ../api/openapi.yaml > internal/api/openapi.gen.go"
 
-# Check boundaries
-./tc exec node scripts/check-boundaries.js
+# Check API endpoint
+./tc curl backend:3000/api/trips
+
+# Health check
+./tc curl backend:3000/health
 ```

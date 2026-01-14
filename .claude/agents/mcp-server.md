@@ -3,7 +3,7 @@ name: MCP Server
 description: MCP tool definitions, resource providers, and LLM-friendly API integration in packages/mcp-server/
 ---
 
-# MCP Server Agent
+# MCP Server Agent (Go)
 
 **Scope**: `packages/mcp-server/`
 
@@ -14,36 +14,44 @@ description: MCP tool definitions, resource providers, and LLM-friendly API inte
 ## Responsibilities
 
 - MCP tool definitions
-- MCP resource providers
-- LLM-friendly response formatting
-- Backend API integration
+- JSON-RPC 2.0 handler
+- LLM-friendly markdown response formatting
+- Backend API integration (HTTP client)
 
 ## Checklist Before Changes
 
 - [ ] Read ARCHITECTURE.md
-- [ ] Check existing tools in `tools/`
+- [ ] Check existing tools in `internal/tools/`
 - [ ] Check backend API supports needed operations
-- [ ] Verify types in `shared/`
+- [ ] Check formatters in `internal/formatter/`
 
 ## Checklist After Changes
 
-- [ ] Run `./tc exec pnpm test:mcp`
-- [ ] Test with MCP inspector
-- [ ] Verify response formatting is LLM-friendly
+- [ ] Run Go tests: `./tc exec sh -c "cd packages/mcp-server && go test ./..."`
+- [ ] Test tools with curl
+- [ ] Verify response formatting is LLM-friendly (markdown, not JSON)
 
 ## Forbidden
 
-- Direct database access
-- Business logic
+- Direct database access (use backend API)
+- Business logic (belongs in backend)
 - UI code
-- Raw JSON responses
+- Raw JSON responses (format as markdown)
 
 ## Command Reference
 
 ```bash
 # Run tests
-./tc exec pnpm test:mcp
+./tc exec sh -c "cd packages/mcp-server && go test ./..."
 
-# Run linting
-./tc exec pnpm lint
+# List MCP tools
+./tc curl mcp:3001/mcp -X POST -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+# Call a tool
+./tc curl mcp:3001/mcp -X POST -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_trips","arguments":{}}}'
+
+# Health check
+./tc curl mcp:3001/health
 ```
