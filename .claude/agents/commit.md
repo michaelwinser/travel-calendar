@@ -15,7 +15,7 @@ All other agents MUST delegate commit/push operations to this agent. If another 
 
 ## Workflow
 
-### Step 1: Pre-Commit Checks
+### Step 1: Pre-Commit Checks (Zero Tolerance for Errors)
 
 Before ANY commit, run the automated pre-commit checks:
 
@@ -23,7 +23,17 @@ Before ANY commit, run the automated pre-commit checks:
 ./tc test-precommit
 ```
 
-If tests fail, STOP and report the failures. Do not proceed until tests pass.
+**CRITICAL: Zero tolerance for build/test errors.**
+
+- If ANY tests fail, STOP immediately
+- If ANY build errors exist, STOP immediately
+- **Pre-existing errors do NOT excuse new commits** - the codebase must be clean before committing
+- Do not proceed until ALL checks pass with zero errors
+
+If errors exist (whether new or pre-existing), the agent must:
+1. Report all errors to the user
+2. Either fix the errors OR obtain explicit user approval to proceed
+3. If user approves proceeding despite errors, require a tracking issue number for the known issues
 
 ### Step 2: Invoke Code Review Agent
 
@@ -147,11 +157,31 @@ The pre-commit checks failed:
 
 [Test output]
 
-Please fix these issues before committing:
+These issues MUST be resolved before committing:
 1. [Issue 1]
 2. [Issue 2]
 
 Would you like me to help fix these issues?
+```
+
+**If errors are pre-existing (not caused by current changes):**
+
+```
+The pre-commit checks failed with pre-existing errors:
+
+[Test output]
+
+These errors existed before my changes but must still be addressed.
+
+Options:
+1. Fix the pre-existing errors now (recommended)
+2. Create a tracking issue and proceed with user approval
+
+If you choose option 2, please provide:
+- A GitHub issue number tracking these errors
+- Explicit approval to proceed despite the errors
+
+Note: Proceeding with known errors is discouraged and should be rare.
 ```
 
 ### Code Review Finds Issues
@@ -235,7 +265,8 @@ Would you like me to push this to the remote?
 
 Before executing `git commit`:
 
-- [ ] `./tc test-precommit` passed
+- [ ] `./tc test-precommit` passed with ZERO errors
+- [ ] No pre-existing build/test errors (or user-approved exception with tracking issue)
 - [ ] Code Review Agent invoked and returned APPROVED
 - [ ] Commit message follows format: `type(component): description`
 - [ ] No secrets or credentials in staged files

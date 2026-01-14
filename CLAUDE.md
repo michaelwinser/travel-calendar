@@ -202,6 +202,7 @@ The following files have special ownership rules:
 | **Git commits and pushes** | `.claude/agents/commit.md` | All git operations |
 | **Tool usage & permissions** | `.claude/agents/tools.md` | Session analysis, tc/settings optimization |
 | **Session summaries** | `.claude/agents/session-summary.md` | Progress tracking, blog entries |
+| **PRDs & product roadmap** | `.claude/agents/product-management.md` | `docs/prd/*.md`, `docs/PRD.md`, feature definitions |
 
 ### Agent Quick Reference
 
@@ -275,6 +276,13 @@ Each agent has detailed checklists. Here are the key rules:
 - **Invoked by**: Commit Agent (after Tools Agent step)
 - **Files**: `blog/.current.md` (working file, gitignored), `blog/*.md` (finalized entries)
 
+#### Product Management Agent
+- **When**: New feature requests, scope clarification, feature completion review, roadmap planning
+- **Does**: Creates/maintains PRDs, defines use cases with acceptance criteria, identifies MVP scope
+- **Output**: PRDs in `docs/prd/*.md`, roadmap updates, UX/UI design guidance
+- **Collaborates with**: Stakeholder (Claude end-user) for requirements, implementation agents for handoff
+- **Evaluates**: Feature completion against acceptance criteria
+
 ---
 
 ## Reference Files
@@ -288,5 +296,6 @@ Each agent has detailed checklists. Here are the key rules:
 | `.claude/agents/code-review.md` | Pre-commit review process | Before committing |
 | `.claude/agents/tools.md` | Tool usage analysis and optimization | After commits, on request |
 | `.claude/agents/session-summary.md` | Progress tracking and blog entries | After commits, session end |
+| `.claude/agents/product-management.md` | PRD ownership, MVP scoping, UX guidance | Feature planning, completion review |
 | `.claude/reviewer.md` | Pushback/review criteria | Evaluating requests |
 | `packages/*/ARCHITECTURE.md` | Component-specific patterns | Before component changes |
