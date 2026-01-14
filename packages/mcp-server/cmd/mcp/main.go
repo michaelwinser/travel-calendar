@@ -1,7 +1,4 @@
 // Travel Calendar MCP Server
-//
-// This is a minimal placeholder that serves the MCP endpoint.
-// It will be replaced with the full implementation in Phase 4.
 package main
 
 import (
@@ -13,12 +10,18 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/user/travel-calendar/mcp-server/internal/handler"
 )
 
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "3001"
+	}
+
+	backendURL := os.Getenv("BACKEND_URL")
+	if backendURL == "" {
+		backendURL = "http://localhost:3000"
 	}
 
 	r := chi.NewRouter()
@@ -34,19 +37,12 @@ func main() {
 		})
 	})
 
-	// MCP endpoint placeholder
-	r.Post("/mcp", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		// Return empty JSON-RPC response for now
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"jsonrpc": "2.0",
-			"id":      1,
-			"result":  map[string]interface{}{},
-		})
-	})
+	// MCP endpoint
+	mcpHandler := handler.NewMCPHandler(backendURL)
+	r.Post("/mcp", mcpHandler.ServeHTTP)
 
 	addr := fmt.Sprintf(":%s", port)
-	log.Printf("MCP server starting on %s", addr)
+	log.Printf("MCP server starting on %s (backend: %s)", addr, backendURL)
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatal(err)
 	}
