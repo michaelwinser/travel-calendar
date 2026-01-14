@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/user/travel-calendar/backend/internal/api"
 	"github.com/user/travel-calendar/backend/internal/service"
 )
@@ -190,4 +191,98 @@ func respondJSON(w http.ResponseWriter, status int, data interface{}) {
 
 func respondError(w http.ResponseWriter, status int, message string) {
 	respondJSON(w, status, api.Error{Error: message})
+}
+
+// Config endpoints
+
+// GetBaseLocations returns the user's base locations.
+func (h *Handler) GetBaseLocations(w http.ResponseWriter, r *http.Request) {
+	locations, err := h.svc.GetBaseLocations()
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, locations)
+}
+
+// SetBaseLocations updates the user's base locations.
+func (h *Handler) SetBaseLocations(w http.ResponseWriter, r *http.Request) {
+	var req api.SetBaseLocationsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	locations, err := h.svc.SetBaseLocations(&req)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, locations)
+}
+
+// Trip Location endpoints
+
+// GetTripLocations returns locations for a trip.
+func (h *Handler) GetTripLocations(w http.ResponseWriter, r *http.Request, tripId openapi_types.UUID) {
+	locations, err := h.svc.GetTripLocations(uuid.UUID(tripId))
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if locations == nil {
+		respondError(w, http.StatusNotFound, "trip not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, locations)
+}
+
+// SetTripLocations sets locations for a trip.
+func (h *Handler) SetTripLocations(w http.ResponseWriter, r *http.Request, tripId openapi_types.UUID) {
+	var req api.SetTripLocationsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	locations, err := h.svc.SetTripLocations(uuid.UUID(tripId), &req)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if locations == nil {
+		respondError(w, http.StatusNotFound, "trip not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, locations)
+}
+
+// Location Query endpoints
+
+// GetLocationOnDate returns the user's location on a specific date.
+func (h *Handler) GetLocationOnDate(w http.ResponseWriter, r *http.Request, date openapi_types.Date) {
+	location, err := h.svc.GetLocationOnDate(date.Time)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, location)
+}
+
+// GetLocationRange returns the user's locations for a date range.
+func (h *Handler) GetLocationRange(w http.ResponseWriter, r *http.Request, params api.GetLocationRangeParams) {
+	from := params.From.Time
+	to := params.To.Time
+
+	if to.Before(from) {
+		respondError(w, http.StatusBadRequest, "'to' date must be after 'from' date")
+		return
+	}
+
+	segments, err := h.svc.GetLocationRange(from, to)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, segments)
 }

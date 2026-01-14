@@ -136,6 +136,98 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/config/locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get base locations
+         * @description Returns the user's configured base locations (home, work)
+         */
+        get: operations["getBaseLocations"];
+        /**
+         * Set base locations
+         * @description Configure the user's base locations (home, work)
+         */
+        put: operations["setBaseLocations"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trips/{tripId}/locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get locations for a trip
+         * @description Returns per-date location data for a trip
+         */
+        get: operations["getTripLocations"];
+        /**
+         * Set locations for a trip
+         * @description Set per-date locations for a trip. Replaces existing location data.
+         */
+        put: operations["setTripLocations"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/location/on/{date}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get user location on a specific date
+         * @description Returns where the user will be on a specific date.
+         *     - If the date falls within a trip with explicit location, returns that location
+         *     - If the date falls within a trip without explicit location, returns "Away"
+         *     - If not within any trip, returns the user's home location
+         */
+        get: operations["getLocationOnDate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/location/range": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get user locations for a date range
+         * @description Returns a timeline of where the user will be across a date range.
+         *     Consecutive days at the same location are grouped into segments.
+         */
+        get: operations["getLocationRange"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -168,6 +260,8 @@ export interface components {
             notes?: string;
             /** @description Trip items (only included when fetching a single trip) */
             items?: components["schemas"]["Item"][];
+            /** @description Per-date locations for this trip (only included when fetching a single trip) */
+            locations?: components["schemas"]["TripDayLocation"][];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -183,6 +277,8 @@ export interface components {
             /** @default planning */
             status: components["schemas"]["TripStatus"];
             notes?: string;
+            /** @description Default location for all days of this trip (optional convenience) */
+            location?: string;
         };
         UpdateTripRequest: {
             name?: string;
@@ -273,6 +369,62 @@ export interface components {
             details?: {
                 [key: string]: unknown;
             };
+        };
+        BaseLocations: {
+            /** @description Home location (default "Home" if not configured) */
+            home?: string;
+            /** @description Work location (optional) */
+            work?: string;
+        };
+        SetBaseLocationsRequest: {
+            home?: string;
+            work?: string;
+        };
+        TripDayLocation: {
+            /**
+             * Format: date
+             * @description The date (YYYY-MM-DD)
+             */
+            date: string;
+            /** @description One or more locations for this date (multiple for travel days) */
+            locations: string[];
+        };
+        SetTripLocationsRequest: {
+            /** @description Default location for all dates not explicitly specified */
+            defaultLocation?: string;
+            /** @description Per-date location overrides */
+            locations?: components["schemas"]["TripDayLocation"][];
+        };
+        /**
+         * @description The source of the location (home, work, or a trip)
+         * @enum {string}
+         */
+        LocationSourceType: "home" | "work" | "trip";
+        LocationSource: {
+            type: components["schemas"]["LocationSourceType"];
+            /**
+             * Format: uuid
+             * @description Present when type is "trip"
+             */
+            tripId?: string;
+            /** @description Present when type is "trip" */
+            tripName?: string;
+        };
+        LocationOnDateResponse: {
+            /** Format: date */
+            date: string;
+            /** @description Location(s) on this date */
+            locations: string[];
+            source: components["schemas"]["LocationSource"];
+        };
+        LocationRangeSegment: {
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            endDate: string;
+            /** @description Location(s) for this segment */
+            locations: string[];
+            source: components["schemas"]["LocationSource"];
         };
     };
     responses: never;
@@ -671,6 +823,222 @@ export interface operations {
                 };
             };
             /** @description Invalid query parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getBaseLocations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Base locations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseLocations"];
+                };
+            };
+        };
+    };
+    setBaseLocations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "home": "New York, USA",
+                 *       "work": "Manhattan, NYC"
+                 *     }
+                 */
+                "application/json": components["schemas"]["SetBaseLocationsRequest"];
+            };
+        };
+        responses: {
+            /** @description Base locations updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseLocations"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getTripLocations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Trip ID */
+                tripId: components["parameters"]["TripId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Trip locations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TripDayLocation"][];
+                };
+            };
+            /** @description Trip not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    setTripLocations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Trip ID */
+                tripId: components["parameters"]["TripId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "defaultLocation": "Brussels, Belgium",
+                 *       "locations": [
+                 *         {
+                 *           "date": "2025-01-29",
+                 *           "locations": [
+                 *             "London, UK",
+                 *             "Brussels, Belgium"
+                 *           ]
+                 *         }
+                 *       ]
+                 *     }
+                 */
+                "application/json": components["schemas"]["SetTripLocationsRequest"];
+            };
+        };
+        responses: {
+            /** @description Trip locations updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TripDayLocation"][];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Trip not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getLocationOnDate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Date to query (YYYY-MM-DD) */
+                date: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Location on the specified date */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationOnDateResponse"];
+                };
+            };
+            /** @description Invalid date format */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getLocationRange: {
+        parameters: {
+            query: {
+                /** @description Start date (YYYY-MM-DD) */
+                from: string;
+                /** @description End date (YYYY-MM-DD) */
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Location timeline */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationRangeSegment"][];
+                };
+            };
+            /** @description Invalid date format or range */
             400: {
                 headers: {
                     [name: string]: unknown;

@@ -43,6 +43,13 @@ const (
 	Train  ItemType = "train"
 )
 
+// Defines values for LocationSourceType.
+const (
+	LocationSourceTypeHome LocationSourceType = "home"
+	LocationSourceTypeTrip LocationSourceType = "trip"
+	LocationSourceTypeWork LocationSourceType = "work"
+)
+
 // Defines values for TripPurpose.
 const (
 	TripPurposeBusiness   TripPurpose = "business"
@@ -60,6 +67,15 @@ const (
 	InProgress TripStatus = "in_progress"
 	Planning   TripStatus = "planning"
 )
+
+// BaseLocations defines model for BaseLocations.
+type BaseLocations struct {
+	// Home Home location (default "Home" if not configured)
+	Home *string `json:"home,omitempty"`
+
+	// Work Work location (optional)
+	Work *string `json:"work,omitempty"`
+}
 
 // CreateItemRequest defines model for CreateItemRequest.
 type CreateItemRequest struct {
@@ -80,7 +96,10 @@ type CreateItemRequest struct {
 
 // CreateTripRequest defines model for CreateTripRequest.
 type CreateTripRequest struct {
-	EndDate   *openapi_types.Date `json:"endDate,omitempty"`
+	EndDate *openapi_types.Date `json:"endDate,omitempty"`
+
+	// Location Default location for all days of this trip (optional convenience)
+	Location  *string             `json:"location,omitempty"`
 	Name      string              `json:"name"`
 	Notes     *string             `json:"notes,omitempty"`
 	Purpose   TripPurpose         `json:"purpose"`
@@ -157,6 +176,55 @@ type Item struct {
 // ItemType defines model for ItemType.
 type ItemType string
 
+// LocationOnDateResponse defines model for LocationOnDateResponse.
+type LocationOnDateResponse struct {
+	Date openapi_types.Date `json:"date"`
+
+	// Locations Location(s) on this date
+	Locations []string       `json:"locations"`
+	Source    LocationSource `json:"source"`
+}
+
+// LocationRangeSegment defines model for LocationRangeSegment.
+type LocationRangeSegment struct {
+	EndDate openapi_types.Date `json:"endDate"`
+
+	// Locations Location(s) for this segment
+	Locations []string           `json:"locations"`
+	Source    LocationSource     `json:"source"`
+	StartDate openapi_types.Date `json:"startDate"`
+}
+
+// LocationSource defines model for LocationSource.
+type LocationSource struct {
+	// TripId Present when type is "trip"
+	TripId *openapi_types.UUID `json:"tripId,omitempty"`
+
+	// TripName Present when type is "trip"
+	TripName *string `json:"tripName,omitempty"`
+
+	// Type The source of the location (home, work, or a trip)
+	Type LocationSourceType `json:"type"`
+}
+
+// LocationSourceType The source of the location (home, work, or a trip)
+type LocationSourceType string
+
+// SetBaseLocationsRequest defines model for SetBaseLocationsRequest.
+type SetBaseLocationsRequest struct {
+	Home *string `json:"home,omitempty"`
+	Work *string `json:"work,omitempty"`
+}
+
+// SetTripLocationsRequest defines model for SetTripLocationsRequest.
+type SetTripLocationsRequest struct {
+	// DefaultLocation Default location for all dates not explicitly specified
+	DefaultLocation *string `json:"defaultLocation,omitempty"`
+
+	// Locations Per-date location overrides
+	Locations *[]TripDayLocation `json:"locations,omitempty"`
+}
+
 // Trip defines model for Trip.
 type Trip struct {
 	CreatedAt time.Time `json:"createdAt"`
@@ -166,15 +234,27 @@ type Trip struct {
 	Id      openapi_types.UUID  `json:"id"`
 
 	// Items Trip items (only included when fetching a single trip)
-	Items   *[]Item     `json:"items,omitempty"`
-	Name    string      `json:"name"`
-	Notes   *string     `json:"notes,omitempty"`
-	Purpose TripPurpose `json:"purpose"`
+	Items *[]Item `json:"items,omitempty"`
+
+	// Locations Per-date locations for this trip (only included when fetching a single trip)
+	Locations *[]TripDayLocation `json:"locations,omitempty"`
+	Name      string             `json:"name"`
+	Notes     *string            `json:"notes,omitempty"`
+	Purpose   TripPurpose        `json:"purpose"`
 
 	// StartDate Trip start date (YYYY-MM-DD)
 	StartDate *openapi_types.Date `json:"startDate,omitempty"`
 	Status    TripStatus          `json:"status"`
 	UpdatedAt time.Time           `json:"updatedAt"`
+}
+
+// TripDayLocation defines model for TripDayLocation.
+type TripDayLocation struct {
+	// Date The date (YYYY-MM-DD)
+	Date openapi_types.Date `json:"date"`
+
+	// Locations One or more locations for this date (multiple for travel days)
+	Locations []string `json:"locations"`
 }
 
 // TripPurpose defines model for TripPurpose.
@@ -208,6 +288,15 @@ type ListDocumentsParams struct {
 	Unassociated *bool `form:"unassociated,omitempty" json:"unassociated,omitempty"`
 }
 
+// GetLocationRangeParams defines parameters for GetLocationRange.
+type GetLocationRangeParams struct {
+	// From Start date (YYYY-MM-DD)
+	From openapi_types.Date `form:"from" json:"from"`
+
+	// To End date (YYYY-MM-DD)
+	To openapi_types.Date `form:"to" json:"to"`
+}
+
 // ListTripsParams defines parameters for ListTrips.
 type ListTripsParams struct {
 	// Upcoming Filter to upcoming trips only
@@ -226,6 +315,9 @@ type SearchTripsParams struct {
 	Q string `form:"q" json:"q"`
 }
 
+// SetBaseLocationsJSONRequestBody defines body for SetBaseLocations for application/json ContentType.
+type SetBaseLocationsJSONRequestBody = SetBaseLocationsRequest
+
 // CreateTripJSONRequestBody defines body for CreateTrip for application/json ContentType.
 type CreateTripJSONRequestBody = CreateTripRequest
 
@@ -234,6 +326,9 @@ type UpdateTripJSONRequestBody = UpdateTripRequest
 
 // CreateTripItemJSONRequestBody defines body for CreateTripItem for application/json ContentType.
 type CreateTripItemJSONRequestBody = CreateItemRequest
+
+// SetTripLocationsJSONRequestBody defines body for SetTripLocations for application/json ContentType.
+type SetTripLocationsJSONRequestBody = SetTripLocationsRequest
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -308,11 +403,25 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+	// GetBaseLocations request
+	GetBaseLocations(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetBaseLocationsWithBody request with any body
+	SetBaseLocationsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SetBaseLocations(ctx context.Context, body SetBaseLocationsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListDocuments request
 	ListDocuments(ctx context.Context, params *ListDocumentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteItem request
 	DeleteItem(ctx context.Context, itemId ItemId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetLocationOnDate request
+	GetLocationOnDate(ctx context.Context, date openapi_types.Date, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetLocationRange request
+	GetLocationRange(ctx context.Context, params *GetLocationRangeParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListTrips request
 	ListTrips(ctx context.Context, params *ListTripsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -344,8 +453,52 @@ type ClientInterface interface {
 
 	CreateTripItem(ctx context.Context, tripId TripId, body CreateTripItemJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetTripLocations request
+	GetTripLocations(ctx context.Context, tripId TripId, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetTripLocationsWithBody request with any body
+	SetTripLocationsWithBody(ctx context.Context, tripId TripId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SetTripLocations(ctx context.Context, tripId TripId, body SetTripLocationsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetHealth request
 	GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) GetBaseLocations(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetBaseLocationsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetBaseLocationsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetBaseLocationsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetBaseLocations(ctx context.Context, body SetBaseLocationsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetBaseLocationsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 func (c *Client) ListDocuments(ctx context.Context, params *ListDocumentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -362,6 +515,30 @@ func (c *Client) ListDocuments(ctx context.Context, params *ListDocumentsParams,
 
 func (c *Client) DeleteItem(ctx context.Context, itemId ItemId, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteItemRequest(c.Server, itemId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetLocationOnDate(ctx context.Context, date openapi_types.Date, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetLocationOnDateRequest(c.Server, date)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetLocationRange(ctx context.Context, params *GetLocationRangeParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetLocationRangeRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -504,6 +681,42 @@ func (c *Client) CreateTripItem(ctx context.Context, tripId TripId, body CreateT
 	return c.Client.Do(req)
 }
 
+func (c *Client) GetTripLocations(ctx context.Context, tripId TripId, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetTripLocationsRequest(c.Server, tripId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetTripLocationsWithBody(ctx context.Context, tripId TripId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetTripLocationsRequestWithBody(c.Server, tripId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetTripLocations(ctx context.Context, tripId TripId, body SetTripLocationsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetTripLocationsRequest(c.Server, tripId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetHealthRequest(c.Server)
 	if err != nil {
@@ -514,6 +727,73 @@ func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewGetBaseLocationsRequest generates requests for GetBaseLocations
+func NewGetBaseLocationsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/config/locations")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSetBaseLocationsRequest calls the generic SetBaseLocations builder with application/json body
+func NewSetBaseLocationsRequest(server string, body SetBaseLocationsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetBaseLocationsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewSetBaseLocationsRequestWithBody generates requests for SetBaseLocations with any type of body
+func NewSetBaseLocationsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/config/locations")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
 }
 
 // NewListDocumentsRequest generates requests for ListDocuments
@@ -608,6 +888,97 @@ func NewDeleteItemRequest(server string, itemId ItemId) (*http.Request, error) {
 	}
 
 	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetLocationOnDateRequest generates requests for GetLocationOnDate
+func NewGetLocationOnDateRequest(server string, date openapi_types.Date) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "date", runtime.ParamLocationPath, date)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/location/on/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetLocationRangeRequest generates requests for GetLocationRange
+func NewGetLocationRangeRequest(server string, params *GetLocationRangeParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/location/range")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "from", runtime.ParamLocationQuery, params.From); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "to", runtime.ParamLocationQuery, params.To); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -977,6 +1348,87 @@ func NewCreateTripItemRequestWithBody(server string, tripId TripId, contentType 
 	return req, nil
 }
 
+// NewGetTripLocationsRequest generates requests for GetTripLocations
+func NewGetTripLocationsRequest(server string, tripId TripId) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "tripId", runtime.ParamLocationPath, tripId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/trips/%s/locations", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSetTripLocationsRequest calls the generic SetTripLocations builder with application/json body
+func NewSetTripLocationsRequest(server string, tripId TripId, body SetTripLocationsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetTripLocationsRequestWithBody(server, tripId, "application/json", bodyReader)
+}
+
+// NewSetTripLocationsRequestWithBody generates requests for SetTripLocations with any type of body
+func NewSetTripLocationsRequestWithBody(server string, tripId TripId, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "tripId", runtime.ParamLocationPath, tripId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/trips/%s/locations", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewGetHealthRequest generates requests for GetHealth
 func NewGetHealthRequest(server string) (*http.Request, error) {
 	var err error
@@ -1047,11 +1499,25 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+	// GetBaseLocationsWithResponse request
+	GetBaseLocationsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetBaseLocationsResponse, error)
+
+	// SetBaseLocationsWithBodyWithResponse request with any body
+	SetBaseLocationsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetBaseLocationsResponse, error)
+
+	SetBaseLocationsWithResponse(ctx context.Context, body SetBaseLocationsJSONRequestBody, reqEditors ...RequestEditorFn) (*SetBaseLocationsResponse, error)
+
 	// ListDocumentsWithResponse request
 	ListDocumentsWithResponse(ctx context.Context, params *ListDocumentsParams, reqEditors ...RequestEditorFn) (*ListDocumentsResponse, error)
 
 	// DeleteItemWithResponse request
 	DeleteItemWithResponse(ctx context.Context, itemId ItemId, reqEditors ...RequestEditorFn) (*DeleteItemResponse, error)
+
+	// GetLocationOnDateWithResponse request
+	GetLocationOnDateWithResponse(ctx context.Context, date openapi_types.Date, reqEditors ...RequestEditorFn) (*GetLocationOnDateResponse, error)
+
+	// GetLocationRangeWithResponse request
+	GetLocationRangeWithResponse(ctx context.Context, params *GetLocationRangeParams, reqEditors ...RequestEditorFn) (*GetLocationRangeResponse, error)
 
 	// ListTripsWithResponse request
 	ListTripsWithResponse(ctx context.Context, params *ListTripsParams, reqEditors ...RequestEditorFn) (*ListTripsResponse, error)
@@ -1083,8 +1549,61 @@ type ClientWithResponsesInterface interface {
 
 	CreateTripItemWithResponse(ctx context.Context, tripId TripId, body CreateTripItemJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTripItemResponse, error)
 
+	// GetTripLocationsWithResponse request
+	GetTripLocationsWithResponse(ctx context.Context, tripId TripId, reqEditors ...RequestEditorFn) (*GetTripLocationsResponse, error)
+
+	// SetTripLocationsWithBodyWithResponse request with any body
+	SetTripLocationsWithBodyWithResponse(ctx context.Context, tripId TripId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetTripLocationsResponse, error)
+
+	SetTripLocationsWithResponse(ctx context.Context, tripId TripId, body SetTripLocationsJSONRequestBody, reqEditors ...RequestEditorFn) (*SetTripLocationsResponse, error)
+
 	// GetHealthWithResponse request
 	GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error)
+}
+
+type GetBaseLocationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *BaseLocations
+}
+
+// Status returns HTTPResponse.Status
+func (r GetBaseLocationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetBaseLocationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type SetBaseLocationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *BaseLocations
+	JSON400      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r SetBaseLocationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetBaseLocationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
 }
 
 type ListDocumentsResponse struct {
@@ -1126,6 +1645,52 @@ func (r DeleteItemResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r DeleteItemResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetLocationOnDateResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *LocationOnDateResponse
+	JSON400      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r GetLocationOnDateResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetLocationOnDateResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetLocationRangeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]LocationRangeSegment
+	JSON400      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r GetLocationRangeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetLocationRangeResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -1317,6 +1882,53 @@ func (r CreateTripItemResponse) StatusCode() int {
 	return 0
 }
 
+type GetTripLocationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]TripDayLocation
+	JSON404      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r GetTripLocationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetTripLocationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type SetTripLocationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]TripDayLocation
+	JSON400      *Error
+	JSON404      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r SetTripLocationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetTripLocationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetHealthResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -1340,6 +1952,32 @@ func (r GetHealthResponse) StatusCode() int {
 	return 0
 }
 
+// GetBaseLocationsWithResponse request returning *GetBaseLocationsResponse
+func (c *ClientWithResponses) GetBaseLocationsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetBaseLocationsResponse, error) {
+	rsp, err := c.GetBaseLocations(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetBaseLocationsResponse(rsp)
+}
+
+// SetBaseLocationsWithBodyWithResponse request with arbitrary body returning *SetBaseLocationsResponse
+func (c *ClientWithResponses) SetBaseLocationsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetBaseLocationsResponse, error) {
+	rsp, err := c.SetBaseLocationsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetBaseLocationsResponse(rsp)
+}
+
+func (c *ClientWithResponses) SetBaseLocationsWithResponse(ctx context.Context, body SetBaseLocationsJSONRequestBody, reqEditors ...RequestEditorFn) (*SetBaseLocationsResponse, error) {
+	rsp, err := c.SetBaseLocations(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetBaseLocationsResponse(rsp)
+}
+
 // ListDocumentsWithResponse request returning *ListDocumentsResponse
 func (c *ClientWithResponses) ListDocumentsWithResponse(ctx context.Context, params *ListDocumentsParams, reqEditors ...RequestEditorFn) (*ListDocumentsResponse, error) {
 	rsp, err := c.ListDocuments(ctx, params, reqEditors...)
@@ -1356,6 +1994,24 @@ func (c *ClientWithResponses) DeleteItemWithResponse(ctx context.Context, itemId
 		return nil, err
 	}
 	return ParseDeleteItemResponse(rsp)
+}
+
+// GetLocationOnDateWithResponse request returning *GetLocationOnDateResponse
+func (c *ClientWithResponses) GetLocationOnDateWithResponse(ctx context.Context, date openapi_types.Date, reqEditors ...RequestEditorFn) (*GetLocationOnDateResponse, error) {
+	rsp, err := c.GetLocationOnDate(ctx, date, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetLocationOnDateResponse(rsp)
+}
+
+// GetLocationRangeWithResponse request returning *GetLocationRangeResponse
+func (c *ClientWithResponses) GetLocationRangeWithResponse(ctx context.Context, params *GetLocationRangeParams, reqEditors ...RequestEditorFn) (*GetLocationRangeResponse, error) {
+	rsp, err := c.GetLocationRange(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetLocationRangeResponse(rsp)
 }
 
 // ListTripsWithResponse request returning *ListTripsResponse
@@ -1454,6 +2110,32 @@ func (c *ClientWithResponses) CreateTripItemWithResponse(ctx context.Context, tr
 	return ParseCreateTripItemResponse(rsp)
 }
 
+// GetTripLocationsWithResponse request returning *GetTripLocationsResponse
+func (c *ClientWithResponses) GetTripLocationsWithResponse(ctx context.Context, tripId TripId, reqEditors ...RequestEditorFn) (*GetTripLocationsResponse, error) {
+	rsp, err := c.GetTripLocations(ctx, tripId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetTripLocationsResponse(rsp)
+}
+
+// SetTripLocationsWithBodyWithResponse request with arbitrary body returning *SetTripLocationsResponse
+func (c *ClientWithResponses) SetTripLocationsWithBodyWithResponse(ctx context.Context, tripId TripId, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetTripLocationsResponse, error) {
+	rsp, err := c.SetTripLocationsWithBody(ctx, tripId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetTripLocationsResponse(rsp)
+}
+
+func (c *ClientWithResponses) SetTripLocationsWithResponse(ctx context.Context, tripId TripId, body SetTripLocationsJSONRequestBody, reqEditors ...RequestEditorFn) (*SetTripLocationsResponse, error) {
+	rsp, err := c.SetTripLocations(ctx, tripId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetTripLocationsResponse(rsp)
+}
+
 // GetHealthWithResponse request returning *GetHealthResponse
 func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error) {
 	rsp, err := c.GetHealth(ctx, reqEditors...)
@@ -1461,6 +2143,65 @@ func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, reqEdit
 		return nil, err
 	}
 	return ParseGetHealthResponse(rsp)
+}
+
+// ParseGetBaseLocationsResponse parses an HTTP response from a GetBaseLocationsWithResponse call
+func ParseGetBaseLocationsResponse(rsp *http.Response) (*GetBaseLocationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetBaseLocationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BaseLocations
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetBaseLocationsResponse parses an HTTP response from a SetBaseLocationsWithResponse call
+func ParseSetBaseLocationsResponse(rsp *http.Response) (*SetBaseLocationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetBaseLocationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BaseLocations
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseListDocumentsResponse parses an HTTP response from a ListDocumentsWithResponse call
@@ -1516,6 +2257,72 @@ func ParseDeleteItemResponse(rsp *http.Response) (*DeleteItemResponse, error) {
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetLocationOnDateResponse parses an HTTP response from a GetLocationOnDateWithResponse call
+func ParseGetLocationOnDateResponse(rsp *http.Response) (*GetLocationOnDateResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetLocationOnDateResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest LocationOnDateResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetLocationRangeResponse parses an HTTP response from a GetLocationRangeWithResponse call
+func ParseGetLocationRangeResponse(rsp *http.Response) (*GetLocationRangeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetLocationRangeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []LocationRangeSegment
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
 
 	}
 
@@ -1773,6 +2580,79 @@ func ParseCreateTripItemResponse(rsp *http.Response) (*CreateTripItemResponse, e
 			return nil, err
 		}
 		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetTripLocationsResponse parses an HTTP response from a GetTripLocationsWithResponse call
+func ParseGetTripLocationsResponse(rsp *http.Response) (*GetTripLocationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetTripLocationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []TripDayLocation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetTripLocationsResponse parses an HTTP response from a SetTripLocationsWithResponse call
+func ParseSetTripLocationsResponse(rsp *http.Response) (*SetTripLocationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetTripLocationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []TripDayLocation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest Error

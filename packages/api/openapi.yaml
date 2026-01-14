@@ -28,6 +28,10 @@ tags:
     description: Trip item management (flights, hotels, etc.)
   - name: Documents
     description: Document management
+  - name: Config
+    description: User configuration (base locations, preferences)
+  - name: Location
+    description: Location queries (where is the user on a given date)
 
 paths:
   /health:
@@ -342,6 +346,184 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  # Configuration endpoints
+  /api/config/locations:
+    get:
+      operationId: getBaseLocations
+      tags: [Config]
+      summary: Get base locations
+      description: Returns the user's configured base locations (home, work)
+      responses:
+        '200':
+          description: Base locations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseLocations'
+    put:
+      operationId: setBaseLocations
+      tags: [Config]
+      summary: Set base locations
+      description: Configure the user's base locations (home, work)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetBaseLocationsRequest'
+            example:
+              home: "New York, USA"
+              work: "Manhattan, NYC"
+      responses:
+        '200':
+          description: Base locations updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaseLocations'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # Trip location endpoints
+  /api/trips/{tripId}/locations:
+    get:
+      operationId: getTripLocations
+      tags: [Trips]
+      summary: Get locations for a trip
+      description: Returns per-date location data for a trip
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      responses:
+        '200':
+          description: Trip locations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TripDayLocation'
+        '404':
+          description: Trip not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      operationId: setTripLocations
+      tags: [Trips]
+      summary: Set locations for a trip
+      description: Set per-date locations for a trip. Replaces existing location data.
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetTripLocationsRequest'
+            example:
+              defaultLocation: "Brussels, Belgium"
+              locations:
+                - date: "2025-01-29"
+                  locations: ["London, UK", "Brussels, Belgium"]
+      responses:
+        '200':
+          description: Trip locations updated
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TripDayLocation'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Trip not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # Location query endpoints
+  /api/location/on/{date}:
+    get:
+      operationId: getLocationOnDate
+      tags: [Location]
+      summary: Get user location on a specific date
+      description: |
+        Returns where the user will be on a specific date.
+        - If the date falls within a trip with explicit location, returns that location
+        - If the date falls within a trip without explicit location, returns "Away"
+        - If not within any trip, returns the user's home location
+      parameters:
+        - name: date
+          in: path
+          required: true
+          description: Date to query (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Location on the specified date
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationOnDateResponse'
+        '400':
+          description: Invalid date format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/location/range:
+    get:
+      operationId: getLocationRange
+      tags: [Location]
+      summary: Get user locations for a date range
+      description: |
+        Returns a timeline of where the user will be across a date range.
+        Consecutive days at the same location are grouped into segments.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: Start date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          description: End date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Location timeline
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LocationRangeSegment'
+        '400':
+          description: Invalid date format or range
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
 components:
   parameters:
     TripId:
@@ -421,6 +603,11 @@ components:
           items:
             $ref: '#/components/schemas/Item'
           description: Trip items (only included when fetching a single trip)
+        locations:
+          type: array
+          items:
+            $ref: '#/components/schemas/TripDayLocation'
+          description: Per-date locations for this trip (only included when fetching a single trip)
         createdAt:
           type: string
           format: date-time
@@ -450,6 +637,10 @@ components:
         notes:
           type: string
           maxLength: 10000
+        location:
+          type: string
+          maxLength: 255
+          description: Default location for all days of this trip (optional convenience)
 
     UpdateTripRequest:
       type: object
@@ -634,3 +825,107 @@ components:
           type: object
           additionalProperties: true
           description: Additional error details
+
+    # Location-related schemas
+    BaseLocations:
+      type: object
+      properties:
+        home:
+          type: string
+          description: Home location (default "Home" if not configured)
+        work:
+          type: string
+          description: Work location (optional)
+
+    SetBaseLocationsRequest:
+      type: object
+      properties:
+        home:
+          type: string
+          maxLength: 255
+        work:
+          type: string
+          maxLength: 255
+
+    TripDayLocation:
+      type: object
+      required: [date, locations]
+      properties:
+        date:
+          type: string
+          format: date
+          description: The date (YYYY-MM-DD)
+        locations:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          description: One or more locations for this date (multiple for travel days)
+
+    SetTripLocationsRequest:
+      type: object
+      properties:
+        defaultLocation:
+          type: string
+          maxLength: 255
+          description: Default location for all dates not explicitly specified
+        locations:
+          type: array
+          items:
+            $ref: '#/components/schemas/TripDayLocation'
+          description: Per-date location overrides
+
+    LocationSourceType:
+      type: string
+      enum:
+        - home
+        - work
+        - trip
+      description: The source of the location (home, work, or a trip)
+
+    LocationSource:
+      type: object
+      required: [type]
+      properties:
+        type:
+          $ref: '#/components/schemas/LocationSourceType'
+        tripId:
+          type: string
+          format: uuid
+          description: Present when type is "trip"
+        tripName:
+          type: string
+          description: Present when type is "trip"
+
+    LocationOnDateResponse:
+      type: object
+      required: [date, locations, source]
+      properties:
+        date:
+          type: string
+          format: date
+        locations:
+          type: array
+          items:
+            type: string
+          description: Location(s) on this date
+        source:
+          $ref: '#/components/schemas/LocationSource'
+
+    LocationRangeSegment:
+      type: object
+      required: [startDate, endDate, locations, source]
+      properties:
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        locations:
+          type: array
+          items:
+            type: string
+          description: Location(s) for this segment
+        source:
+          $ref: '#/components/schemas/LocationSource'

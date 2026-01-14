@@ -238,3 +238,144 @@ func getString(m map[string]interface{}, key string) string {
 	}
 	return ""
 }
+
+// FormatLocationOnDate formats a single date location response as markdown.
+func FormatLocationOnDate(loc map[string]interface{}) string {
+	var sb strings.Builder
+
+	date := getString(loc, "date")
+	sb.WriteString(fmt.Sprintf("## Location on %s\n\n", date))
+
+	// Get locations
+	locations := getStringArray(loc, "locations")
+	if len(locations) > 0 {
+		sb.WriteString(fmt.Sprintf("**Location(s)**: %s\n\n", strings.Join(locations, ", ")))
+	}
+
+	// Get source info
+	if source, ok := loc["source"].(map[string]interface{}); ok {
+		sourceType := getString(source, "type")
+		switch sourceType {
+		case "home":
+			sb.WriteString("*You'll be at home.*\n")
+		case "work":
+			sb.WriteString("*You'll be at work.*\n")
+		case "trip":
+			tripName := getString(source, "tripName")
+			if tripName != "" {
+				sb.WriteString(fmt.Sprintf("*Source: trip \"%s\"*\n", tripName))
+			} else {
+				sb.WriteString("*Source: a scheduled trip*\n")
+			}
+		}
+	}
+
+	return sb.String()
+}
+
+// FormatLocationRange formats a location range timeline as markdown.
+func FormatLocationRange(segments []map[string]interface{}) string {
+	if len(segments) == 0 {
+		return "No location data for this range."
+	}
+
+	var sb strings.Builder
+	sb.WriteString("## Location Timeline\n\n")
+
+	for _, seg := range segments {
+		startDate := getString(seg, "startDate")
+		endDate := getString(seg, "endDate")
+		locations := getStringArray(seg, "locations")
+
+		// Format date range
+		var dateRange string
+		if startDate == endDate {
+			dateRange = startDate
+		} else {
+			dateRange = fmt.Sprintf("%s to %s", startDate, endDate)
+		}
+
+		// Format source
+		sourceDesc := ""
+		if source, ok := seg["source"].(map[string]interface{}); ok {
+			sourceType := getString(source, "type")
+			switch sourceType {
+			case "home":
+				sourceDesc = "home"
+			case "work":
+				sourceDesc = "work"
+			case "trip":
+				tripName := getString(source, "tripName")
+				if tripName != "" {
+					sourceDesc = fmt.Sprintf("trip: %s", tripName)
+				} else {
+					sourceDesc = "trip"
+				}
+			}
+		}
+
+		sb.WriteString(fmt.Sprintf("- **%s**: %s", dateRange, strings.Join(locations, ", ")))
+		if sourceDesc != "" {
+			sb.WriteString(fmt.Sprintf(" (%s)", sourceDesc))
+		}
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
+}
+
+// FormatTripLocations formats trip day locations as markdown.
+func FormatTripLocations(locations []map[string]interface{}) string {
+	if len(locations) == 0 {
+		return "No locations set for this trip."
+	}
+
+	var sb strings.Builder
+	sb.WriteString("## Trip Locations\n\n")
+
+	for _, dayLoc := range locations {
+		date := getString(dayLoc, "date")
+		locs := getStringArray(dayLoc, "locations")
+		sb.WriteString(fmt.Sprintf("- **%s**: %s\n", date, strings.Join(locs, ", ")))
+	}
+
+	return sb.String()
+}
+
+// FormatBaseLocations formats base location configuration as markdown.
+func FormatBaseLocations(locs map[string]interface{}) string {
+	var sb strings.Builder
+	sb.WriteString("## Base Locations\n\n")
+
+	home := getString(locs, "home")
+	work := getString(locs, "work")
+
+	if home != "" {
+		sb.WriteString(fmt.Sprintf("- **Home**: %s\n", home))
+	} else {
+		sb.WriteString("- **Home**: (not set)\n")
+	}
+
+	if work != "" {
+		sb.WriteString(fmt.Sprintf("- **Work**: %s\n", work))
+	} else {
+		sb.WriteString("- **Work**: (not set)\n")
+	}
+
+	return sb.String()
+}
+
+func getStringArray(m map[string]interface{}, key string) []string {
+	if v, ok := m[key]; ok {
+		if arr, ok := v.([]interface{}); ok {
+			result := make([]string, 0, len(arr))
+			for _, item := range arr {
+				if s, ok := item.(string); ok {
+					result = append(result, s)
+				}
+			}
+			return result
+		}
+	}
+	return nil
+}

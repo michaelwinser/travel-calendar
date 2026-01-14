@@ -86,6 +86,24 @@ func (s *Store) migrate() error {
 	CREATE INDEX IF NOT EXISTS idx_documents_trip_id ON documents(trip_id);
 	CREATE INDEX IF NOT EXISTS idx_trips_start_date ON trips(start_date);
 	CREATE INDEX IF NOT EXISTS idx_trips_purpose ON trips(purpose);
+
+	CREATE TABLE IF NOT EXISTS config (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS trip_locations (
+		id TEXT PRIMARY KEY,
+		trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+		date TEXT NOT NULL,
+		location TEXT NOT NULL,
+		created_at TEXT NOT NULL,
+		UNIQUE(trip_id, date, location)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_trip_locations_trip_id ON trip_locations(trip_id);
+	CREATE INDEX IF NOT EXISTS idx_trip_locations_date ON trip_locations(date);
 	`
 
 	_, err := s.db.Exec(schema)
@@ -507,6 +525,151 @@ func nullToPtr(ns sql.NullString) *string {
 		return nil
 	}
 	return &ns.String
+}
+
+// Config methods
+
+// GetConfig retrieves a config value by key.
+func (s *Store) GetConfig(key string) (*string, error) {
+	var value string
+	err := s.db.QueryRow("SELECT value FROM config WHERE key = ?", key).Scan(&value)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &value, nil
+}
+
+// SetConfig sets a config value.
+func (s *Store) SetConfig(key, value string) error {
+	query := `INSERT INTO config (key, value, updated_at) VALUES (?, ?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+	_, err := s.db.Exec(query, key, value, time.Now().Format(time.RFC3339))
+	return err
+}
+
+// DeleteConfig removes a config value.
+func (s *Store) DeleteConfig(key string) error {
+	_, err := s.db.Exec("DELETE FROM config WHERE key = ?", key)
+	return err
+}
+
+// Trip Location methods
+
+// GetTripLocations returns all locations for a trip.
+func (s *Store) GetTripLocations(tripID uuid.UUID) ([]entity.TripLocation, error) {
+	query := `SELECT id, trip_id, date, location, created_at FROM trip_locations
+		WHERE trip_id = ? ORDER BY date ASC, location ASC`
+	rows, err := s.db.Query(query, tripID.String())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var locations []entity.TripLocation
+	for rows.Next() {
+		var loc entity.TripLocation
+		var id, tripIDStr, date, createdAt string
+		if err := rows.Scan(&id, &tripIDStr, &date, &loc.Location, &createdAt); err != nil {
+			return nil, err
+		}
+		loc.ID, _ = uuid.Parse(id)
+		loc.TripID, _ = uuid.Parse(tripIDStr)
+		loc.Date, _ = time.Parse("2006-01-02", date)
+		loc.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		locations = append(locations, loc)
+	}
+	return locations, rows.Err()
+}
+
+// SetTripLocations replaces all locations for a trip.
+func (s *Store) SetTripLocations(tripID uuid.UUID, locations []entity.TripLocation) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Delete existing locations
+	if _, err := tx.Exec("DELETE FROM trip_locations WHERE trip_id = ?", tripID.String()); err != nil {
+		return err
+	}
+
+	// Insert new locations
+	stmt, err := tx.Prepare(`INSERT INTO trip_locations (id, trip_id, date, location, created_at) VALUES (?, ?, ?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, loc := range locations {
+		_, err := stmt.Exec(
+			loc.ID.String(),
+			loc.TripID.String(),
+			loc.Date.Format("2006-01-02"),
+			loc.Location,
+			loc.CreatedAt.Format(time.RFC3339),
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+// GetTripsForDateRange returns trips that overlap with the given date range.
+func (s *Store) GetTripsForDateRange(from, to time.Time) ([]entity.Trip, error) {
+	query := `SELECT id, name, purpose, start_date, end_date, status, notes, created_at, updated_at FROM trips
+		WHERE start_date IS NOT NULL AND end_date IS NOT NULL
+		AND start_date <= ? AND end_date >= ?
+		ORDER BY start_date ASC`
+
+	rows, err := s.db.Query(query, to.Format("2006-01-02"), from.Format("2006-01-02"))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var trips []entity.Trip
+	for rows.Next() {
+		trip, err := scanTrip(rows)
+		if err != nil {
+			return nil, err
+		}
+		trips = append(trips, trip)
+	}
+	return trips, rows.Err()
+}
+
+// GetTripLocationsForDateRange returns locations for a trip within a date range.
+func (s *Store) GetTripLocationsForDateRange(tripID uuid.UUID, from, to time.Time) ([]entity.TripLocation, error) {
+	query := `SELECT id, trip_id, date, location, created_at FROM trip_locations
+		WHERE trip_id = ? AND date >= ? AND date <= ?
+		ORDER BY date ASC, location ASC`
+
+	rows, err := s.db.Query(query, tripID.String(), from.Format("2006-01-02"), to.Format("2006-01-02"))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var locations []entity.TripLocation
+	for rows.Next() {
+		var loc entity.TripLocation
+		var id, tripIDStr, date, createdAt string
+		if err := rows.Scan(&id, &tripIDStr, &date, &loc.Location, &createdAt); err != nil {
+			return nil, err
+		}
+		loc.ID, _ = uuid.Parse(id)
+		loc.TripID, _ = uuid.Parse(tripIDStr)
+		loc.Date, _ = time.Parse("2006-01-02", date)
+		loc.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		locations = append(locations, loc)
+	}
+	return locations, rows.Err()
 }
 
 // Silence the unused import warning

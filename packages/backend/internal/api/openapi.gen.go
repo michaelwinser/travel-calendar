@@ -38,6 +38,13 @@ const (
 	Train  ItemType = "train"
 )
 
+// Defines values for LocationSourceType.
+const (
+	LocationSourceTypeHome LocationSourceType = "home"
+	LocationSourceTypeTrip LocationSourceType = "trip"
+	LocationSourceTypeWork LocationSourceType = "work"
+)
+
 // Defines values for TripPurpose.
 const (
 	TripPurposeBusiness   TripPurpose = "business"
@@ -55,6 +62,15 @@ const (
 	InProgress TripStatus = "in_progress"
 	Planning   TripStatus = "planning"
 )
+
+// BaseLocations defines model for BaseLocations.
+type BaseLocations struct {
+	// Home Home location (default "Home" if not configured)
+	Home *string `json:"home,omitempty"`
+
+	// Work Work location (optional)
+	Work *string `json:"work,omitempty"`
+}
 
 // CreateItemRequest defines model for CreateItemRequest.
 type CreateItemRequest struct {
@@ -75,7 +91,10 @@ type CreateItemRequest struct {
 
 // CreateTripRequest defines model for CreateTripRequest.
 type CreateTripRequest struct {
-	EndDate   *openapi_types.Date `json:"endDate,omitempty"`
+	EndDate *openapi_types.Date `json:"endDate,omitempty"`
+
+	// Location Default location for all days of this trip (optional convenience)
+	Location  *string             `json:"location,omitempty"`
 	Name      string              `json:"name"`
 	Notes     *string             `json:"notes,omitempty"`
 	Purpose   TripPurpose         `json:"purpose"`
@@ -152,6 +171,55 @@ type Item struct {
 // ItemType defines model for ItemType.
 type ItemType string
 
+// LocationOnDateResponse defines model for LocationOnDateResponse.
+type LocationOnDateResponse struct {
+	Date openapi_types.Date `json:"date"`
+
+	// Locations Location(s) on this date
+	Locations []string       `json:"locations"`
+	Source    LocationSource `json:"source"`
+}
+
+// LocationRangeSegment defines model for LocationRangeSegment.
+type LocationRangeSegment struct {
+	EndDate openapi_types.Date `json:"endDate"`
+
+	// Locations Location(s) for this segment
+	Locations []string           `json:"locations"`
+	Source    LocationSource     `json:"source"`
+	StartDate openapi_types.Date `json:"startDate"`
+}
+
+// LocationSource defines model for LocationSource.
+type LocationSource struct {
+	// TripId Present when type is "trip"
+	TripId *openapi_types.UUID `json:"tripId,omitempty"`
+
+	// TripName Present when type is "trip"
+	TripName *string `json:"tripName,omitempty"`
+
+	// Type The source of the location (home, work, or a trip)
+	Type LocationSourceType `json:"type"`
+}
+
+// LocationSourceType The source of the location (home, work, or a trip)
+type LocationSourceType string
+
+// SetBaseLocationsRequest defines model for SetBaseLocationsRequest.
+type SetBaseLocationsRequest struct {
+	Home *string `json:"home,omitempty"`
+	Work *string `json:"work,omitempty"`
+}
+
+// SetTripLocationsRequest defines model for SetTripLocationsRequest.
+type SetTripLocationsRequest struct {
+	// DefaultLocation Default location for all dates not explicitly specified
+	DefaultLocation *string `json:"defaultLocation,omitempty"`
+
+	// Locations Per-date location overrides
+	Locations *[]TripDayLocation `json:"locations,omitempty"`
+}
+
 // Trip defines model for Trip.
 type Trip struct {
 	CreatedAt time.Time `json:"createdAt"`
@@ -161,15 +229,27 @@ type Trip struct {
 	Id      openapi_types.UUID  `json:"id"`
 
 	// Items Trip items (only included when fetching a single trip)
-	Items   *[]Item     `json:"items,omitempty"`
-	Name    string      `json:"name"`
-	Notes   *string     `json:"notes,omitempty"`
-	Purpose TripPurpose `json:"purpose"`
+	Items *[]Item `json:"items,omitempty"`
+
+	// Locations Per-date locations for this trip (only included when fetching a single trip)
+	Locations *[]TripDayLocation `json:"locations,omitempty"`
+	Name      string             `json:"name"`
+	Notes     *string            `json:"notes,omitempty"`
+	Purpose   TripPurpose        `json:"purpose"`
 
 	// StartDate Trip start date (YYYY-MM-DD)
 	StartDate *openapi_types.Date `json:"startDate,omitempty"`
 	Status    TripStatus          `json:"status"`
 	UpdatedAt time.Time           `json:"updatedAt"`
+}
+
+// TripDayLocation defines model for TripDayLocation.
+type TripDayLocation struct {
+	// Date The date (YYYY-MM-DD)
+	Date openapi_types.Date `json:"date"`
+
+	// Locations One or more locations for this date (multiple for travel days)
+	Locations []string `json:"locations"`
 }
 
 // TripPurpose defines model for TripPurpose.
@@ -203,6 +283,15 @@ type ListDocumentsParams struct {
 	Unassociated *bool `form:"unassociated,omitempty" json:"unassociated,omitempty"`
 }
 
+// GetLocationRangeParams defines parameters for GetLocationRange.
+type GetLocationRangeParams struct {
+	// From Start date (YYYY-MM-DD)
+	From openapi_types.Date `form:"from" json:"from"`
+
+	// To End date (YYYY-MM-DD)
+	To openapi_types.Date `form:"to" json:"to"`
+}
+
 // ListTripsParams defines parameters for ListTrips.
 type ListTripsParams struct {
 	// Upcoming Filter to upcoming trips only
@@ -221,6 +310,9 @@ type SearchTripsParams struct {
 	Q string `form:"q" json:"q"`
 }
 
+// SetBaseLocationsJSONRequestBody defines body for SetBaseLocations for application/json ContentType.
+type SetBaseLocationsJSONRequestBody = SetBaseLocationsRequest
+
 // CreateTripJSONRequestBody defines body for CreateTrip for application/json ContentType.
 type CreateTripJSONRequestBody = CreateTripRequest
 
@@ -230,14 +322,29 @@ type UpdateTripJSONRequestBody = UpdateTripRequest
 // CreateTripItemJSONRequestBody defines body for CreateTripItem for application/json ContentType.
 type CreateTripItemJSONRequestBody = CreateItemRequest
 
+// SetTripLocationsJSONRequestBody defines body for SetTripLocations for application/json ContentType.
+type SetTripLocationsJSONRequestBody = SetTripLocationsRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Get base locations
+	// (GET /api/config/locations)
+	GetBaseLocations(w http.ResponseWriter, r *http.Request)
+	// Set base locations
+	// (PUT /api/config/locations)
+	SetBaseLocations(w http.ResponseWriter, r *http.Request)
 	// List documents
 	// (GET /api/documents)
 	ListDocuments(w http.ResponseWriter, r *http.Request, params ListDocumentsParams)
 	// Delete an item
 	// (DELETE /api/items/{itemId})
 	DeleteItem(w http.ResponseWriter, r *http.Request, itemId ItemId)
+	// Get user location on a specific date
+	// (GET /api/location/on/{date})
+	GetLocationOnDate(w http.ResponseWriter, r *http.Request, date openapi_types.Date)
+	// Get user locations for a date range
+	// (GET /api/location/range)
+	GetLocationRange(w http.ResponseWriter, r *http.Request, params GetLocationRangeParams)
 	// List trips
 	// (GET /api/trips)
 	ListTrips(w http.ResponseWriter, r *http.Request, params ListTripsParams)
@@ -262,6 +369,12 @@ type ServerInterface interface {
 	// Add an item to a trip
 	// (POST /api/trips/{tripId}/items)
 	CreateTripItem(w http.ResponseWriter, r *http.Request, tripId TripId)
+	// Get locations for a trip
+	// (GET /api/trips/{tripId}/locations)
+	GetTripLocations(w http.ResponseWriter, r *http.Request, tripId TripId)
+	// Set locations for a trip
+	// (PUT /api/trips/{tripId}/locations)
+	SetTripLocations(w http.ResponseWriter, r *http.Request, tripId TripId)
 	// Health check
 	// (GET /health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -270,6 +383,18 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// Get base locations
+// (GET /api/config/locations)
+func (_ Unimplemented) GetBaseLocations(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Set base locations
+// (PUT /api/config/locations)
+func (_ Unimplemented) SetBaseLocations(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // List documents
 // (GET /api/documents)
@@ -280,6 +405,18 @@ func (_ Unimplemented) ListDocuments(w http.ResponseWriter, r *http.Request, par
 // Delete an item
 // (DELETE /api/items/{itemId})
 func (_ Unimplemented) DeleteItem(w http.ResponseWriter, r *http.Request, itemId ItemId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get user location on a specific date
+// (GET /api/location/on/{date})
+func (_ Unimplemented) GetLocationOnDate(w http.ResponseWriter, r *http.Request, date openapi_types.Date) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get user locations for a date range
+// (GET /api/location/range)
+func (_ Unimplemented) GetLocationRange(w http.ResponseWriter, r *http.Request, params GetLocationRangeParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -331,6 +468,18 @@ func (_ Unimplemented) CreateTripItem(w http.ResponseWriter, r *http.Request, tr
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Get locations for a trip
+// (GET /api/trips/{tripId}/locations)
+func (_ Unimplemented) GetTripLocations(w http.ResponseWriter, r *http.Request, tripId TripId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Set locations for a trip
+// (PUT /api/trips/{tripId}/locations)
+func (_ Unimplemented) SetTripLocations(w http.ResponseWriter, r *http.Request, tripId TripId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Health check
 // (GET /health)
 func (_ Unimplemented) GetHealth(w http.ResponseWriter, r *http.Request) {
@@ -345,6 +494,34 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetBaseLocations operation middleware
+func (siw *ServerInterfaceWrapper) GetBaseLocations(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBaseLocations(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetBaseLocations operation middleware
+func (siw *ServerInterfaceWrapper) SetBaseLocations(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetBaseLocations(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListDocuments operation middleware
 func (siw *ServerInterfaceWrapper) ListDocuments(w http.ResponseWriter, r *http.Request) {
@@ -397,6 +574,80 @@ func (siw *ServerInterfaceWrapper) DeleteItem(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteItem(w, r, itemId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetLocationOnDate operation middleware
+func (siw *ServerInterfaceWrapper) GetLocationOnDate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "date" -------------
+	var date openapi_types.Date
+
+	err = runtime.BindStyledParameterWithOptions("simple", "date", chi.URLParam(r, "date"), &date, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "date", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetLocationOnDate(w, r, date)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetLocationRange operation middleware
+func (siw *ServerInterfaceWrapper) GetLocationRange(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetLocationRangeParams
+
+	// ------------- Required query parameter "from" -------------
+
+	if paramValue := r.URL.Query().Get("from"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "from", r.URL.Query(), &params.From)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "to" -------------
+
+	if paramValue := r.URL.Query().Get("to"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "to", r.URL.Query(), &params.To)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetLocationRange(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -622,6 +873,56 @@ func (siw *ServerInterfaceWrapper) CreateTripItem(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetTripLocations operation middleware
+func (siw *ServerInterfaceWrapper) GetTripLocations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "tripId" -------------
+	var tripId TripId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tripId", chi.URLParam(r, "tripId"), &tripId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tripId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTripLocations(w, r, tripId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetTripLocations operation middleware
+func (siw *ServerInterfaceWrapper) SetTripLocations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "tripId" -------------
+	var tripId TripId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tripId", chi.URLParam(r, "tripId"), &tripId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tripId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetTripLocations(w, r, tripId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
 
@@ -750,10 +1051,22 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	}
 
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/config/locations", wrapper.GetBaseLocations)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/api/config/locations", wrapper.SetBaseLocations)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/documents", wrapper.ListDocuments)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/api/items/{itemId}", wrapper.DeleteItem)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/location/on/{date}", wrapper.GetLocationOnDate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/location/range", wrapper.GetLocationRange)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/trips", wrapper.ListTrips)
@@ -778,6 +1091,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/api/trips/{tripId}/items", wrapper.CreateTripItem)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/trips/{tripId}/locations", wrapper.GetTripLocations)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/api/trips/{tripId}/locations", wrapper.SetTripLocations)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/health", wrapper.GetHealth)

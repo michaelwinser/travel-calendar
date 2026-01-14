@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/user/travel-calendar/cli/internal/client"
@@ -88,6 +89,7 @@ var tripsCreateCmd = &cobra.Command{
 		startDate, _ := cmd.Flags().GetString("start")
 		endDate, _ := cmd.Flags().GetString("end")
 		notes, _ := cmd.Flags().GetString("notes")
+		location, _ := cmd.Flags().GetString("location")
 
 		if name == "" || purpose == "" {
 			output.PrintError("--name and --purpose are required", nil)
@@ -113,6 +115,9 @@ var tripsCreateCmd = &cobra.Command{
 		}
 		if notes != "" {
 			req.Notes = &notes
+		}
+		if location != "" {
+			req.Location = &location
 		}
 
 		resp, err := getClient().CreateTripWithResponse(getContext(), req)
@@ -247,6 +252,163 @@ var tripsSearchCmd = &cobra.Command{
 	},
 }
 
+// trips get-locations <trip-id>
+var tripsGetLocationsCmd = &cobra.Command{
+	Use:   "get-locations <trip-id>",
+	Short: "Get locations for a trip",
+	Long:  `Get the location assignments for each day of a trip.`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		tripID, err := parseUUID(args[0])
+		if err != nil {
+			output.PrintError("Invalid trip ID", err)
+		}
+
+		resp, err := getClient().GetTripLocationsWithResponse(getContext(), tripID)
+		if err != nil {
+			output.PrintError("Failed to get trip locations", err)
+		}
+		if resp.StatusCode() == http.StatusNotFound {
+			output.PrintError("Trip not found", nil)
+		}
+		if resp.StatusCode() != http.StatusOK {
+			output.PrintError(fmt.Sprintf("API returned %d", resp.StatusCode()), nil)
+		}
+
+		output.PrintTripLocations(*resp.JSON200)
+	},
+}
+
+// trips set-location <trip-id> <location> [--date YYYY-MM-DD] [--start YYYY-MM-DD --end YYYY-MM-DD]
+var tripsSetLocationCmd = &cobra.Command{
+	Use:   "set-location <trip-id> <location>",
+	Short: "Set location for a trip",
+	Long: `Set the location for a trip. Without flags, sets the location for all days.
+With --date, sets location for a single day.
+With --start and --end, sets location for a date range.`,
+	Args: cobra.ExactArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		tripID, err := parseUUID(args[0])
+		if err != nil {
+			output.PrintError("Invalid trip ID", err)
+		}
+		location := args[1]
+
+		dateStr, _ := cmd.Flags().GetString("date")
+		startStr, _ := cmd.Flags().GetString("start")
+		endStr, _ := cmd.Flags().GetString("end")
+
+		req := client.SetTripLocationsRequest{}
+
+		if dateStr != "" {
+			// Single date
+			date, err := parseDate(dateStr)
+			if err != nil {
+				output.PrintError("Invalid date", err)
+			}
+			locs := []client.TripDayLocation{{Date: date, Locations: []string{location}}}
+			req.Locations = &locs
+		} else if startStr != "" && endStr != "" {
+			// Date range - we'll set defaultLocation and the backend will apply it
+			// But we need to be more clever here - the API expects per-day or default
+			// For a range, we set defaultLocation which applies to all uncovered dates
+			req.DefaultLocation = &location
+		} else if startStr != "" || endStr != "" {
+			output.PrintError("Both --start and --end are required for date range", nil)
+		} else {
+			// All days - use default location
+			req.DefaultLocation = &location
+		}
+
+		resp, err := getClient().SetTripLocationsWithResponse(getContext(), tripID, req)
+		if err != nil {
+			output.PrintError("Failed to set trip locations", err)
+		}
+		if resp.StatusCode() == http.StatusNotFound {
+			output.PrintError("Trip not found", nil)
+		}
+		if resp.StatusCode() != http.StatusOK {
+			output.PrintError(fmt.Sprintf("API returned %d", resp.StatusCode()), nil)
+		}
+
+		output.PrintSuccess("Location set successfully")
+		output.PrintTripLocations(*resp.JSON200)
+	},
+}
+
+// trips add-location <trip-id> <location> --date YYYY-MM-DD
+var tripsAddLocationCmd = &cobra.Command{
+	Use:   "add-location <trip-id> <location>",
+	Short: "Add a location to a trip day",
+	Long: `Add an additional location to a specific day (for travel days with multiple locations).
+Requires --date flag to specify which day.`,
+	Args: cobra.ExactArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		tripID, err := parseUUID(args[0])
+		if err != nil {
+			output.PrintError("Invalid trip ID", err)
+		}
+		location := args[1]
+
+		dateStr, _ := cmd.Flags().GetString("date")
+		if dateStr == "" {
+			output.PrintError("--date is required for add-location", nil)
+		}
+
+		date, err := parseDate(dateStr)
+		if err != nil {
+			output.PrintError("Invalid date", err)
+		}
+
+		// First get existing locations
+		getResp, err := getClient().GetTripLocationsWithResponse(getContext(), tripID)
+		if err != nil {
+			output.PrintError("Failed to get existing locations", err)
+		}
+		if getResp.StatusCode() == http.StatusNotFound {
+			output.PrintError("Trip not found", nil)
+		}
+		if getResp.StatusCode() != http.StatusOK {
+			output.PrintError(fmt.Sprintf("API returned %d when getting locations", getResp.StatusCode()), nil)
+		}
+
+		// Build new locations list with the added location
+		var newLocations []client.TripDayLocation
+		dateFound := false
+		for _, dayLoc := range *getResp.JSON200 {
+			if dayLoc.Date.Format("2006-01-02") == date.Format("2006-01-02") {
+				// Add to existing day
+				dayLoc.Locations = append(dayLoc.Locations, location)
+				dateFound = true
+			}
+			newLocations = append(newLocations, dayLoc)
+		}
+
+		if !dateFound {
+			// Add new day with just this location
+			newLocations = append(newLocations, client.TripDayLocation{
+				Date:      date,
+				Locations: []string{location},
+			})
+		}
+
+		req := client.SetTripLocationsRequest{
+			Locations: &newLocations,
+		}
+
+		resp, err := getClient().SetTripLocationsWithResponse(getContext(), tripID, req)
+		if err != nil {
+			output.PrintError("Failed to add location", err)
+		}
+		if resp.StatusCode() != http.StatusOK {
+			output.PrintError(fmt.Sprintf("API returned %d", resp.StatusCode()), nil)
+		}
+
+		output.PrintSuccess("Location added successfully")
+		output.PrintTripLocations(*resp.JSON200)
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(tripsCmd)
 
@@ -266,6 +428,7 @@ func init() {
 	tripsCreateCmd.Flags().String("start", "", "Start date (YYYY-MM-DD)")
 	tripsCreateCmd.Flags().String("end", "", "End date (YYYY-MM-DD)")
 	tripsCreateCmd.Flags().String("notes", "", "Additional notes")
+	tripsCreateCmd.Flags().String("location", "", "Default location for all days of this trip")
 	tripsCreateCmd.MarkFlagRequired("name")
 	tripsCreateCmd.MarkFlagRequired("purpose")
 
@@ -283,6 +446,20 @@ func init() {
 
 	// trips search
 	tripsCmd.AddCommand(tripsSearchCmd)
+
+	// trips get-locations
+	tripsCmd.AddCommand(tripsGetLocationsCmd)
+
+	// trips set-location
+	tripsCmd.AddCommand(tripsSetLocationCmd)
+	tripsSetLocationCmd.Flags().String("date", "", "Set location for a single date (YYYY-MM-DD)")
+	tripsSetLocationCmd.Flags().String("start", "", "Start of date range (YYYY-MM-DD)")
+	tripsSetLocationCmd.Flags().String("end", "", "End of date range (YYYY-MM-DD)")
+
+	// trips add-location
+	tripsCmd.AddCommand(tripsAddLocationCmd)
+	tripsAddLocationCmd.Flags().String("date", "", "Date to add location to (YYYY-MM-DD)")
+	tripsAddLocationCmd.MarkFlagRequired("date")
 }
 
 // Helper functions
@@ -297,4 +474,25 @@ func parseDate(s string) (openapi_types.Date, error) {
 	var date openapi_types.Date
 	err := date.UnmarshalText([]byte(s))
 	return date, err
+}
+
+func parseDateWithKeywords(s string) (openapi_types.Date, error) {
+	var date openapi_types.Date
+	now := time.Now()
+
+	switch s {
+	case "today":
+		date.Time = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+		return date, nil
+	case "tomorrow":
+		tomorrow := now.AddDate(0, 0, 1)
+		date.Time = time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 0, 0, 0, 0, time.UTC)
+		return date, nil
+	case "yesterday":
+		yesterday := now.AddDate(0, 0, -1)
+		date.Time = time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, time.UTC)
+		return date, nil
+	default:
+		return parseDate(s)
+	}
 }

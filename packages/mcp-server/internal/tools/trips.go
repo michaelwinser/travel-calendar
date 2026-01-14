@@ -57,7 +57,7 @@ func (r *Registry) registerTripTools() {
 	// create_trip - Create a new trip
 	r.register(ToolDefinition{
 		Name:        "create_trip",
-		Description: "Create a new trip.",
+		Description: "Create a new trip. Use the location parameter to set a default location for all days.",
 		InputSchema: map[string]interface{}{
 			"type":     "object",
 			"required": []string{"name", "purpose"},
@@ -80,6 +80,10 @@ func (r *Registry) registerTripTools() {
 					"type":        "string",
 					"format":      "date",
 					"description": "End date (YYYY-MM-DD)",
+				},
+				"location": map[string]interface{}{
+					"type":        "string",
+					"description": "Default location for all days of this trip",
 				},
 				"notes": map[string]interface{}{
 					"type":        "string",

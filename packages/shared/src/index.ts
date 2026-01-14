@@ -29,3 +29,13 @@ export type Document = components['schemas']['Document'];
 
 export type HealthResponse = components['schemas']['HealthResponse'];
 export type ErrorResponse = components['schemas']['Error'];
+
+// Location types
+export type BaseLocations = components['schemas']['BaseLocations'];
+export type SetBaseLocationsRequest = components['schemas']['SetBaseLocationsRequest'];
+export type TripDayLocation = components['schemas']['TripDayLocation'];
+export type SetTripLocationsRequest = components['schemas']['SetTripLocationsRequest'];
+export type LocationSourceType = components['schemas']['LocationSourceType'];
+export type LocationSource = components['schemas']['LocationSource'];
+export type LocationOnDateResponse = components['schemas']['LocationOnDateResponse'];
+export type LocationRangeSegment = components['schemas']['LocationRangeSegment'];

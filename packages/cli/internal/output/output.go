@@ -219,5 +219,114 @@ func getString(s *string) string {
 	return *s
 }
 
-// Silence unused import warning
-var _ = strings.TrimSpace
+// PrintConfig prints a single config key-value pair.
+func PrintConfig(key, value string) {
+	if JSONOutput {
+		printJSON(map[string]string{key: value})
+		return
+	}
+	fmt.Printf("%s = %s\n", key, value)
+}
+
+// PrintBaseLocations prints all base location configuration.
+func PrintBaseLocations(locs client.BaseLocations) {
+	if JSONOutput {
+		printJSON(locs)
+		return
+	}
+
+	fmt.Println("Base Locations:")
+	if locs.Home != nil {
+		fmt.Printf("  home = %s\n", *locs.Home)
+	} else {
+		fmt.Println("  home = (not set)")
+	}
+	if locs.Work != nil {
+		fmt.Printf("  work = %s\n", *locs.Work)
+	} else {
+		fmt.Println("  work = (not set)")
+	}
+}
+
+// PrintTripLocations prints location assignments for a trip.
+func PrintTripLocations(locs []client.TripDayLocation) {
+	if JSONOutput {
+		printJSON(locs)
+		return
+	}
+
+	if len(locs) == 0 {
+		fmt.Println("No locations set for this trip.")
+		return
+	}
+
+	fmt.Println("Trip Locations:")
+	for _, dayLoc := range locs {
+		fmt.Printf("  %s: %s\n", dayLoc.Date.Format("2006-01-02"), strings.Join(dayLoc.Locations, ", "))
+	}
+}
+
+// PrintLocationOnDate prints the location for a single date.
+func PrintLocationOnDate(loc client.LocationOnDateResponse) {
+	if JSONOutput {
+		printJSON(loc)
+		return
+	}
+
+	fmt.Printf("Location on %s:\n", loc.Date.Format("2006-01-02"))
+	fmt.Printf("  %s\n", strings.Join(loc.Locations, ", "))
+
+	sourceDesc := ""
+	switch loc.Source.Type {
+	case client.LocationSourceTypeHome:
+		sourceDesc = "home"
+	case client.LocationSourceTypeWork:
+		sourceDesc = "work"
+	case client.LocationSourceTypeTrip:
+		if loc.Source.TripName != nil {
+			sourceDesc = fmt.Sprintf("trip: %s", *loc.Source.TripName)
+		} else {
+			sourceDesc = "trip"
+		}
+	}
+	fmt.Printf("  (source: %s)\n", sourceDesc)
+}
+
+// PrintLocationRange prints location segments for a date range.
+func PrintLocationRange(segments []client.LocationRangeSegment) {
+	if JSONOutput {
+		printJSON(segments)
+		return
+	}
+
+	if len(segments) == 0 {
+		fmt.Println("No location data for this range.")
+		return
+	}
+
+	fmt.Println("Location Timeline:")
+	for _, seg := range segments {
+		dateRange := ""
+		if seg.StartDate.Format("2006-01-02") == seg.EndDate.Format("2006-01-02") {
+			dateRange = seg.StartDate.Format("2006-01-02")
+		} else {
+			dateRange = fmt.Sprintf("%s to %s", seg.StartDate.Format("2006-01-02"), seg.EndDate.Format("2006-01-02"))
+		}
+
+		sourceDesc := ""
+		switch seg.Source.Type {
+		case client.LocationSourceTypeHome:
+			sourceDesc = "home"
+		case client.LocationSourceTypeWork:
+			sourceDesc = "work"
+		case client.LocationSourceTypeTrip:
+			if seg.Source.TripName != nil {
+				sourceDesc = fmt.Sprintf("trip: %s", *seg.Source.TripName)
+			} else {
+				sourceDesc = "trip"
+			}
+		}
+
+		fmt.Printf("  %s: %s (%s)\n", dateRange, strings.Join(seg.Locations, ", "), sourceDesc)
+	}
+}

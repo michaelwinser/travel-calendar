@@ -70,4 +70,6 @@ func (r *Registry) registerTools() {
 	r.registerTripTools()
 	// Register document tools
 	r.registerDocumentTools()
+	// Register location tools
+	r.registerLocationTools()
 }

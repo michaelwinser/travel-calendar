@@ -13,7 +13,13 @@ import type {
 	Item,
 	CreateItemRequest,
 	Document,
-	ErrorResponse
+	ErrorResponse,
+	BaseLocations,
+	SetBaseLocationsRequest,
+	TripDayLocation,
+	SetTripLocationsRequest,
+	LocationOnDateResponse,
+	LocationRangeSegment
 } from '@travel-calendar/shared';
 
 // In development, Vite proxies /api to localhost:3000
@@ -147,6 +153,47 @@ export const api = {
 			const qs = buildQueryString(filters || {});
 			const response = await fetch(`${API_BASE}/api/documents${qs}`);
 			return handleResponse<Document[]>(response);
+		}
+	},
+
+	locations: {
+		async getBaseLocations(): Promise<BaseLocations> {
+			const response = await fetch(`${API_BASE}/api/config/locations`);
+			return handleResponse<BaseLocations>(response);
+		},
+
+		async setBaseLocations(input: SetBaseLocationsRequest): Promise<BaseLocations> {
+			const response = await fetch(`${API_BASE}/api/config/locations`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(input)
+			});
+			return handleResponse<BaseLocations>(response);
+		},
+
+		async getTripLocations(tripId: string): Promise<TripDayLocation[]> {
+			const response = await fetch(`${API_BASE}/api/trips/${tripId}/locations`);
+			return handleResponse<TripDayLocation[]>(response);
+		},
+
+		async setTripLocations(tripId: string, input: SetTripLocationsRequest): Promise<TripDayLocation[]> {
+			const response = await fetch(`${API_BASE}/api/trips/${tripId}/locations`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(input)
+			});
+			return handleResponse<TripDayLocation[]>(response);
+		},
+
+		async getLocationOnDate(date: string): Promise<LocationOnDateResponse> {
+			const response = await fetch(`${API_BASE}/api/location/on/${date}`);
+			return handleResponse<LocationOnDateResponse>(response);
+		},
+
+		async getLocationRange(from: string, to: string): Promise<LocationRangeSegment[]> {
+			const qs = buildQueryString({ from, to });
+			const response = await fetch(`${API_BASE}/api/location/range${qs}`);
+			return handleResponse<LocationRangeSegment[]>(response);
 		}
 	}
 };
