@@ -1,0 +1,11 @@
+# Travel Calendar - Production Overrides
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up
+#
+# This file enables production settings that differ from development defaults.
+
+services:
+  backend:
+    environment:
+      - STATIC_CACHE=true  # Enable 1-year cache headers for /_app/* static assets

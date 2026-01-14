@@ -5,11 +5,19 @@ import (
 	"embed"
 	"io/fs"
 	"net/http"
+	"os"
 	"strings"
 )
 
 //go:embed dist/*
 var staticFiles embed.FS
+
+// staticCacheEnabled returns true if production caching should be enabled.
+// Set STATIC_CACHE=true in production for 1-year cache on hashed assets.
+// Defaults to false (no caching) for development.
+func staticCacheEnabled() bool {
+	return os.Getenv("STATIC_CACHE") == "true"
+}
 
 // staticHandler returns an http.Handler that serves the embedded static files.
 // It handles SPA routing by serving index.html for non-file requests.
@@ -25,11 +33,13 @@ func staticHandler() http.Handler {
 
 	fileServer := http.FileServer(http.FS(distFS))
 
+	cacheEnabled := staticCacheEnabled()
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
 		// Set cache headers for static assets
-		if strings.HasPrefix(path, "/_app/") {
+		if cacheEnabled && strings.HasPrefix(path, "/_app/") {
 			// Immutable assets (hashed filenames) - cache for 1 year
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		} else if strings.HasSuffix(path, ".html") || path == "/" {
