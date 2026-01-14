@@ -33,8 +33,9 @@ Thumbs.db
 coverage/
 .nyc_output/
 
-# Claude Code conversations (may contain sensitive info)
+# Claude Code conversations and audit logs (may contain sensitive info)
 .claude/conversations/
+.claude/audit.jsonl
 
 # Docker overrides (local customization)
 docker-compose.override.yml

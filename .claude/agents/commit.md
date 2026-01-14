@@ -98,7 +98,23 @@ git log -1 --oneline
 git status
 ```
 
-### Step 7: Push (If Requested)
+### Step 7: Invoke Tools Agent
+
+**After successful commit**, spawn the Tools Agent to review tool usage:
+
+```
+Task: Review tool usage for this session and propose any optimizations.
+Agent: tools
+```
+
+The Tools Agent will:
+- Analyze permission prompts encountered during the session
+- Identify commands that should be added to `tc` or `settings.json`
+- Propose workflow improvements
+
+If the Tools Agent has recommendations, present them to the user.
+
+### Step 8: Push (If Requested)
 
 Only push if the user explicitly requests it:
 
@@ -185,6 +201,13 @@ Agent: I'll prepare a commit for you.
 5. [After user confirms]
    Commit created: abc1234 feat(backend): add trip validation
 
+6. Invoking Tools Agent...
+   [Spawns tools agent]
+
+   ## Tool Usage Review
+   - Session efficiency: 94%
+   - No new recommendations
+
 Would you like me to push this to the remote?
 ```
 
@@ -197,6 +220,11 @@ Before executing `git commit`:
 - [ ] Commit message follows format: `type(component): description`
 - [ ] No secrets or credentials in staged files
 - [ ] User has been shown and approved the changes
+
+After `git commit` succeeds:
+
+- [ ] Tools Agent invoked for session review
+- [ ] Any tool recommendations presented to user
 
 Before executing `git push`:
 

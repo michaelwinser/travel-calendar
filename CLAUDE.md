@@ -200,6 +200,7 @@ The following files have special ownership rules:
 | End-to-end tests | `.claude/agents/e2e-test.md` | `tests/e2e/` |
 | **Pre-commit review** | `.claude/agents/code-review.md` | All changes |
 | **Git commits and pushes** | `.claude/agents/commit.md` | All git operations |
+| **Tool usage & permissions** | `.claude/agents/tools.md` | Session analysis, tc/settings optimization |
 
 ### Agent Quick Reference
 
@@ -256,8 +257,15 @@ Each agent has detailed checklists. Here are the key rules:
 #### Commit Agent
 - **Exclusive authority**: ONLY agent allowed to run `git commit` or `git push`
 - **Mandatory steps**: Run `./tc test-precommit`, invoke Code Review Agent
-- **Workflow**: Pre-commit checks → Code Review → Stage → Commit → (Push if requested)
+- **Workflow**: Pre-commit checks → Code Review → Stage → Commit → Tools Review → (Push if requested)
 - **Forbidden**: Committing without Code Review approval, force-push to main/master
+
+#### Tools Agent
+- **When**: After commits, on request, or when permission patterns emerge
+- **Does**: Analyzes tool usage, identifies permission prompt patterns, proposes optimizations
+- **Proposes**: Additions to `tc` script, changes to `.claude/settings.json` permissions
+- **Goals**: User confidence, minimize prompts, identify workflow gaps
+- **Works with**: Infra Agent (implements approved changes)
 
 ---
 
@@ -270,5 +278,6 @@ Each agent has detailed checklists. Here are the key rules:
 | `.claude/agents/*.md` | Detailed agent checklists | Before component work |
 | `.claude/agents/commit.md` | Commit workflow (exclusive authority) | Before any commit |
 | `.claude/agents/code-review.md` | Pre-commit review process | Before committing |
+| `.claude/agents/tools.md` | Tool usage analysis and optimization | After commits, on request |
 | `.claude/reviewer.md` | Pushback/review criteria | Evaluating requests |
 | `packages/*/ARCHITECTURE.md` | Component-specific patterns | Before component changes |
