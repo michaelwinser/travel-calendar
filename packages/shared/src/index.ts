@@ -1,146 +1,31 @@
 /**
  * Travel Calendar - Shared Types
  *
- * This package contains TypeScript types only.
- * No runtime code, no dependencies.
+ * This package contains TypeScript types generated from the OpenAPI specification.
+ * Types are auto-generated - do not edit manually.
+ *
+ * To regenerate: pnpm generate
  * See ARCHITECTURE.md for conventions.
  */
 
-// ===========================================
-// Trip Types
-// ===========================================
+// Re-export all types from generated API types
+export type { paths, components, operations } from './api';
 
-export type TripPurpose = 'conference' | 'work' | 'vacation' | 'family' | 'personal';
-export type TripStatus = 'planned' | 'confirmed' | 'completed' | 'cancelled';
+// Convenience aliases for commonly used types
+import type { components } from './api';
 
-export interface Trip {
-  id: string;
-  name: string;
-  purpose: TripPurpose;
-  status: TripStatus;
-  startDate: string;
-  endDate: string;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-}
+// Schema types
+export type Trip = components['schemas']['Trip'];
+export type TripPurpose = components['schemas']['TripPurpose'];
+export type TripStatus = components['schemas']['TripStatus'];
+export type CreateTripRequest = components['schemas']['CreateTripRequest'];
+export type UpdateTripRequest = components['schemas']['UpdateTripRequest'];
 
-export interface TripWithItems extends Trip {
-  items: Item[];
-}
+export type Item = components['schemas']['Item'];
+export type ItemType = components['schemas']['ItemType'];
+export type CreateItemRequest = components['schemas']['CreateItemRequest'];
 
-// ===========================================
-// Item Types
-// ===========================================
+export type Document = components['schemas']['Document'];
 
-export type ItemType = 'flight' | 'hotel' | 'train' | 'drive' | 'event';
-
-interface BaseItem {
-  id: string;
-  tripId: string;
-  type: ItemType;
-  date: string;
-  notes?: string;
-  createdAt: string;
-}
-
-export interface FlightItem extends BaseItem {
-  type: 'flight';
-  from: string;
-  to: string;
-  departureTime?: string;
-  arrivalTime?: string;
-  carrier?: string;
-  flightNumber?: string;
-  confirmation?: string;
-}
-
-export interface HotelItem extends BaseItem {
-  type: 'hotel';
-  name: string;
-  location: string;
-  checkIn: string;
-  checkOut: string;
-  confirmation?: string;
-}
-
-export interface TrainItem extends BaseItem {
-  type: 'train';
-  from: string;
-  to: string;
-  departureTime?: string;
-  arrivalTime?: string;
-  carrier?: string;
-  trainNumber?: string;
-  confirmation?: string;
-}
-
-export interface DriveItem extends BaseItem {
-  type: 'drive';
-  from: string;
-  to: string;
-  rentalCompany?: string;
-  confirmation?: string;
-}
-
-export interface EventItem extends BaseItem {
-  type: 'event';
-  name: string;
-  location?: string;
-  startTime?: string;
-  endTime?: string;
-}
-
-export type Item = FlightItem | HotelItem | TrainItem | DriveItem | EventItem;
-
-// ===========================================
-// Document Types
-// ===========================================
-
-export type DocumentType = 'confirmation' | 'receipt' | 'ticket' | 'hotel' | 'visa' | 'insurance' | 'other';
-
-export interface Document {
-  id: string;
-  tripId?: string;
-  itemId?: string;
-  type: DocumentType;
-  name: string;
-  filePath: string;
-  mimeType?: string;
-  fileSize?: number;
-  vendor?: string;
-  amount?: number;
-  currency?: string;
-  createdAt: string;
-}
-
-// ===========================================
-// API Types
-// ===========================================
-
-export interface CreateTripInput {
-  name: string;
-  purpose: TripPurpose;
-  startDate: string;
-  endDate: string;
-  notes?: string;
-}
-
-export interface UpdateTripInput {
-  name?: string;
-  purpose?: TripPurpose;
-  status?: TripStatus;
-  startDate?: string;
-  endDate?: string;
-  notes?: string;
-}
-
-export interface TripFilters {
-  upcoming?: boolean;
-  past?: boolean;
-  status?: TripStatus;
-  purpose?: TripPurpose;
-  location?: string;
-  dateRange?: [string, string];
-  search?: string;
-}
+export type HealthResponse = components['schemas']['HealthResponse'];
+export type ErrorResponse = components['schemas']['Error'];

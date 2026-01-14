@@ -4,14 +4,15 @@
 
 ## Overview
 
-The `shared` package contains **TypeScript types only**. No runtime code, no logic, no dependencies.
+The `shared` package contains **TypeScript types generated from the OpenAPI specification**. These types are auto-generated and should not be edited manually.
 
-## Purpose
+## Source of Truth
 
-Provides type definitions that ensure consistency across:
-- Backend API responses
-- Frontend data models
-- MCP server interfaces
+The OpenAPI specification (`packages/api/openapi.yaml`) is the single source of truth for all types. This ensures consistency between:
+- Backend Go API (generates server types)
+- CLI Go client (generates client types)
+- Frontend TypeScript (generates via this package)
+- MCP server tools
 
 ## Directory Structure
 
@@ -19,179 +20,105 @@ Provides type definitions that ensure consistency across:
 packages/shared/
 ├── ARCHITECTURE.md           # This file - read first!
 ├── src/
-│   ├── index.ts              # Main export
-│   ├── trip.ts               # Trip types
-│   ├── item.ts               # Item types (flight, hotel, etc.)
-│   ├── document.ts           # Document types
-│   └── api.ts                # API request/response types
-├── package.json
-└── tsconfig.json
+│   ├── index.ts              # Convenience exports and type aliases
+│   └── api.ts                # Generated types (DO NOT EDIT)
+└── package.json
+```
+
+## Regenerating Types
+
+When the OpenAPI spec changes, regenerate the types:
+
+```bash
+# From packages/shared/
+pnpm generate
+
+# Or from root
+npx openapi-typescript packages/api/openapi.yaml -o packages/shared/src/api.ts
+```
+
+## Available Types
+
+The package exports convenience aliases for commonly used types:
+
+```typescript
+// Entity types
+import type { Trip, Item, Document } from '@travel-calendar/shared';
+
+// Enum types
+import type { TripPurpose, TripStatus, ItemType } from '@travel-calendar/shared';
+
+// Request types
+import type { CreateTripRequest, UpdateTripRequest, CreateItemRequest } from '@travel-calendar/shared';
+
+// Full API types (paths, operations, etc.)
+import type { paths, components, operations } from '@travel-calendar/shared';
+```
+
+## Usage Examples
+
+### Frontend
+
+```typescript
+import type { Trip, TripPurpose, CreateTripRequest } from '@travel-calendar/shared';
+
+// Use in components
+const trip: Trip = await fetchTrip(id);
+
+// Use in forms
+const newTrip: CreateTripRequest = {
+  name: 'New Trip',
+  purpose: 'vacation' as TripPurpose,
+  status: 'planning',
+};
+```
+
+### API Client Types
+
+For strongly-typed API clients, use the generated `paths` and `operations`:
+
+```typescript
+import type { paths } from '@travel-calendar/shared';
+
+type ListTripsResponse = paths['/api/trips']['get']['responses']['200']['content']['application/json'];
 ```
 
 ## Core Principles
 
-### 1. Types Only - No Runtime Code
+### 1. Generated Types Only
+
+The `api.ts` file is auto-generated. **Never edit it manually.**
+
+### 2. Convenience Aliases in index.ts
+
+`index.ts` provides friendly aliases for commonly used types:
 
 ```typescript
-// ✓ ALLOWED: Type definitions
-export interface Trip {
-  id: string;
-  name: string;
-  purpose: TripPurpose;
-}
-
-export type TripPurpose = 'conference' | 'work' | 'vacation' | 'family' | 'personal';
-
-// ✗ FORBIDDEN: Runtime code
-export function formatTrip(trip: Trip): string {  // NO!
-  return `${trip.name} (${trip.purpose})`;
-}
-
-// ✗ FORBIDDEN: Constants that could be types
-export const TRIP_PURPOSES = ['conference', 'work', ...] as const;  // NO!
+// In index.ts
+export type Trip = components['schemas']['Trip'];
 ```
 
-### 2. No Dependencies
+You can add more aliases as needed, but keep them simple re-exports.
 
-`package.json` should have zero dependencies:
+### 3. No Runtime Code
 
-```json
-{
-  "name": "@travel-calendar/shared",
-  "dependencies": {},
-  "devDependencies": {
-    "typescript": "^5.0.0"
-  }
-}
-```
+This package contains types only - no functions, classes, or constants.
 
-### 3. Entity Types Mirror Backend
+### 4. Minimal Dependencies
 
-Types should match backend entity shapes:
+Only `openapi-typescript` as a dev dependency for generation.
 
-```typescript
-// trip.ts - Mirrors backend/src/entities/trip.ts
-export interface Trip {
-  id: string;
-  name: string;
-  purpose: TripPurpose;
-  status: TripStatus;
-  startDate: string;  // ISO date
-  endDate: string;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-}
+## Workflow
 
-export type TripPurpose = 'conference' | 'work' | 'vacation' | 'family' | 'personal';
-export type TripStatus = 'planned' | 'confirmed' | 'completed' | 'cancelled';
-```
-
-### 4. API Types for Request/Response
-
-```typescript
-// api.ts
-import type { Trip, TripPurpose } from './trip';
-
-// Input types (for creation/updates)
-export interface CreateTripInput {
-  name: string;
-  purpose: TripPurpose;
-  startDate: string;
-  endDate: string;
-  notes?: string;
-}
-
-export interface UpdateTripInput {
-  name?: string;
-  purpose?: TripPurpose;
-  status?: TripStatus;
-  startDate?: string;
-  endDate?: string;
-  notes?: string;
-}
-
-// Query types
-export interface TripFilters {
-  upcoming?: boolean;
-  past?: boolean;
-  purpose?: TripPurpose;
-  location?: string;
-  dateRange?: [string, string];
-}
-
-// Response types (if different from entity)
-export interface TripWithItems extends Trip {
-  items: Item[];
-}
-```
-
-### 5. Discriminated Unions for Item Types
-
-```typescript
-// item.ts
-interface BaseItem {
-  id: string;
-  tripId: string;
-  date: string;
-  createdAt: string;
-}
-
-export interface FlightItem extends BaseItem {
-  type: 'flight';
-  from: string;
-  to: string;
-  departureTime?: string;
-  arrivalTime?: string;
-  carrier?: string;
-  flightNumber?: string;
-  confirmation?: string;
-}
-
-export interface HotelItem extends BaseItem {
-  type: 'hotel';
-  name: string;
-  location: string;
-  checkIn: string;
-  checkOut: string;
-  confirmation?: string;
-}
-
-// ... other item types
-
-export type Item = FlightItem | HotelItem | TrainItem | DriveItem | EventItem;
-export type ItemType = Item['type'];
-```
-
-## Usage in Other Packages
-
-```typescript
-// In backend
-import type { Trip, CreateTripInput } from '@travel-calendar/shared';
-
-// In frontend
-import type { Trip, TripWithItems } from '@travel-calendar/shared';
-
-// In mcp-server
-import type { Trip, TripFilters } from '@travel-calendar/shared';
-```
-
-## Adding New Types
-
-1. Create type file in `src/`
-2. Export from `src/index.ts`
-3. Update consumers as needed
-
-**Do not add:**
-- Validation logic (use Zod in backend)
-- Formatting functions (use component utilities)
-- Constants (use type literals)
+1. **Edit OpenAPI spec** (`packages/api/openapi.yaml`)
+2. **Validate spec** (`npx @redocly/cli lint packages/api/openapi.yaml`)
+3. **Regenerate types** (`pnpm generate` in shared package)
+4. **Update consumers** if type structure changed significantly
 
 ## Forbidden Patterns
 
-- ❌ Any runtime code (functions, classes)
-- ❌ Dependencies in package.json
-- ❌ Importing from other packages
-- ❌ `const` declarations (except `as const` for type inference)
+- ❌ Editing `api.ts` directly
+- ❌ Adding runtime code (functions, classes)
+- ❌ Adding external dependencies
 - ❌ Default exports
-- ❌ Re-exporting from external packages
+- ❌ Hand-written type definitions (use OpenAPI spec instead)
