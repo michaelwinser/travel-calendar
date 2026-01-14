@@ -271,6 +271,380 @@ travel trips delete $TRIP2
 
 ---
 
+## Location Awareness
+
+A key capability of the travel calendar is knowing where the user is on any given day. Location is a semantic concept (city, country, "Away") rather than GPS coordinates.
+
+### Location Data Model
+
+**Base Locations** (user configuration):
+- `home`: Primary residence (default: "Home")
+- `work`: Office location if different from home (optional)
+
+**Trip Locations**:
+- Each trip can have one or more locations
+- Locations can be assigned to specific dates within the trip
+- If no explicit location is set, trips default to "Away" (indicating not-home without specifying where)
+- A single day can have multiple locations (e.g., travel day: "London" to "Brussels")
+
+```
+Trip
+├── locations: [
+│     { date: "2025-01-29", locations: ["London, UK"] },
+│     { date: "2025-01-30", locations: ["London, UK", "Brussels, Belgium"] },  // Eurostar day
+│     { date: "2025-01-31", locations: ["Brussels, Belgium"] },
+│     { date: "2025-02-01", locations: ["Brussels, Belgium"] },
+│     { date: "2025-02-02", locations: ["Brussels, Belgium"] }
+│   ]
+└── ...
+```
+
+**Location Resolution** (for any date):
+1. If date falls within a trip with explicit location(s) for that date, return those
+2. If date falls within a trip without explicit location, return "Away"
+3. Otherwise, return base location (home or work based on context)
+
+---
+
+### [UC-TRP-008] Configure base locations
+
+**Actor**: User
+
+**Preconditions**:
+- None
+
+**Steps**:
+1. User sets their home location
+2. Optionally, user sets their work location
+
+**Expected Result**:
+- Base locations stored in user configuration
+- Default "Home" used if not explicitly configured
+- Work location is optional
+
+**CLI Test**:
+```bash
+# Action - set home location
+travel config set home-location "New York, USA"
+
+# Verify
+HOME=$(travel config get home-location --json)
+echo $HOME | jq -e '. == "New York, USA"'
+
+# Action - set work location (optional)
+travel config set work-location "Jersey City, USA"
+
+# Verify
+WORK=$(travel config get work-location --json)
+echo $WORK | jq -e '. == "Jersey City, USA"'
+
+# Verify default when not set
+travel config unset home-location
+DEFAULT=$(travel config get home-location --json)
+echo $DEFAULT | jq -e '. == "Home"'
+
+# Cleanup - restore
+travel config set home-location "New York, USA"
+```
+
+---
+
+### [UC-TRP-009] Set trip location(s)
+
+**Actor**: User
+
+**Preconditions**:
+- Trip exists
+
+**Steps**:
+1. User adds location(s) to a trip
+2. Location can apply to entire trip or specific dates
+3. Multiple locations can exist for the same date
+
+**Expected Result**:
+- Location(s) associated with trip
+- If no dates specified, location applies to all trip dates
+- Multiple locations on same date supported (travel days)
+
+**CLI Test**:
+```bash
+# Setup
+TRIP_ID=$(travel trips create --name "Europe Trip" --purpose vacation \
+  --start 2025-01-29 --end 2025-02-02 --json | jq -r '.id')
+
+# Action - set location for entire trip
+travel trips set-location $TRIP_ID "Brussels, Belgium"
+
+# Verify
+TRIP=$(travel trips get $TRIP_ID --json)
+echo $TRIP | jq -e '.locations[0].locations[0] == "Brussels, Belgium"'
+
+# Action - override specific date with multiple locations (travel day)
+travel trips set-location $TRIP_ID "London, UK" --date 2025-01-29
+travel trips add-location $TRIP_ID "Brussels, Belgium" --date 2025-01-29
+
+# Verify travel day has both
+TRIP=$(travel trips get $TRIP_ID --json)
+echo $TRIP | jq -e '.locations[] | select(.date == "2025-01-29") | .locations | length == 2'
+
+# Cleanup
+travel trips delete $TRIP_ID
+```
+
+---
+
+### [UC-TRP-010] Query user location on a specific date
+
+**Actor**: User or LLM
+
+**Preconditions**:
+- User configuration exists (or defaults apply)
+- Zero or more trips exist
+
+**Steps**:
+1. User asks "Where will I be on DATE?"
+2. System checks if DATE falls within any trip
+3. If within a trip: return the trip's location(s) for that date
+4. If not within a trip: return base location (home)
+
+**Expected Result**:
+- Location(s) returned for the date
+- Multiple locations possible (travel day, or home+work)
+- Source indicated (trip name or "home"/"work")
+- "Away" returned for trips without explicit location
+
+**CLI Test**:
+```bash
+# Setup
+TRIP_ID=$(travel trips create --name "Brussels Conference" --purpose conference \
+  --start 2025-01-29 --end 2025-02-02 --json | jq -r '.id')
+travel trips set-location $TRIP_ID "Brussels, Belgium"
+travel config set home-location "New York, USA"
+
+# Action - query during trip
+DURING=$(travel location on 2025-01-30 --json)
+
+# Verify
+echo $DURING | jq -e '.locations[0] == "Brussels, Belgium"'
+echo $DURING | jq -e '.source.type == "trip"'
+echo $DURING | jq -e '.source.tripName == "Brussels Conference"'
+
+# Action - query outside trip
+OUTSIDE=$(travel location on 2025-03-15 --json)
+
+# Verify
+echo $OUTSIDE | jq -e '.locations[0] == "New York, USA"'
+echo $OUTSIDE | jq -e '.source.type == "home"'
+
+# Cleanup
+travel trips delete $TRIP_ID
+```
+
+---
+
+### [UC-TRP-011] Query user location for a date range
+
+**Actor**: User or LLM
+
+**Preconditions**:
+- User configuration exists (or defaults apply)
+- Zero or more trips exist
+
+**Steps**:
+1. User asks "Where will I be from DATE1 to DATE2?"
+2. System builds day-by-day location list
+3. System groups consecutive days with same location(s)
+4. System returns consolidated timeline
+
+**Expected Result**:
+- Timeline of location segments covering the range
+- Consecutive days at same location grouped
+- Each segment: location(s), start date, end date, source
+- Gaps between trips show base location
+
+**CLI Test**:
+```bash
+# Setup - create trips with gap
+TRIP1=$(travel trips create --name "Brussels" --purpose conference \
+  --start 2025-01-29 --end 2025-02-02 --json | jq -r '.id')
+travel trips set-location $TRIP1 "Brussels, Belgium"
+
+TRIP2=$(travel trips create --name "London" --purpose work \
+  --start 2025-02-10 --end 2025-02-12 --json | jq -r '.id')
+travel trips set-location $TRIP2 "London, UK"
+
+travel config set home-location "New York, USA"
+
+# Action - query range spanning both trips
+RANGE=$(travel location from 2025-01-28 to 2025-02-15 --json)
+
+# Verify - should have 5 segments
+echo $RANGE | jq -e 'length == 5'
+echo $RANGE | jq -e '.[0].locations[0] == "New York, USA"'   # before trip1
+echo $RANGE | jq -e '.[0].startDate == "2025-01-28"'
+echo $RANGE | jq -e '.[1].locations[0] == "Brussels, Belgium"'  # trip1
+echo $RANGE | jq -e '.[2].locations[0] == "New York, USA"'   # gap
+echo $RANGE | jq -e '.[3].locations[0] == "London, UK"'      # trip2
+echo $RANGE | jq -e '.[4].locations[0] == "New York, USA"'   # after trip2
+
+# Cleanup
+travel trips delete $TRIP1
+travel trips delete $TRIP2
+```
+
+---
+
+### [UC-TRP-012] Trip defaults to "Away" without explicit location
+
+**Actor**: User
+
+**Preconditions**:
+- Trip exists without location set
+
+**Steps**:
+1. User creates trip without specifying location
+2. User queries location for a date within the trip
+
+**Expected Result**:
+- Location returns "Away" (not home, not null)
+- Indicates user is traveling but destination unspecified
+- Trip is clearly distinguished from being at home
+
+**CLI Test**:
+```bash
+# Setup - trip without location
+TRIP_ID=$(travel trips create --name "Mystery Trip" --purpose vacation \
+  --start 2025-04-01 --end 2025-04-05 --json | jq -r '.id')
+
+travel config set home-location "New York, USA"
+
+# Action - query date within trip (no location set)
+RESULT=$(travel location on 2025-04-03 --json)
+
+# Verify - should return "Away", not home
+echo $RESULT | jq -e '.locations[0] == "Away"'
+echo $RESULT | jq -e '.source.type == "trip"'
+echo $RESULT | jq -e '.source.tripName == "Mystery Trip"'
+
+# Cleanup
+travel trips delete $TRIP_ID
+```
+
+---
+
+### [UC-TRP-013] LLM queries user location
+
+**Actor**: LLM (via MCP)
+
+**Preconditions**:
+- At least one trip exists with location data
+
+**Steps**:
+1. User asks LLM "Where will I be on January 30th?"
+2. LLM calls `get_location_on_date` tool
+3. LLM responds with location information
+
+**Expected Result**:
+- LLM correctly identifies location
+- Response is natural language
+- Includes trip context if applicable
+
+**MCP Tool Call**:
+```json
+{
+  "tool": "get_location_on_date",
+  "arguments": { "date": "2025-01-30" }
+}
+```
+
+---
+
+### [UC-TRP-014] Detect calendar conflicts with trip locations (Future)
+
+**Actor**: LLM
+
+**Preconditions**:
+- Calendar integration enabled (Phase 2+)
+- User has calendar events with location data
+- User has trips with location data
+
+**Steps**:
+1. LLM asks "Does the user have meetings that conflict with their location?"
+2. System retrieves calendar events for the date range
+3. System determines user location for each event's date
+4. System identifies events where event location is far from user location
+5. System returns potential conflicts
+
+**Expected Result**:
+- Conflicts identified when event location differs significantly from user location
+- "Near home" events (dentist in same metro area) not flagged
+- Virtual/online meetings not flagged
+- Each conflict includes: event details, event location, user location
+
+**Notes**:
+- Requires calendar integration (Phase 2+)
+- "Significant distance" needs proximity calculation
+- Local appointments should be distinguishable from remote meetings
+
+**MCP Tool Call**:
+```json
+{
+  "tool": "detect_location_conflicts",
+  "arguments": {
+    "startDate": "2025-01-01",
+    "endDate": "2025-03-31"
+  }
+}
+```
+
+---
+
+## MVP Scope: Location Awareness
+
+### Included in MVP
+- [UC-TRP-008] Configure base locations (home, work)
+- [UC-TRP-009] Set trip location(s) - per-trip and per-date
+- [UC-TRP-010] Query location on specific date
+- [UC-TRP-011] Query location for date range
+- [UC-TRP-012] "Away" default for trips without location
+- [UC-TRP-013] LLM location queries
+- Multiple locations per day supported
+
+### Deferred to Later
+- [UC-TRP-014] Calendar conflict detection (requires calendar integration)
+- Location proximity/distance calculations
+- "Near home" vs "far from home" distinction
+- Automatic location inference from flight/hotel items
+- Natural language trip creation (`travel NYC next Wed`)
+- Simplified CLI (`travel --date 2026-04-13 --location NYC`)
+
+### Future Vision
+
+The location model enables powerful future capabilities:
+
+**Simplified Trip Creation** (beyond MVP):
+```bash
+# Future: natural defaults
+travel --date 2026-04-13 --location NYC
+# Creates trip named "NYC" for single day
+
+# Future: natural language
+travel NYC next Wed
+# Parses and creates appropriate trip
+```
+
+**Intelligent Conflict Detection** (Phase 2+):
+- Distinguish local appointments (dentist) from remote meetings
+- Understand metro areas (Jersey City is "near" NYC)
+- Flag only truly conflicting calendar events
+
+**Item-Derived Locations** (future enhancement):
+- Infer daily location from hotel bookings
+- Track arrival/departure from flight items
+- Build location timeline automatically from items
+
+---
+
 ## API Endpoints
 
 | Method | Endpoint | Description | Use Cases |
@@ -281,6 +655,11 @@ travel trips delete $TRIP2
 | PATCH | `/api/trips/:id` | Update trip | UC-TRP-004 |
 | DELETE | `/api/trips/:id` | Delete trip | UC-TRP-005 |
 | GET | `/api/trips/search` | Search trips | UC-TRP-006 |
+| PUT | `/api/trips/:id/locations` | Set trip locations | UC-TRP-009 |
+| GET | `/api/location/on/:date` | Get location on date | UC-TRP-010 |
+| GET | `/api/location/range` | Get locations for range | UC-TRP-011 |
+| GET | `/api/config/locations` | Get base locations | UC-TRP-008 |
+| PUT | `/api/config/locations` | Set base locations | UC-TRP-008 |
 
 ---
 
@@ -294,6 +673,10 @@ travel trips delete $TRIP2
 | `update_trip` | Update trip | UC-TRP-004 |
 | `delete_trip` | Delete trip | UC-TRP-005 |
 | `search_trips` | Search trips | UC-TRP-006 |
+| `set_trip_locations` | Set locations for trip | UC-TRP-009 |
+| `get_location_on_date` | Get location on specific date | UC-TRP-010, UC-TRP-013 |
+| `get_location_range` | Get locations for date range | UC-TRP-011 |
+| `detect_location_conflicts` | Find calendar conflicts (future) | UC-TRP-014 |
 
 ---
 
@@ -306,17 +689,31 @@ travel trips delete $TRIP2
 | TripDetail | Full page | UC-TRP-003 |
 | TripForm | Create/edit | UC-TRP-001, UC-TRP-004 |
 | TripCalendarBar | Calendar view | UC-TRP-002 |
+| LocationEditor | Trip detail, inline | UC-TRP-009 |
+| LocationTimeline | Date range view | UC-TRP-011 |
+| BaseLocationSettings | Settings page | UC-TRP-008 |
 
 ---
 
 ## Acceptance Criteria
 
+### Core Trip Management
 - [ ] All use case CLI tests pass
 - [ ] API endpoints return correct HTTP status codes
 - [ ] MCP tools tested with inspector
 - [ ] UI components render correctly
 - [ ] Search is case-insensitive and matches partial strings
 - [ ] Delete cascades to items but not documents
+
+### Location Awareness (MVP)
+- [ ] Base locations configurable (home required, work optional)
+- [ ] Default "Home" used when home-location not configured
+- [ ] Trips without explicit location return "Away"
+- [ ] Location query returns trip location when date is within trip
+- [ ] Location query returns home location when date is not within any trip
+- [ ] Multiple locations per day supported
+- [ ] Date range query correctly groups consecutive days at same location
+- [ ] LLM can query location via MCP tools
 
 ---
 
@@ -325,3 +722,10 @@ travel trips delete $TRIP2
 - Trip templates (recurring trips)
 - Trip sharing/collaboration
 - Trip merging
+- GPS coordinates or precise geographic data
+- Automatic location inference from flight/hotel items (future enhancement)
+- Time-of-day location changes (morning vs evening on travel days)
+- Location history/tracking beyond trip dates
+- Natural language trip creation parsing
+- Calendar conflict detection (requires Phase 2 calendar integration)
+- Proximity calculations for "near home" distinction
