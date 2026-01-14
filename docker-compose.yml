@@ -1,140 +1,88 @@
-# Travel Calendar - Development Environment
+# Travel Calendar - Docker Compose Configuration
 #
 # Usage:
-#   docker compose up                    # Start all services
-#   docker compose up -d                 # Start in background
-#   docker compose logs -f backend       # Follow logs
-#   docker compose exec backend sh       # Shell into container
-#   docker compose down                  # Stop all services
-#   docker compose build --no-cache      # Rebuild images
+#   docker compose build              # Build images
+#   docker compose up                 # Start backend
+#   docker compose up -d              # Start in background
+#   docker compose --profile mcp up   # Start with MCP server
+#   docker compose logs -f backend    # Follow logs
+#   docker compose down               # Stop all services
+#
+# Testing (via ./tc):
+#   ./tc test backend                 # Run backend tests
+#   ./tc test mcp                     # Run MCP tests
+#   ./tc test frontend                # Run frontend tests
 #
 # Services:
-#   backend   - REST API + Static Frontend (Go + Chi + SQLite) on http://localhost:3000
-#               Serves API at /api/* and embedded static files at /*
-#   mcp       - MCP Server (Go + HTTP) on http://localhost:3001
-#
-# First-time setup:
-#   docker compose build
-#   docker compose up
+#   backend - REST API + Static Frontend on http://localhost:3000
+#   mcp     - MCP Server on http://localhost:3001 (profile: mcp)
 
 services:
   # ===========================================
-  # Backend - REST API + Static Frontend (Go)
-  # Static files are embedded via go:embed from cmd/server/dist/
+  # Backend - REST API + Static Frontend
   # ===========================================
   backend:
     build:
       context: .
-      dockerfile: Dockerfile.go
+      target: runtime
     container_name: travel-backend
-    command: go run ./cmd/server
-    working_dir: /app/packages/backend
     ports:
       - "3000:3000"
     volumes:
-      # Source code
-      - ./packages/backend:/app/packages/backend
-      - ./packages/api:/app/packages/api
-      # Data persistence
+      # Data persistence only
       - ./data:/app/data
-      # Go module cache for faster rebuilds
-      - go-mod-cache:/go/pkg/mod
-      - go-build-cache:/root/.cache/go-build
     environment:
       - DATABASE_PATH=/app/data/travel.db
       - PORT=3000
-      - CGO_ENABLED=1
-      # STATIC_CACHE: Set to "true" for production caching headers on /_app/* assets
-      # Defaults to no caching, which is correct for development
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 30s
+      start_period: 10s
 
   # ===========================================
-  # MCP Server - LLM Interface (Go)
+  # MCP Server - LLM Interface
   # ===========================================
   mcp:
     build:
       context: .
-      dockerfile: Dockerfile.go
+      target: runtime
     container_name: travel-mcp
-    command: go run ./cmd/mcp
-    working_dir: /app/packages/mcp-server
+    command: ["/app/bin/mcp"]
     ports:
       - "3001:3001"
-    volumes:
-      - ./packages/mcp-server:/app/packages/mcp-server
-      - ./packages/api:/app/packages/api
-      # Share Go caches with backend
-      - go-mod-cache:/go/pkg/mod
-      - go-build-cache:/root/.cache/go-build
     environment:
       - BACKEND_URL=http://backend:3000
       - PORT=3001
-      - CGO_ENABLED=1
     depends_on:
       backend:
         condition: service_healthy
     profiles:
-      - mcp  # Only start with: docker compose --profile mcp up
+      - mcp
 
   # ===========================================
-  # Sandbox - Claude Code Operations Container
+  # Dev - Development container with all tools
+  # Used for running tests via docker run
   # ===========================================
-  # This container provides a sandboxed environment for Claude Code to run
-  # commands. All operations are isolated to the mounted project directory.
-  #
-  # Usage:
-  #   ./tc sandbox start     # Start the sandbox container
-  #   ./tc exec <command>    # Run command in sandbox
-  #   ./tc sandbox shell     # Interactive shell in sandbox
-  #
-  sandbox:
+  dev:
     build:
       context: .
-      dockerfile: Dockerfile.dev
-    container_name: travel-sandbox
-    command: sleep infinity
-    working_dir: /app
+      target: dev
+    container_name: travel-dev
     volumes:
-      # Mount entire project for full access
-      - .:/app
-    environment:
-      - NODE_ENV=development
-      - DATABASE_PATH=/app/data/travel.db
-      - TRAVEL_API_URL=http://backend:3000
-    profiles:
-      - sandbox  # Start with: docker compose --profile sandbox up -d
-
-  # ===========================================
-  # Test Runner - Go Tests (on-demand)
-  # ===========================================
-  test:
-    build:
-      context: .
-      dockerfile: Dockerfile.go
-    container_name: travel-test
-    command: sh -c "cd /app/packages/backend && go test ./... && cd /app/packages/mcp-server && go test ./..."
-    volumes:
+      # Mount source for live testing
       - ./packages:/app/packages
-      - ./tests:/app/tests
+      - ./data:/app/data
+      # Go module cache
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
     environment:
       - CGO_ENABLED=1
-      - TRAVEL_API_URL=http://backend:3000
-    depends_on:
-      backend:
-        condition: service_healthy
+      - DATABASE_PATH=/app/data/travel.db
     profiles:
-      - test  # Only start with: docker compose --profile test up
+      - dev
 
-# ===========================================
-# Named Volumes
-# ===========================================
 volumes:
   go-mod-cache:
     name: travel-go-mod-cache

@@ -16,15 +16,11 @@
 #   shell           Open shell in a container
 #   test            Run tests
 #   test-precommit  Fast pre-commit checks
-#   lint            Run linting
 #
 #   db:reset    Reset database (delete and recreate)
 #   db:backup   Backup database to file
 #   db:restore  Restore database from backup
 #   db:shell    Open SQLite shell
-#
-#   sandbox     Manage sandbox container for Claude Code
-#   exec        Run command in sandbox container
 #
 #   clean       Remove containers, volumes, and build cache
 #   help        Show this help message
@@ -111,7 +107,6 @@ cmd_start() {
     while [ $# -gt 0 ]; do
         case "$1" in
             --mcp)     profile="--profile mcp" ;;
-            --test)    profile="--profile test" ;;
             --fg|-f)   detach="" ;;
             *)         break ;;
         esac
@@ -119,13 +114,12 @@ cmd_start() {
     done
 
     # shellcheck disable=SC2086
-    docker compose $profile up $detach "$@"
+    docker compose $profile up --remove-orphans $detach "$@"
 
     if [ -n "$detach" ]; then
         success "Services started"
         echo ""
         echo "  Backend:  http://localhost:3000"
-        echo "  Frontend: http://localhost:5173"
         [ -n "$profile" ] && echo "  MCP:      http://localhost:3001"
         echo ""
         echo "  View logs: ./tc logs"
@@ -136,7 +130,7 @@ cmd_start() {
 cmd_stop() {
     require_docker
     info "Stopping services..."
-    docker compose --profile mcp --profile test down "$@"
+    docker compose --profile mcp down "$@"
     success "Services stopped"
 }
 
@@ -160,8 +154,9 @@ cmd_build() {
         shift
     done
 
+    # Build all services including those in profiles
     # shellcheck disable=SC2086
-    docker compose build $no_cache "$@"
+    docker compose --profile mcp --profile dev build $no_cache "$@"
     success "Build complete"
 }
 
@@ -188,7 +183,7 @@ cmd_shell() {
 }
 
 # ===========================================
-# Commands: Testing & Linting
+# Commands: Testing
 # ===========================================
 
 cmd_test() {
@@ -199,7 +194,10 @@ cmd_test() {
     case "$target" in
         all)
             info "Running all tests..."
-            docker compose --profile test up --abort-on-container-exit test
+            cmd_test_backend
+            cmd_test_mcp
+            cmd_test_frontend
+            success "All tests passed"
             ;;
         e2e)
             info "Running E2E tests..."
@@ -207,16 +205,13 @@ cmd_test() {
             ./tests/e2e/run-all.sh
             ;;
         backend)
-            info "Running backend tests (Go)..."
-            docker compose exec backend sh -c "go test ./..."
+            cmd_test_backend
             ;;
         mcp)
-            info "Running MCP server tests (Go)..."
-            docker compose exec mcp sh -c "go test ./..."
+            cmd_test_mcp
             ;;
         frontend)
-            info "Running frontend tests..."
-            docker compose exec frontend pnpm test
+            cmd_test_frontend
             ;;
         *)
             error "Unknown test target: $target. Use: all, e2e, backend, frontend, mcp"
@@ -224,43 +219,57 @@ cmd_test() {
     esac
 }
 
+cmd_test_backend() {
+    require_docker
+    info "Running backend tests (Go)..."
+    docker compose run --rm --no-deps -T dev sh -c "cd /app/packages/backend && go test ./..."
+    success "Backend tests passed"
+}
+
+cmd_test_mcp() {
+    require_docker
+    info "Running MCP server tests (Go)..."
+    docker compose run --rm --no-deps -T dev sh -c "cd /app/packages/mcp-server && go test ./..."
+    success "MCP tests passed"
+}
+
+cmd_test_frontend() {
+    require_docker
+    info "Running frontend tests..."
+    docker compose run --rm --no-deps -T dev sh -c "cd /app/packages/frontend && pnpm test run"
+    success "Frontend tests passed"
+}
+
 cmd_test_precommit() {
     require_docker
     info "Running pre-commit checks..."
 
-    # Ensure backend is healthy (test container depends on it)
-    if ! docker compose ps backend 2>/dev/null | grep -q "running"; then
-        info "Starting backend container..."
-        docker compose up -d backend
-        info "Waiting for backend to be healthy..."
-        sleep 5
-    fi
-
     failed=0
 
-    # Backend Go tests (use test container which has all packages mounted)
+    # Backend Go tests
     info "Running backend tests (Go)..."
-    if ! docker compose run --rm --no-deps test sh -c "cd /app/packages/backend && go test ./..."; then
+    if ! docker compose run --rm --no-deps -T dev sh -c "cd /app/packages/backend && go test ./..."; then
         warn "Backend tests failed"
         failed=1
     fi
 
     # MCP server Go tests
     info "Running MCP server tests (Go)..."
-    if ! docker compose run --rm --no-deps test sh -c "cd /app/packages/mcp-server && go test ./..."; then
+    if ! docker compose run --rm --no-deps -T dev sh -c "cd /app/packages/mcp-server && go test ./..."; then
         warn "MCP server tests failed"
         failed=1
     fi
 
-    # Frontend type checking (optional - only if sandbox is available)
-    if docker compose ps sandbox 2>/dev/null | grep -q "running"; then
-        info "Running frontend type check..."
-        if ! docker compose exec sandbox sh -c "cd packages/frontend && pnpm exec svelte-check --threshold warning" 2>/dev/null; then
+    # Frontend type checking (only if svelte-check is installed)
+    info "Running frontend type check..."
+    if ! docker compose run --rm --no-deps -T dev sh -c "cd /app/packages/frontend && pnpm exec svelte-check --threshold warning 2>/dev/null"; then
+        # Check if svelte-check is installed
+        if docker compose run --rm --no-deps -T dev sh -c "cd /app/packages/frontend && pnpm exec svelte-check --help >/dev/null 2>&1"; then
             warn "Frontend type check failed"
             failed=1
+        else
+            info "Skipping frontend type check (svelte-check not installed)"
         fi
-    else
-        info "Skipping frontend type check (sandbox not running)"
     fi
 
     if [ $failed -eq 0 ]; then
@@ -269,31 +278,6 @@ cmd_test_precommit() {
     else
         error "Pre-commit checks failed"
     fi
-}
-
-cmd_lint() {
-    require_docker
-
-    target="${1:-all}"
-
-    case "$target" in
-        all)
-            info "Running all linters..."
-            docker compose exec backend pnpm lint
-            ;;
-        boundaries)
-            info "Checking component boundaries..."
-            node scripts/check-boundaries.js
-            ;;
-        commits)
-            info "Checking commit messages..."
-            node scripts/check-commits.js
-            ;;
-        *)
-            info "Running lint in $target..."
-            docker compose exec "$target" pnpm lint
-            ;;
-    esac
 }
 
 # ===========================================
@@ -407,124 +391,6 @@ cmd_db_shell() {
 }
 
 # ===========================================
-# Commands: Sandbox (Claude Code Operations)
-# ===========================================
-
-cmd_sandbox() {
-    require_docker
-    action="${1:-help}"
-    shift 2>/dev/null || true
-
-    case "$action" in
-        start)
-            info "Starting sandbox container..."
-            docker compose --profile sandbox up -d sandbox
-            success "Sandbox ready"
-            echo ""
-            echo "  Run commands: ./tc exec <command>"
-            echo "  Open shell:   ./tc sandbox shell"
-            echo "  Stop:         ./tc sandbox stop"
-            ;;
-        stop)
-            info "Stopping sandbox container..."
-            docker compose --profile sandbox stop sandbox
-            success "Sandbox stopped"
-            ;;
-        shell)
-            if ! docker compose ps sandbox 2>/dev/null | grep -q "running"; then
-                info "Starting sandbox container..."
-                docker compose --profile sandbox up -d sandbox
-            fi
-            info "Opening shell in sandbox..."
-            docker compose exec sandbox sh
-            ;;
-        status)
-            docker compose ps sandbox
-            ;;
-        help|*)
-            echo "Sandbox Commands:"
-            echo ""
-            echo "  ./tc sandbox start    Start the sandbox container"
-            echo "  ./tc sandbox stop     Stop the sandbox container"
-            echo "  ./tc sandbox shell    Open interactive shell"
-            echo "  ./tc sandbox status   Show container status"
-            echo ""
-            echo "  ./tc exec <command>   Run command in sandbox"
-            echo ""
-            echo "The sandbox provides an isolated environment for Claude Code"
-            echo "operations. All commands run inside the container with only"
-            echo "the project directory accessible."
-            ;;
-    esac
-}
-
-cmd_exec() {
-    require_docker
-
-    if [ $# -eq 0 ]; then
-        error "Usage: ./tc exec <command> [args...]"
-    fi
-
-    # Start sandbox if not running
-    if ! docker compose ps sandbox 2>/dev/null | grep -q "running"; then
-        info "Starting sandbox container..."
-        docker compose --profile sandbox up -d sandbox
-    fi
-
-    # Execute command in sandbox
-    docker compose exec sandbox "$@"
-}
-
-# ===========================================
-# Commands: Go Development
-# ===========================================
-
-cmd_go() {
-    require_docker
-
-    service="${1:-backend}"
-    shift 2>/dev/null || true
-
-    if [ $# -eq 0 ]; then
-        echo "Usage: ./tc go [service] <go-command>"
-        echo ""
-        echo "  service: backend (default), mcp"
-        echo ""
-        echo "Examples:"
-        echo "  ./tc go test ./...              # Run tests in backend"
-        echo "  ./tc go mcp test ./...          # Run tests in mcp-server"
-        echo "  ./tc go build ./...             # Build backend"
-        echo "  ./tc go mod tidy                # Tidy backend dependencies"
-        return 0
-    fi
-
-    # Check if first arg is a service name
-    case "$service" in
-        backend|mcp)
-            # service is valid, args are the rest
-            ;;
-        *)
-            # First arg is actually a go command, default to backend
-            set -- "$service" "$@"
-            service="backend"
-            ;;
-    esac
-
-    # Ensure service is running
-    if ! docker compose ps "$service" 2>/dev/null | grep -q "running"; then
-        info "Starting $service container..."
-        if [ "$service" = "mcp" ]; then
-            docker compose --profile mcp up -d "$service"
-        else
-            docker compose up -d "$service"
-        fi
-    fi
-
-    info "Running: go $*"
-    docker compose exec "$service" go "$@"
-}
-
-# ===========================================
 # Commands: Health & Diagnostics
 # ===========================================
 
@@ -552,21 +418,13 @@ cmd_health() {
         all)
             info "Checking service health..."
             check_endpoint "Backend" "http://localhost:3000/health"
-            # Add more services as needed
             ;;
         backend)
             check_endpoint "Backend" "http://localhost:3000/health"
             ;;
         mcp)
-            check_endpoint "MCP" "http://localhost:3001/health"
-            ;;
-        frontend)
-            # Frontend doesn't have a health endpoint, check if container is up
-            if docker compose ps frontend 2>/dev/null | grep -q "running"; then
-                printf "${GREEN}✓${NC} Frontend: container running\n"
-            else
-                printf "${RED}✗${NC} Frontend: not running\n"
-            fi
+            # Use container hostname since we're checking from inside backend container
+            check_endpoint "MCP" "http://mcp:3001/health"
             ;;
         *)
             echo "Usage: ./tc health [service]"
@@ -574,7 +432,6 @@ cmd_health() {
             echo "  all      - Check all services (default)"
             echo "  backend  - Check backend health"
             echo "  mcp      - Check MCP server health"
-            echo "  frontend - Check frontend status"
             ;;
     esac
 }
@@ -616,21 +473,21 @@ cmd_clean() {
         containers)
             if confirm "Remove all containers?"; then
                 info "Removing containers..."
-                docker compose --profile mcp --profile test down
+                docker compose --profile mcp --profile dev down
                 success "Containers removed"
             fi
             ;;
         volumes)
-            if confirm "Remove containers AND volumes (node_modules)?"; then
+            if confirm "Remove containers AND volumes (Go cache)?"; then
                 info "Removing containers and volumes..."
-                docker compose --profile mcp --profile test down -v
+                docker compose --profile mcp --profile dev down -v
                 success "Containers and volumes removed"
             fi
             ;;
         all)
             if confirm "Remove containers, volumes, AND build cache?"; then
                 info "Removing everything..."
-                docker compose --profile mcp --profile test down -v --rmi local
+                docker compose --profile mcp --profile dev down -v --rmi local
                 docker builder prune -f
                 success "Full cleanup complete"
             fi
@@ -666,17 +523,10 @@ Service Commands:
 
 Testing & Quality:
   test [target]          Run tests (all, e2e, backend, frontend, mcp)
-  test-precommit         Fast pre-commit checks (Go tests, type checking)
-  lint [target]          Run linting (all, boundaries, commits, or service)
-
-Go Development:
-  go [service] <cmd>     Run go command in service (default: backend)
-                         Examples: ./tc go test ./...
-                                   ./tc go mcp build ./...
-                                   ./tc go mod tidy
+  test-precommit         Pre-commit checks (Go tests, type checking)
 
 Health & Diagnostics:
-  health [service]       Check service health (all, backend, mcp, frontend)
+  health [service]       Check service health (all, backend, mcp)
   curl <url> [opts]      Run curl inside backend container
 
 Database:
@@ -688,27 +538,20 @@ Database:
 Cleanup:
   clean [level]          Cleanup (containers, volumes, all)
 
-Sandbox (Claude Code):
-  sandbox start          Start sandbox container
-  sandbox stop           Stop sandbox container
-  sandbox shell          Open shell in sandbox
-  exec <cmd>             Run command in sandbox
-
 Other:
   help                   Show this help message
 
 Examples:
-  ./tc start                    # Start backend and frontend
+  ./tc start                    # Start backend
   ./tc start --mcp              # Start with MCP server
   ./tc logs backend             # Follow backend logs
   ./tc health                   # Check all service health
   ./tc curl http://localhost:3000/api/trips  # Call API endpoint
-  ./tc test e2e                 # Run E2E tests
-  ./tc go test ./...            # Run Go tests in backend
-  ./tc go mod tidy              # Tidy Go dependencies
+  ./tc test backend             # Run backend tests
+  ./tc test-precommit           # Run pre-commit checks
   ./tc db:backup before-refactor  # Create named backup
   ./tc shell backend            # Shell into backend container
-  ./tc clean volumes            # Remove containers and node_modules
+  ./tc clean volumes            # Remove containers and Go cache
 EOF
 }
 
@@ -730,7 +573,6 @@ case "$command" in
 
     test)       cmd_test "$@" ;;
     test-precommit)  cmd_test_precommit "$@" ;;
-    lint)       cmd_lint "$@" ;;
 
     db:reset)   cmd_db_reset "$@" ;;
     db:backup)  cmd_db_backup "$@" ;;
@@ -738,10 +580,6 @@ case "$command" in
     db:shell)   cmd_db_shell "$@" ;;
 
     clean)      cmd_clean "$@" ;;
-
-    sandbox)    cmd_sandbox "$@" ;;
-    exec)       cmd_exec "$@" ;;
-    go)         cmd_go "$@" ;;
 
     health)     cmd_health "$@" ;;
     curl)       cmd_curl "$@" ;;
