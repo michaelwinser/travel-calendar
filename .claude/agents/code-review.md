@@ -74,11 +74,70 @@ For each affected component, run appropriate tests:
 
 | Component | Test Command |
 |-----------|--------------|
-| backend | `./tc go test ./...` |
-| mcp-server | `./tc go mcp test ./...` |
-| frontend | `./tc exec pnpm test:frontend` |
+| backend | `./tc test backend` |
+| frontend | `./tc test frontend` |
+| frontend (browser) | `./tc test browser` (see Step 3a) |
 | shared | `./tc exec pnpm build:shared` |
 | infra | `./tc build && ./tc start && ./tc health` |
+
+### Step 3a: Evaluate Playwright Browser Tests (Frontend Changes)
+
+When frontend files are changed, evaluate whether to run Playwright browser tests.
+
+**Always run Playwright tests when:**
+- Route files changed (`routes/**/*.svelte`)
+- Store files changed (`lib/stores/*.ts`)
+- API client changed (`lib/api/*.ts`)
+- Form components changed (anything with `Form` in the name)
+- Navigation-related changes detected
+
+**Skip Playwright tests only when:**
+- Changes are purely cosmetic AND isolated:
+  - Only CSS/Tailwind class changes
+  - Only comments or formatting
+  - Only type annotations without logic changes
+- Changes are to test files themselves
+
+**Decision Process:**
+1. List the changed frontend files
+2. Categorize each file:
+   - `route`: Route page files
+   - `store`: Reactive stores
+   - `component`: UI components
+   - `style`: Pure styling
+   - `config`: Build/config files
+   - `test`: Test files
+3. If ANY file is categorized as `route`, `store`, or `component` → Run Playwright
+4. If ONLY `style`, `config`, or `test` files → Skip Playwright (note in report)
+
+**Low bar policy:** When in doubt, run Playwright tests. It's better to catch errors than depend on manual testing.
+
+**Invoke Frontend Agent for ambiguous cases:**
+If changes are mixed (some functional, some cosmetic), spawn the Frontend Agent:
+
+```
+Task: Review these frontend changes and determine if they affect user-facing behavior:
+[list of changed files]
+
+Classify as:
+- FUNCTIONAL: Affects behavior, navigation, data flow, or user interactions
+- COSMETIC: Only affects appearance without behavior changes
+- MIXED: Both functional and cosmetic changes
+```
+
+If Frontend Agent returns FUNCTIONAL or MIXED → Run Playwright tests.
+
+**Decision Tree Summary:**
+```
+Frontend files changed?
+├── No → Skip Playwright
+└── Yes → Categorize files
+    ├── Any route/store/component? → Run Playwright
+    ├── Only style/config/test? → Skip Playwright (note reason)
+    └── Ambiguous? → Ask Frontend Agent
+        ├── FUNCTIONAL/MIXED → Run Playwright
+        └── COSMETIC → Skip Playwright (note reason)
+```
 
 ### Step 5: Invoke Component Agents for Review
 
@@ -106,8 +165,12 @@ Collect findings from each agent.
 (or: ⚠️ Not in roadmap - verify intentional)
 
 ### Test Results
-- [ ] backend: `./tc go test ./...` - PASSED/FAILED
+- [ ] backend: `./tc test backend` - PASSED/FAILED
 - [ ] shared: `./tc exec pnpm build:shared` - PASSED/FAILED
+
+### Browser Test Results (if applicable)
+- [ ] Playwright tests: PASSED/FAILED/SKIPPED
+- Reason for skip (if skipped): {reason - e.g., "no frontend changes" or "cosmetic-only changes to CSS"}
 
 ### CLAUDE.md Compliance
 - [x] Component boundaries respected
@@ -189,6 +252,7 @@ How would you like to proceed?
 Before approving:
 - [ ] All affected components identified
 - [ ] All tests pass
+- [ ] Browser tests run if frontend changed (or skip justified)
 - [ ] No CLAUDE.md violations
 - [ ] No protected file violations
 - [ ] Component agents have reviewed their areas

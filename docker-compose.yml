@@ -50,6 +50,7 @@ services:
     volumes:
       # Mount source for live testing
       - ./packages:/app/packages
+      - ./tests:/app/tests
       - ./data:/app/data
       # Go module cache
       - go-mod-cache:/go/pkg/mod

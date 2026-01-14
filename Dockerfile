@@ -141,13 +141,27 @@ FROM base-go AS dev
 
 # Install Node.js and pnpm for frontend development
 # Use npm to install pnpm since alpine's nodejs doesn't include corepack
+# Also install Playwright browser dependencies
 RUN apk add --no-cache \
     nodejs \
     npm \
     curl \
-    bash
+    bash \
+    # Playwright Chromium dependencies
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    # ffmpeg for Playwright video recording
+    ffmpeg
 
 RUN npm install -g pnpm
+
+# Set Playwright to use system Chromium
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Copy workspace config and install dependencies
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
@@ -155,6 +169,9 @@ COPY packages/frontend/package.json ./packages/frontend/
 COPY packages/shared/package.json ./packages/shared/
 
 RUN pnpm install --frozen-lockfile || pnpm install
+
+# Install Playwright's ffmpeg for video recording (browsers use system Chromium)
+RUN cd packages/frontend && pnpm exec playwright install ffmpeg 2>/dev/null || true
 
 # Copy all source code
 COPY packages ./packages/

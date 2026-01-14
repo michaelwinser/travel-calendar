@@ -187,6 +187,7 @@ cmd_test() {
     require_docker
 
     target="${1:-all}"
+    shift 2>/dev/null || true
 
     case "$target" in
         all)
@@ -206,8 +207,11 @@ cmd_test() {
         frontend)
             cmd_test_frontend
             ;;
+        browser)
+            cmd_test_browser "$@"
+            ;;
         *)
-            error "Unknown test target: $target. Use: all, e2e, backend, frontend"
+            error "Unknown test target: $target. Use: all, e2e, backend, frontend, browser"
             ;;
     esac
 }
@@ -224,6 +228,48 @@ cmd_test_frontend() {
     info "Running frontend tests..."
     docker compose run --rm --no-deps -T dev sh -c "cd /app/packages/frontend && pnpm test run"
     success "Frontend tests passed"
+}
+
+cmd_test_browser() {
+    require_docker
+
+    video_env=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --video) video_env="-e PLAYWRIGHT_VIDEO=on" ;;
+            *) break ;;
+        esac
+        shift
+    done
+
+    info "Running browser tests (Playwright)..."
+
+    # Ensure backend is running
+    if ! docker compose ps backend 2>/dev/null | grep -q "running"; then
+        info "Starting backend for browser tests..."
+        docker compose up -d backend
+        # Wait for health check
+        info "Waiting for backend to be healthy..."
+        for i in $(seq 1 30); do
+            if docker compose exec -T backend curl -sf http://localhost:3000/health >/dev/null 2>&1; then
+                break
+            fi
+            sleep 1
+        done
+    fi
+
+    # Run Playwright tests via the dev container
+    # - PLAYWRIGHT_SKIP_WEBSERVER: Backend is already running
+    # - PLAYWRIGHT_BASE_URL: Use backend container name for network access
+    # - PLAYWRIGHT_VIDEO: Force video recording when --video flag is passed
+    # shellcheck disable=SC2086
+    docker compose run --rm -T \
+        -e PLAYWRIGHT_SKIP_WEBSERVER=1 \
+        -e PLAYWRIGHT_BASE_URL=http://backend:3000 \
+        $video_env \
+        dev sh -c "cd /app/packages/frontend && pnpm exec playwright test --reporter=list"
+
+    success "Browser tests passed"
 }
 
 cmd_test_precommit() {
@@ -493,7 +539,8 @@ Service Commands:
   shell [service]        Open shell in container (default: backend)
 
 Testing & Quality:
-  test [target]          Run tests (all, e2e, backend, frontend)
+  test [target]          Run tests (all, e2e, backend, frontend, browser)
+  test browser --video   Run browser tests with video recording
   test-precommit         Pre-commit checks (Go tests, type checking)
 
 Health & Diagnostics:

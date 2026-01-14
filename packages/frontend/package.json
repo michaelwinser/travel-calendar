@@ -8,12 +8,15 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest",
+    "test:browser": "playwright test",
+    "test:browser:ui": "playwright test --ui",
     "lint": "eslint src/"
   },
   "dependencies": {
     "@travel-calendar/shared": "workspace:*"
   },
   "devDependencies": {
+    "@playwright/test": "^1.40.0",
     "@sveltejs/adapter-static": "^3.0.0",
     "@sveltejs/kit": "^2.0.0",
     "@sveltejs/vite-plugin-svelte": "^3.0.0",
