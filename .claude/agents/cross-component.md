@@ -14,11 +14,13 @@ Task affects more than one component.
 
 ## Behavior
 
-1. Create plan document at `docs/plans/{issue-number}.md`
-2. Break down changes by component
-3. Define integration points
-4. Request explicit approval
-5. Execute component-by-component with tests between each
+1. **Check `docs/roadmap.md`** to understand current phase and priorities
+2. Create plan document at `docs/plans/{issue-number}.md`
+3. Break down changes by component
+4. Define integration points
+5. Note how this work aligns with roadmap priorities
+6. Request explicit approval
+7. Execute component-by-component with tests between each
 
 ## Plan Document Template
 
@@ -27,6 +29,8 @@ Task affects more than one component.
 
 Issue: #{issue-number}
 Components: api, backend, cli, mcp-server, frontend
+Roadmap Phase: {Current phase from docs/roadmap.md}
+Roadmap Item: {Which feature/use case this addresses, if any}
 
 ## Summary
 {Brief description of the change}

@@ -93,11 +93,12 @@ All other agents must delegate commit/push operations to the Commit Agent. This 
 ### Locality of Knowledge
 
 When working on a file, check for:
-1. **Component ARCHITECTURE.md** - overall patterns
-2. **Directory README.md** - specific conventions for that directory
-3. **Adjacent test files** - `*_test.go` or `*.test.ts` shows expected behavior
-4. **Type definitions** - in `shared/` (generated from OpenAPI) for the entity you're touching
-5. **OpenAPI spec** - `packages/api/openapi.yaml` for API contracts
+1. **Product roadmap** - `docs/roadmap.md` for current phase and priorities
+2. **Component ARCHITECTURE.md** - overall patterns
+3. **Directory README.md** - specific conventions for that directory
+4. **Adjacent test files** - `*_test.go` or `*.test.ts` shows expected behavior
+5. **Type definitions** - in `shared/` (generated from OpenAPI) for the entity you're touching
+6. **OpenAPI spec** - `packages/api/openapi.yaml` for API contracts
 
 ### Pushback Protocol
 
@@ -290,6 +291,7 @@ Each agent has detailed checklists. Here are the key rules:
 | File | Purpose | When to Read |
 |------|---------|--------------|
 | `CLAUDE.md` | This file - universal principles | Always (start here) |
+| `docs/roadmap.md` | Current priorities, phase status | Before starting work |
 | `PROJECT_MAP.md` | Component overview, lexicon | Understanding codebase |
 | `.claude/agents/*.md` | Detailed agent checklists | Before component work |
 | `.claude/agents/commit.md` | Commit workflow (exclusive authority) | Before any commit |

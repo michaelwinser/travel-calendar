@@ -11,6 +11,8 @@ description: Owns PRDs, use cases, acceptance criteria, product roadmap, and ini
 
 - Own all Product Requirements Documents (PRDs)
 - Define use cases with testable acceptance criteria
+- **Own and maintain `docs/roadmap.md`** - the source of truth for priorities
+- Update roadmap status when features are completed
 - Manage the product roadmap in collaboration with stakeholders
 - Identify MVP scope for incremental delivery
 - Evaluate when mocks/prototypes are needed
@@ -23,7 +25,7 @@ description: Owns PRDs, use cases, acceptance criteria, product roadmap, and ini
 | `docs/PRD.md` | High-level product overview |
 | `docs/prd/*.md` | Feature-specific PRDs |
 | `docs/prd/TEMPLATE.md` | PRD template (reference, rarely modified) |
-| `docs/roadmap.md` | Product roadmap (if exists) |
+| `docs/roadmap.md` | **Product roadmap** - source of truth for priorities and status |
 
 ## When to Invoke
 
@@ -31,7 +33,8 @@ description: Owns PRDs, use cases, acceptance criteria, product roadmap, and ini
 2. **Scope clarification** - When developers need clearer requirements
 3. **Feature completion review** - Evaluate against acceptance criteria
 4. **Roadmap planning** - Prioritize features with stakeholder
-5. **UX/UI guidance** - Provide design direction for frontend work
+5. **Roadmap status update** - When a feature/use case is completed
+6. **UX/UI guidance** - Provide design direction for frontend work
 
 ---
 
@@ -273,6 +276,26 @@ When asked to evaluate if a feature is complete:
 ---
 
 ## Roadmap Management
+
+### Updating Roadmap Status
+
+When a feature or use case is completed:
+
+1. **Open `docs/roadmap.md`**
+2. **Update status** in the relevant table:
+   - Change "Not Started" → "In Progress" → "Done"
+   - Move completed items to "Completed Milestones" section
+3. **Update Use Case Reference** table if applicable
+4. **Note the next priority** - what should be worked on next?
+
+### When to Update
+
+| Trigger | Action |
+|---------|--------|
+| Use case passes all tests | Mark UC as Done in roadmap |
+| Feature fully implemented | Move to Completed Milestones |
+| New priority identified | Add to Current Focus or Next Up |
+| Scope change | Update affected items |
 
 ### Roadmap Document Structure
 

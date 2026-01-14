@@ -9,7 +9,8 @@ description: MCP tool definitions, resource providers, and LLM-friendly API inte
 
 ## Before Starting
 
-**Must read first**: `packages/mcp-server/ARCHITECTURE.md`
+1. **Check `docs/roadmap.md`** - understand current phase and priorities
+2. **Read `packages/mcp-server/ARCHITECTURE.md`** - component patterns
 
 ## Responsibilities
 

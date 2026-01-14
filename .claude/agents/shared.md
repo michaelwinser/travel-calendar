@@ -9,7 +9,8 @@ description: TypeScript type definitions and interfaces shared across packages i
 
 ## Before Starting
 
-**Must read first**: `packages/shared/ARCHITECTURE.md`
+1. **Check `docs/roadmap.md`** - understand current phase and priorities
+2. **Read `packages/shared/ARCHITECTURE.md`** - component patterns
 
 ## Responsibilities
 

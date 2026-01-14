@@ -35,13 +35,16 @@ Maintain a microblog of development progress by:
 When invoked after work is done:
 
 1. Read `blog/.current.md` (create if doesn't exist)
-2. Analyze recent activity:
+2. Read `docs/roadmap.md` to understand current priorities
+3. Analyze recent activity:
    - Commits made
    - Files changed
    - Components touched
    - Features implemented/fixed
-3. Append a concise bullet point or section
-4. Save updated `.current.md`
+   - Roadmap items progressed or completed
+4. Append a concise bullet point or section
+5. Note any roadmap milestone progress
+6. Save updated `.current.md`
 
 ### Detecting Session Boundaries
 
@@ -77,12 +80,18 @@ When a session boundary is detected:
 ## Current Session
 
 **Started**: 2026-01-14 10:30
+**Roadmap Phase**: Phase 1 - Core MVP
 
 ### Progress
 
 - Implemented SvelteKit frontend with trip list and calendar views
 - Converted to static adapter for embedded serving
 - Created multi-stage Dockerfile (Node→Go→Alpine)
+
+### Roadmap Progress
+- UC-TRP-001 (Create trip): Done
+- UC-TRP-002 (List trips): Done
+- Trip items (flights, hotels): Not started
 
 ### Components Touched
 - frontend, backend, infra

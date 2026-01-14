@@ -39,7 +39,16 @@ Map files to components:
 | `tests/e2e/**` | e2e-tests |
 | `docs/**` | docs |
 
-### Step 2: Check CLAUDE.md Compliance
+### Step 2: Check Roadmap Alignment (Informational)
+
+Read `docs/roadmap.md` and note:
+- Does this work align with current phase priorities?
+- Is this work listed in "Current Focus" or "Next Up"?
+- If not, flag as informational (not blocking)
+
+This is a **soft check** - work outside roadmap priorities may be intentional (bug fixes, urgent requests, etc.).
+
+### Step 3: Check CLAUDE.md Compliance
 
 For each change, verify:
 
@@ -59,7 +68,7 @@ For each change, verify:
 - [ ] No raw `docker` or `docker-compose` commands added (use `./tc`)
 - [ ] No raw `curl` commands for localhost (use `./tc curl`)
 
-### Step 3: Run Component Tests
+### Step 4: Run Component Tests
 
 For each affected component, run appropriate tests:
 
@@ -71,7 +80,7 @@ For each affected component, run appropriate tests:
 | shared | `./tc exec pnpm build:shared` |
 | infra | `./tc build && ./tc start && ./tc health` |
 
-### Step 4: Invoke Component Agents for Review
+### Step 5: Invoke Component Agents for Review
 
 For each affected component, spawn the appropriate agent to review:
 
@@ -81,7 +90,7 @@ Task: Review the changes in {component} for compliance with {component}/ARCHITEC
 
 Collect findings from each agent.
 
-### Step 5: Generate Review Report
+### Step 6: Generate Review Report
 
 ```markdown
 ## Code Review Report
@@ -89,6 +98,12 @@ Collect findings from each agent.
 ### Components Changed
 - backend: 3 files
 - shared: 1 file
+
+### Roadmap Alignment
+- Phase: Phase 1 - Core MVP
+- Related item: UC-TRP-004 (Update trip details)
+- Status: ✓ Aligned with current priorities
+(or: ⚠️ Not in roadmap - verify intentional)
 
 ### Test Results
 - [ ] backend: `./tc go test ./...` - PASSED/FAILED

@@ -108,9 +108,19 @@ git log -1 --oneline
 git status
 ```
 
-### Step 7: Invoke Tools Agent
+### Step 7: Check Roadmap Impact
 
-**After successful commit**, spawn the Tools Agent to review tool usage:
+**After successful commit**, check if this work completes a roadmap item:
+
+1. Review `docs/roadmap.md` for items related to this commit
+2. If a feature or use case is now complete:
+   - Ask user: "This commit appears to complete [roadmap item]. Should I invoke the Product Management Agent to update the roadmap?"
+   - If yes, spawn Product Management Agent with: "Update roadmap status for [item]"
+3. If no roadmap item affected, proceed to next step
+
+### Step 8: Invoke Tools Agent
+
+**After roadmap check**, spawn the Tools Agent to review tool usage:
 
 ```
 Task: Review tool usage for this session and propose any optimizations.
@@ -124,7 +134,7 @@ The Tools Agent will:
 
 If the Tools Agent has recommendations, present them to the user.
 
-### Step 8: Invoke Session Summary Agent
+### Step 9: Invoke Session Summary Agent
 
 **After Tools Agent**, spawn the Session Summary Agent to update the running summary:
 
@@ -138,7 +148,7 @@ The Session Summary Agent will:
 - Detect if a session boundary has been reached
 - Offer to finalize the summary as a dated blog entry if appropriate
 
-### Step 9: Push (If Requested)
+### Step 10: Push (If Requested)
 
 Only push if the user explicitly requests it:
 
@@ -245,14 +255,18 @@ Agent: I'll prepare a commit for you.
 5. [After user confirms]
    Commit created: abc1234 feat(backend): add trip validation
 
-6. Invoking Tools Agent...
+6. Checking roadmap impact...
+   This commit relates to UC-TRP-004 (Update trip details).
+   No roadmap update needed (already marked as Done).
+
+7. Invoking Tools Agent...
    [Spawns tools agent]
 
    ## Tool Usage Review
    - Session efficiency: 94%
    - No new recommendations
 
-7. Invoking Session Summary Agent...
+8. Invoking Session Summary Agent...
    [Spawns session-summary agent]
 
    Updated blog/.current.md:
@@ -274,6 +288,8 @@ Before executing `git commit`:
 
 After `git commit` succeeds:
 
+- [ ] Roadmap impact checked (does this complete a roadmap item?)
+- [ ] Product Management Agent invoked if roadmap update needed
 - [ ] Tools Agent invoked for session review
 - [ ] Any tool recommendations presented to user
 - [ ] Session Summary Agent invoked to update running summary

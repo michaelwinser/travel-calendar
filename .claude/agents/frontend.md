@@ -10,7 +10,8 @@ model: opus
 
 ## Before Starting
 
-**Must read first**: `packages/frontend/ARCHITECTURE.md`
+1. **Check `docs/roadmap.md`** - understand current phase and priorities
+2. **Read `packages/frontend/ARCHITECTURE.md`** - component patterns
 
 ## Responsibilities
 
