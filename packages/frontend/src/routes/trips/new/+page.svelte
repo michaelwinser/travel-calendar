@@ -1,44 +1,19 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import type { TripPurpose, TripStatus } from '@travel-calendar/shared';
+	import type { CreateTripRequest } from '@travel-calendar/shared';
 	import { trips } from '$lib/stores';
+	import TripForm from '$lib/components/trip/TripForm.svelte';
 
-	let name = '';
-	let purpose: TripPurpose = 'conference';
-	let startDate = '';
-	let endDate = '';
-	let status: TripStatus = 'planning';
-	let notes = '';
-
+	let tripForm: TripForm;
 	let saving = false;
 	let error: string | null = null;
 
-	const purposes: { value: TripPurpose; label: string; color: string }[] = [
-		{ value: 'conference', label: 'Conference', color: 'orange' },
-		{ value: 'business', label: 'Business', color: 'yellow' },
-		{ value: 'vacation', label: 'Vacation', color: 'blue' },
-		{ value: 'family', label: 'Family', color: 'green' },
-		{ value: 'other', label: 'Other', color: 'purple' }
-	];
-
-	async function handleSubmit() {
-		if (!name.trim()) {
-			error = 'Trip name is required';
-			return;
-		}
-
+	async function handleSubmit(data: CreateTripRequest) {
 		saving = true;
 		error = null;
 
 		try {
-			const trip = await trips.create({
-				name: name.trim(),
-				purpose,
-				startDate: startDate || undefined,
-				endDate: endDate || undefined,
-				status,
-				notes: notes.trim() || undefined
-			});
+			const trip = await trips.create(data);
 			goto(`/trips/${trip.id}`);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to create trip';
@@ -48,6 +23,10 @@
 
 	function handleCancel() {
 		goto('/trips');
+	}
+
+	function handleSaveClick() {
+		tripForm?.submit();
 	}
 </script>
 
@@ -74,7 +53,7 @@
 		<h1 class="font-semibold text-lg flex-1">New Trip</h1>
 		<button
 			type="button"
-			on:click={handleSubmit}
+			on:click={handleSaveClick}
 			disabled={saving}
 			class="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded disabled:opacity-50"
 		>
@@ -84,115 +63,12 @@
 </header>
 
 <main class="max-w-2xl mx-auto px-4 py-6">
-	{#if error}
-		<div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-			{error}
-		</div>
-	{/if}
-
-	<form on:submit|preventDefault={handleSubmit} class="space-y-6">
-		<!-- Basic Info -->
-		<div class="bg-white rounded-lg shadow-sm border p-4">
-			<h2 class="font-medium text-gray-900 mb-4">Trip Details</h2>
-
-			<div class="space-y-4">
-				<div>
-					<label for="name" class="block text-sm font-medium text-gray-700 mb-1">
-						Trip Name
-					</label>
-					<input
-						type="text"
-						id="name"
-						bind:value={name}
-						placeholder="e.g., FOSDEM 2025, Summer Vacation"
-						class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-					/>
-				</div>
-
-				<div class="grid grid-cols-2 gap-4">
-					<div>
-						<label for="startDate" class="block text-sm font-medium text-gray-700 mb-1">
-							Start Date
-						</label>
-						<input
-							type="date"
-							id="startDate"
-							bind:value={startDate}
-							class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-						/>
-					</div>
-					<div>
-						<label for="endDate" class="block text-sm font-medium text-gray-700 mb-1">
-							End Date
-						</label>
-						<input
-							type="date"
-							id="endDate"
-							bind:value={endDate}
-							class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-						/>
-					</div>
-				</div>
-
-				<div>
-					<label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
-					<div class="flex flex-wrap gap-2">
-						{#each purposes as { value, label, color }}
-							<label
-								class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors
-									{purpose === value ? `border-${color}-500 bg-${color}-50` : ''}"
-							>
-								<input
-									type="radio"
-									name="purpose"
-									{value}
-									bind:group={purpose}
-									class="sr-only"
-								/>
-								<span class="w-3 h-3 rounded-full bg-{color}-300"></span>
-								<span class="text-sm">{label}</span>
-							</label>
-						{/each}
-					</div>
-				</div>
-
-				<div>
-					<label for="status" class="block text-sm font-medium text-gray-700 mb-1">
-						Status
-					</label>
-					<select
-						id="status"
-						bind:value={status}
-						class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-					>
-						<option value="planning">Planning</option>
-						<option value="confirmed">Confirmed</option>
-						<option value="in_progress">In Progress</option>
-						<option value="completed">Completed</option>
-						<option value="cancelled">Cancelled</option>
-					</select>
-				</div>
-
-				<div>
-					<label for="notes" class="block text-sm font-medium text-gray-700 mb-1">
-						Description
-					</label>
-					<textarea
-						id="notes"
-						bind:value={notes}
-						rows="3"
-						placeholder="What's this trip about?"
-						class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-					></textarea>
-				</div>
-			</div>
-		</div>
-
-		<!-- Info about adding items -->
-		<div class="bg-gray-50 rounded-lg border p-4 text-sm text-gray-600">
-			<p>
-				After creating the trip, you can add flights, hotels, events, and other items from the trip detail page.
-			</p>
-		</div>
-	</form>
+	<TripForm
+		bind:this={tripForm}
+		mode="create"
+		{saving}
+		{error}
+		onSubmit={handleSubmit}
+		onCancel={handleCancel}
+	/>
 </main>

@@ -62,12 +62,14 @@ function buildQueryString(params: Record<string, string | boolean | undefined>):
 }
 
 export interface TripFilters {
+	[key: string]: string | boolean | undefined;
 	upcoming?: boolean;
 	past?: boolean;
 	purpose?: TripPurpose;
 }
 
 export interface DocumentFilters {
+	[key: string]: string | boolean | undefined;
 	tripId?: string;
 	unassociated?: boolean;
 }
