@@ -6,7 +6,7 @@
 
 set -e
 
-CLI="${PROJECT_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}/cli/travel"
+CLI="${PROJECT_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}/packages/cli/travel"
 
 echo "[UC-TRP-001] Testing trip CRUD operations"
 

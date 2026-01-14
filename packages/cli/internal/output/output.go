@@ -186,7 +186,11 @@ func PrintDocuments(docs []client.Document) {
 }
 
 // PrintSuccess prints a success message.
+// In JSON mode, success messages are suppressed to allow clean JSON output.
 func PrintSuccess(message string) {
+	if JSONOutput {
+		return
+	}
 	fmt.Println(message)
 }
 

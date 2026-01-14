@@ -26,7 +26,7 @@ echo ""
 # Check if API is running
 if ! curl -s "${TRAVEL_API_URL:-http://localhost:3000}/health" > /dev/null 2>&1; then
   echo -e "${YELLOW}Warning: API not running at ${TRAVEL_API_URL:-http://localhost:3000}${NC}"
-  echo "Start the API with: pnpm dev"
+  echo "Start the API with: ./tc start"
   echo ""
   exit 1
 fi

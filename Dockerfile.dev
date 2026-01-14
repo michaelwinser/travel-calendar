@@ -29,11 +29,10 @@ COPY package.json pnpm-workspace.yaml ./
 
 # Create package directories and copy package.json files
 # Must preserve directory structure for pnpm workspace
-RUN mkdir -p packages/backend packages/frontend packages/mcp-server packages/shared
+# Note: backend and mcp-server are Go projects (no package.json)
+RUN mkdir -p packages/frontend packages/shared
 
-COPY packages/backend/package.json ./packages/backend/
 COPY packages/frontend/package.json ./packages/frontend/
-COPY packages/mcp-server/package.json ./packages/mcp-server/
 COPY packages/shared/package.json ./packages/shared/
 
 # Install dependencies
