@@ -7,8 +7,8 @@
 	export let onTripClick: (trip: Trip) => void = () => {};
 
 	const monthNames = [
-		'January', 'February', 'March', 'April', 'May', 'June',
-		'July', 'August', 'September', 'October', 'November', 'December'
+		'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+		'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
 	];
 
 	// Get number of days in month
@@ -98,23 +98,27 @@
 	$: daysInMonth = getDaysInMonth(year, month);
 	$: days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 	$: tripBars = calculateTripBars(trips, year, month);
-	$: maxRow = Math.max(0, ...tripBars.map(b => b.row || 0));
-	$: barAreaHeight = (maxRow + 1) * 28 + 4; // 28px per row + 4px padding
+	$: maxRow = Math.max(-1, ...tripBars.map(b => b.row ?? 0));
+	$: barAreaHeight = maxRow >= 0 ? (maxRow + 1) * 24 + 4 : 0; // 24px per row + 4px padding
 </script>
 
-<div class="bg-white rounded-lg shadow-sm border overflow-hidden">
-	<div class="px-4 py-2 bg-gray-50 border-b font-medium text-gray-700">
-		{monthNames[month]} {year}
+<div class="flex border-b border-gray-200 bg-white">
+	<!-- Month/Year label column -->
+	<div class="w-16 flex-shrink-0 py-2 px-2 border-r border-gray-100 flex flex-col justify-center">
+		<div class="text-sm font-medium text-gray-700">{monthNames[month]}</div>
+		<div class="text-xs text-gray-400">{year}</div>
 	</div>
-	<div class="p-3">
-		<!-- Day numbers grid -->
-		<div class="grid gap-px mb-1" style="grid-template-columns: repeat({daysInMonth}, minmax(28px, 1fr));">
+
+	<!-- Days and trip bars -->
+	<div class="flex-1 py-2 px-2 min-w-0">
+		<!-- Day numbers -->
+		<div class="grid gap-px" style="grid-template-columns: repeat({daysInMonth}, minmax(0, 1fr));">
 			{#each days as day}
 				<div
-					class="text-center text-xs py-0.5 {isWeekend(year, month, day) ? 'text-gray-300' : 'text-gray-400'}"
+					class="text-center text-xs {isWeekend(year, month, day) ? 'text-gray-300' : 'text-gray-400'}"
 				>
 					{#if isToday(year, month, day)}
-						<span class="inline-flex items-center justify-center w-5 h-5 bg-blue-500 text-white rounded-full">
+						<span class="inline-flex items-center justify-center w-5 h-5 bg-blue-500 text-white rounded-full text-[10px]">
 							{day}
 						</span>
 					{:else}
@@ -125,25 +129,27 @@
 		</div>
 
 		<!-- Trip bars area -->
-		<div class="relative" style="height: {barAreaHeight}px;">
-			{#each tripBars as bar}
-				{@const widthPercent = ((bar.endDay - bar.startDay + 1) / daysInMonth) * 100}
-				{@const leftPercent = ((bar.startDay - 1) / daysInMonth) * 100}
-				<button
-					type="button"
-					class="trip-bar trip-bar-{bar.trip.purpose} absolute"
-					style="left: {leftPercent}%; width: {widthPercent}%; top: {(bar.row || 0) * 28}px;"
-					on:click={() => onTripClick(bar.trip)}
-				>
-					{#if bar.continuesFromPrev}
-						<span class="mr-1">&larr;</span>
-					{/if}
-					{bar.trip.name}
-					{#if bar.continuesToNext}
-						<span class="ml-1">&rarr;</span>
-					{/if}
-				</button>
-			{/each}
-		</div>
+		{#if barAreaHeight > 0}
+			<div class="relative mt-1" style="height: {barAreaHeight}px;">
+				{#each tripBars as bar}
+					{@const widthPercent = ((bar.endDay - bar.startDay + 1) / daysInMonth) * 100}
+					{@const leftPercent = ((bar.startDay - 1) / daysInMonth) * 100}
+					<button
+						type="button"
+						class="trip-bar trip-bar-{bar.trip.purpose} absolute text-xs"
+						style="left: {leftPercent}%; width: {widthPercent}%; top: {(bar.row || 0) * 24}px; height: 20px; line-height: 20px;"
+						on:click={() => onTripClick(bar.trip)}
+					>
+						{#if bar.continuesFromPrev}
+							<span class="mr-0.5">&larr;</span>
+						{/if}
+						<span class="truncate">{bar.trip.name}</span>
+						{#if bar.continuesToNext}
+							<span class="ml-0.5">&rarr;</span>
+						{/if}
+					</button>
+				{/each}
+			</div>
+		{/if}
 	</div>
 </div>
