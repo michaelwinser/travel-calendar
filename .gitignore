@@ -8,6 +8,7 @@ dist/
 # Data (SQLite database)
 data/*
 !data/.gitkeep
+packages/backend/data/
 
 # Environment files
 .env
