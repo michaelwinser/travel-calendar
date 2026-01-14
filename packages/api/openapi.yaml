@@ -1,0 +1,636 @@
+openapi: 3.1.0
+info:
+  title: Travel Calendar API
+  description: |
+    REST API for the Travel Calendar application.
+
+    This API manages trips, trip items (flights, hotels, etc.), and documents.
+  version: 1.0.0
+  contact:
+    name: Travel Calendar
+  license:
+    name: MIT
+    identifier: MIT
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+
+# No authentication required for local development
+security: []
+
+tags:
+  - name: Health
+    description: Service health checks
+  - name: Trips
+    description: Trip management
+  - name: Items
+    description: Trip item management (flights, hotels, etc.)
+  - name: Documents
+    description: Document management
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      tags: [Health]
+      summary: Health check
+      description: Returns the health status of the service
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: ok
+                service: backend
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/trips:
+    get:
+      operationId: listTrips
+      tags: [Trips]
+      summary: List trips
+      description: Returns a list of trips, optionally filtered
+      parameters:
+        - name: upcoming
+          in: query
+          description: Filter to upcoming trips only
+          schema:
+            type: boolean
+        - name: past
+          in: query
+          description: Filter to past trips only
+          schema:
+            type: boolean
+        - name: purpose
+          in: query
+          description: Filter by trip purpose
+          schema:
+            $ref: '#/components/schemas/TripPurpose'
+      responses:
+        '200':
+          description: List of trips
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Trip'
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      operationId: createTrip
+      tags: [Trips]
+      summary: Create a new trip
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTripRequest'
+            example:
+              name: "FOSDEM 2025"
+              purpose: conference
+              startDate: "2025-01-29"
+              endDate: "2025-02-02"
+              notes: "Annual open source conference in Brussels"
+      responses:
+        '201':
+          description: Trip created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/trips/search:
+    get:
+      operationId: searchTrips
+      tags: [Trips]
+      summary: Search trips
+      description: Full-text search across trip names, notes, and items
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Trip'
+        '400':
+          description: Invalid search query
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/trips/{tripId}:
+    get:
+      operationId: getTrip
+      tags: [Trips]
+      summary: Get a trip by ID
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      responses:
+        '200':
+          description: Trip details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+        '404':
+          description: Trip not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      operationId: updateTrip
+      tags: [Trips]
+      summary: Update a trip
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTripRequest'
+      responses:
+        '200':
+          description: Trip updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Trip not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      operationId: deleteTrip
+      tags: [Trips]
+      summary: Delete a trip
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      responses:
+        '204':
+          description: Trip deleted
+        '404':
+          description: Trip not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/trips/{tripId}/items:
+    get:
+      operationId: listTripItems
+      tags: [Items]
+      summary: List items for a trip
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      responses:
+        '200':
+          description: List of items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Item'
+        '404':
+          description: Trip not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      operationId: createTripItem
+      tags: [Items]
+      summary: Add an item to a trip
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateItemRequest'
+            examples:
+              flight:
+                summary: Flight item
+                value:
+                  type: flight
+                  from: EWR
+                  to: BRU
+                  date: "2025-01-29"
+                  time: "18:30"
+                  carrier: United
+                  flightNumber: UA123
+                  confirmation: ABC123
+              hotel:
+                summary: Hotel item
+                value:
+                  type: hotel
+                  name: Hotel Brussels
+                  location: Brussels, Belgium
+                  checkIn: "2025-01-29"
+                  checkOut: "2025-02-02"
+                  confirmation: HTL456
+      responses:
+        '201':
+          description: Item created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Trip not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/items/{itemId}:
+    delete:
+      operationId: deleteItem
+      tags: [Items]
+      summary: Delete an item
+      parameters:
+        - $ref: '#/components/parameters/ItemId'
+      responses:
+        '204':
+          description: Item deleted
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/documents:
+    get:
+      operationId: listDocuments
+      tags: [Documents]
+      summary: List documents
+      parameters:
+        - name: tripId
+          in: query
+          description: Filter by trip ID
+          schema:
+            type: string
+            format: uuid
+        - name: unassociated
+          in: query
+          description: Return only documents not associated with a trip
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Document'
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  parameters:
+    TripId:
+      name: tripId
+      in: path
+      required: true
+      description: Trip ID
+      schema:
+        type: string
+        format: uuid
+    ItemId:
+      name: itemId
+      in: path
+      required: true
+      description: Item ID
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, service]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        service:
+          type: string
+
+    TripPurpose:
+      type: string
+      enum:
+        - business
+        - vacation
+        - conference
+        - family
+        - other
+
+    TripStatus:
+      type: string
+      enum:
+        - planning
+        - confirmed
+        - in_progress
+        - completed
+        - cancelled
+
+    Trip:
+      type: object
+      required: [id, name, purpose, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        purpose:
+          $ref: '#/components/schemas/TripPurpose'
+        startDate:
+          type: string
+          format: date
+          description: Trip start date (YYYY-MM-DD)
+        endDate:
+          type: string
+          format: date
+          description: Trip end date (YYYY-MM-DD)
+        status:
+          $ref: '#/components/schemas/TripStatus'
+        notes:
+          type: string
+          maxLength: 10000
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Item'
+          description: Trip items (only included when fetching a single trip)
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateTripRequest:
+      type: object
+      required: [name, purpose]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        purpose:
+          $ref: '#/components/schemas/TripPurpose'
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/TripStatus'
+          default: planning
+        notes:
+          type: string
+          maxLength: 10000
+
+    UpdateTripRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        purpose:
+          $ref: '#/components/schemas/TripPurpose'
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/TripStatus'
+        notes:
+          type: string
+          maxLength: 10000
+
+    ItemType:
+      type: string
+      enum:
+        - flight
+        - hotel
+        - train
+        - drive
+        - event
+
+    Item:
+      type: object
+      required: [id, tripId, type, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tripId:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/ItemType'
+        # Common fields
+        date:
+          type: string
+          format: date
+        time:
+          type: string
+          pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
+          description: Time in HH:MM format
+        confirmation:
+          type: string
+          maxLength: 100
+        notes:
+          type: string
+          maxLength: 10000
+        # Transport fields (flight, train, drive)
+        from:
+          type: string
+          maxLength: 100
+          description: Origin location or airport code
+        to:
+          type: string
+          maxLength: 100
+          description: Destination location or airport code
+        carrier:
+          type: string
+          maxLength: 100
+          description: Airline or train operator
+        flightNumber:
+          type: string
+          maxLength: 20
+        # Hotel fields
+        name:
+          type: string
+          maxLength: 255
+          description: Hotel or event name
+        location:
+          type: string
+          maxLength: 255
+        checkIn:
+          type: string
+          format: date
+        checkOut:
+          type: string
+          format: date
+        # Timestamps
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateItemRequest:
+      type: object
+      required: [type]
+      properties:
+        type:
+          $ref: '#/components/schemas/ItemType'
+        date:
+          type: string
+          format: date
+        time:
+          type: string
+          pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
+        confirmation:
+          type: string
+          maxLength: 100
+        notes:
+          type: string
+          maxLength: 10000
+        from:
+          type: string
+          maxLength: 100
+        to:
+          type: string
+          maxLength: 100
+        carrier:
+          type: string
+          maxLength: 100
+        flightNumber:
+          type: string
+          maxLength: 20
+        name:
+          type: string
+          maxLength: 255
+        location:
+          type: string
+          maxLength: 255
+        checkIn:
+          type: string
+          format: date
+        checkOut:
+          type: string
+          format: date
+
+    Document:
+      type: object
+      required: [id, name, type, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tripId:
+          type: string
+          format: uuid
+          description: Associated trip ID (null if unassociated)
+        name:
+          type: string
+          maxLength: 255
+        type:
+          type: string
+          enum:
+            - confirmation
+            - itinerary
+            - receipt
+            - visa
+            - passport
+            - insurance
+            - other
+        url:
+          type: string
+          format: uri
+          description: URL or file path to the document
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Error message
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error details
