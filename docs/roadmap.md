@@ -35,7 +35,7 @@ This roadmap tracks implementation progress for the Travel Calendar application.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Google Calendar OAuth | Not Started | Secure token storage needed |
+| Google Calendar OAuth | In Progress | Phase 2A complete: OAuth flow, settings UI |
 | Read calendar for conflicts | Not Started | Detect home events during trips |
 | Suggest trips from calendar | Not Started | Events with locations → trip suggestions |
 | Write trips to calendar | Not Started | Optional, dedicated "Travel" calendar |
@@ -93,6 +93,13 @@ This roadmap tracks implementation progress for the Travel Calendar application.
 - Item timeline grouped by date
 - MCP tools for item management
 - E2E and browser tests for UC-TRP-003
+
+### Google Calendar OAuth Foundation (Jan 2026)
+- OAuth 2.0 flow with Google Calendar API
+- Settings page with connect/disconnect UI
+- Calendar selection for monitoring
+- Database schema for credentials and calendar links
+- Multi-user ready architecture
 
 ---
 
