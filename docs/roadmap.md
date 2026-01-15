@@ -19,11 +19,11 @@ This roadmap tracks implementation progress for the Travel Calendar application.
 | Web UI: Trip delete | Done | UC-TRP-005 | With confirmation |
 | MCP server: Trip tools | Done | UC-TRP-007 | Go implementation |
 | Trip search | Done | UC-TRP-006 | Full-text search on name/notes |
-| Trip items (flights, hotels) | Not Started | UC-TRP-003 | Nested entities within trips |
+| Trip items (flights, hotels) | Done | UC-TRP-003 | Flights, hotels, trains, drives, events |
 | Document upload | Not Started | - | File storage + association |
 | JSON import/export | Not Started | - | Backup/restore capability |
 
-**Next priority**: Trip items (flights, hotels, events) to complete UC-TRP-003
+**Next priority**: Document upload for trip attachments
 
 ---
 
@@ -87,6 +87,13 @@ This roadmap tracks implementation progress for the Travel Calendar application.
 - Trip editing UI with form validation
 - Backend unit tests for store, service, and handler layers
 
+### Trip Items Feature (Jan 2026)
+- Items CRUD (flights, hotels, trains, drives, events)
+- Add Item UI with type-specific forms
+- Item timeline grouped by date
+- MCP tools for item management
+- E2E and browser tests for UC-TRP-003
+
 ---
 
 ## Use Case Reference
@@ -97,7 +104,7 @@ All use cases are defined in [prd/trip-management.md](prd/trip-management.md):
 |----|-------------|--------|
 | UC-TRP-001 | Create a basic trip | Done |
 | UC-TRP-002 | List upcoming trips | Done |
-| UC-TRP-003 | Get trip with all items | Partial (items not implemented) |
+| UC-TRP-003 | Get trip with all items | Done |
 | UC-TRP-004 | Update trip details | Done |
 | UC-TRP-005 | Delete trip and all items | Done |
 | UC-TRP-006 | Search trips by name or location | Done |

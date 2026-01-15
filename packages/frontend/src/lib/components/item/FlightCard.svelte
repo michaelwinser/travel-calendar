@@ -46,6 +46,7 @@
 				type="button"
 				on:click={() => onDelete?.(item)}
 				class="text-gray-400 hover:text-red-500"
+				title="Delete"
 			>
 				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path

@@ -8,12 +8,14 @@
 	import Header from '$lib/components/ui/Header.svelte';
 	import TripBadge from '$lib/components/trip/TripBadge.svelte';
 	import ItemCard from '$lib/components/item/ItemCard.svelte';
+	import ItemForm from '$lib/components/item/ItemForm.svelte';
 	import LocationEditor from '$lib/components/location/LocationEditor.svelte';
 
 	let loading = true;
 	let error: string | null = null;
 	let deleting = false;
 	let showLocations = false;
+	let showAddItem = false;
 
 	$: tripId = $page.params.id;
 
@@ -50,6 +52,12 @@
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to delete item';
 		}
+	}
+
+	async function handleItemAdded() {
+		// Reload the trip to get updated items
+		await currentTrip.load(tripId);
+		showAddItem = false;
 	}
 
 	// Group items by date
@@ -275,6 +283,37 @@
 				{/if}
 			</div>
 		{/if}
+
+		<!-- Add Item Section -->
+		<div class="bg-white rounded-lg shadow-sm border mb-6">
+			<button
+				type="button"
+				class="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
+				on:click={() => (showAddItem = !showAddItem)}
+			>
+				<div class="flex items-center gap-2">
+					<svg
+						class="w-5 h-5 text-gray-500 transform transition-transform {showAddItem ? 'rotate-90' : ''}"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+					</svg>
+					<span class="font-medium">Add Item</span>
+				</div>
+				<span class="text-sm text-gray-500">Flights, hotels, events, and more</span>
+			</button>
+			{#if showAddItem && $currentTrip}
+				<div class="p-4 border-t">
+					<ItemForm
+						tripId={$currentTrip.id}
+						onSave={handleItemAdded}
+						onCancel={() => (showAddItem = false)}
+					/>
+				</div>
+			{/if}
+		</div>
 
 		<!-- Timeline of Items -->
 		{#if itemGroups.size === 0}
