@@ -43,6 +43,31 @@ test.describe('Calendar View', () => {
 		expect(scrollHeight).toBeGreaterThan(0);
 	});
 
+	test('scrollable on large viewport (regression test for initial load)', async ({ page }) => {
+		// Set a large viewport that could expose the issue where initial months
+		// don't fill the container and scrolling is not possible
+		await page.setViewportSize({ width: 2560, height: 1440 });
+		await page.goto('/calendar');
+		await expect(page.getByText('Loading calendar...')).toBeHidden({ timeout: 10000 });
+
+		const scrollContainer = page.locator('.overflow-y-auto');
+		await expect(scrollContainer).toBeVisible();
+
+		// Wait for dynamic loading to complete (the fix loads more months if needed)
+		await page.waitForTimeout(500);
+
+		// Content must exceed container height to enable scrolling
+		const { scrollHeight, clientHeight } = await scrollContainer.evaluate((el) => ({
+			scrollHeight: el.scrollHeight,
+			clientHeight: el.clientHeight
+		}));
+
+		expect(scrollHeight).toBeGreaterThan(
+			clientHeight,
+			`Scroll container should be scrollable: scrollHeight (${scrollHeight}) must exceed clientHeight (${clientHeight})`
+		);
+	});
+
 	test('Today button scrolls to current month', async ({ page }) => {
 		await expect(page.getByText('Loading calendar...')).toBeHidden({ timeout: 10000 });
 

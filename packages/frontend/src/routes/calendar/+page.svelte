@@ -168,8 +168,22 @@
 			loading = false;
 		}
 
-		// After initial render, scroll to current month
+		// After initial render, ensure enough content to enable scrolling
 		await tick();
+
+		// On large monitors, initial 25 months may not fill the container.
+		// Keep loading until content exceeds container height (scrollbar appears).
+		if (scrollContainer) {
+			while (scrollContainer.scrollHeight <= scrollContainer.clientHeight) {
+				const prevLength = months.length;
+				await appendMonths();
+				await prependMonths();
+				// Safety: prevent infinite loop if months stop growing
+				if (months.length === prevLength) break;
+			}
+		}
+
+		// Scroll to current month
 		if (currentMonthElement) {
 			currentMonthElement.scrollIntoView({ block: 'center' });
 		}
