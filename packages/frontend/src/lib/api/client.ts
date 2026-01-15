@@ -19,7 +19,12 @@ import type {
 	TripDayLocation,
 	SetTripLocationsRequest,
 	LocationOnDateResponse,
-	LocationRangeSegment
+	LocationRangeSegment,
+	OAuthUrlResponse,
+	GoogleAuthStatus,
+	GoogleCalendar,
+	UserCalendar,
+	SetSelectedCalendarsRequest
 } from '@travel-calendar/shared';
 
 // In development, Vite proxies /api to localhost:3000
@@ -194,6 +199,45 @@ export const api = {
 			const qs = buildQueryString({ from, to });
 			const response = await fetch(`${API_BASE}/api/location/range${qs}`);
 			return handleResponse<LocationRangeSegment[]>(response);
+		}
+	},
+
+	calendar: {
+		async getAuthUrl(scopes?: string): Promise<OAuthUrlResponse> {
+			const qs = scopes ? buildQueryString({ scopes }) : '';
+			const response = await fetch(`${API_BASE}/api/auth/google${qs}`);
+			return handleResponse<OAuthUrlResponse>(response);
+		},
+
+		async getAuthStatus(): Promise<GoogleAuthStatus> {
+			const response = await fetch(`${API_BASE}/api/auth/google/status`);
+			return handleResponse<GoogleAuthStatus>(response);
+		},
+
+		async disconnect(): Promise<void> {
+			const response = await fetch(`${API_BASE}/api/auth/google/disconnect`, {
+				method: 'POST'
+			});
+			return handleResponse<void>(response);
+		},
+
+		async listCalendars(): Promise<GoogleCalendar[]> {
+			const response = await fetch(`${API_BASE}/api/calendars`);
+			return handleResponse<GoogleCalendar[]>(response);
+		},
+
+		async getSelectedCalendars(): Promise<UserCalendar[]> {
+			const response = await fetch(`${API_BASE}/api/calendars/selected`);
+			return handleResponse<UserCalendar[]>(response);
+		},
+
+		async setSelectedCalendars(input: SetSelectedCalendarsRequest): Promise<UserCalendar[]> {
+			const response = await fetch(`${API_BASE}/api/calendars/selected`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(input)
+			});
+			return handleResponse<UserCalendar[]>(response);
 		}
 	}
 };

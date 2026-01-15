@@ -28,6 +28,8 @@ services:
     volumes:
       # Data persistence only
       - ./data:/app/data
+    env_file:
+      - .env
     environment:
       - DATABASE_PATH=/app/data/travel.db
       - PORT=3000

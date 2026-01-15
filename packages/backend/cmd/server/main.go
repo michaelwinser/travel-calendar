@@ -46,6 +46,25 @@ func main() {
 	h := handler.New(svc)
 	mcpHandler := mcp.NewHandler(svc)
 
+	// Initialize calendar service if configured
+	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
+	googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
+	googleRedirectURL := os.Getenv("GOOGLE_REDIRECT_URL")
+	if googleClientID != "" && googleClientSecret != "" {
+		if googleRedirectURL == "" {
+			googleRedirectURL = fmt.Sprintf("http://localhost:%s/oauth/google/callback", port)
+		}
+		calendarSvc := service.NewCalendarService(db, service.CalendarConfig{
+			ClientID:     googleClientID,
+			ClientSecret: googleClientSecret,
+			RedirectURL:  googleRedirectURL,
+		})
+		h.SetCalendarService(calendarSvc)
+		log.Printf("Google Calendar integration enabled")
+	} else {
+		log.Printf("Google Calendar integration disabled (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET not set)")
+	}
+
 	// Set up router
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)

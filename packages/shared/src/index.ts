@@ -39,3 +39,14 @@ export type LocationSourceType = components['schemas']['LocationSourceType'];
 export type LocationSource = components['schemas']['LocationSource'];
 export type LocationOnDateResponse = components['schemas']['LocationOnDateResponse'];
 export type LocationRangeSegment = components['schemas']['LocationRangeSegment'];
+
+// Google Calendar types
+export type OAuthUrlResponse = components['schemas']['OAuthUrlResponse'];
+export type GoogleAuthStatus = components['schemas']['GoogleAuthStatus'];
+export type GoogleCalendar = components['schemas']['GoogleCalendar'];
+export type UserCalendar = components['schemas']['UserCalendar'];
+export type SetSelectedCalendarsRequest = components['schemas']['SetSelectedCalendarsRequest'];
+export type CalendarEvent = components['schemas']['CalendarEvent'];
+export type CalendarConflict = components['schemas']['CalendarConflict'];
+export type TripSuggestion = components['schemas']['TripSuggestion'];
+export type CalendarLink = components['schemas']['CalendarLink'];

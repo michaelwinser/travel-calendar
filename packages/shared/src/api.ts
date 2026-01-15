@@ -228,6 +228,234 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/google": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Google OAuth URL
+         * @description Returns the URL to redirect the user for Google OAuth authorization
+         */
+        get: operations["getGoogleAuthUrl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/google/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Handle Google OAuth callback
+         * @description Exchanges authorization code for tokens and stores credentials. Redirects to settings page.
+         */
+        get: operations["handleGoogleCallback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/google/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Google authentication status
+         * @description Returns whether Google Calendar is connected and which scopes are authorized
+         */
+        get: operations["getGoogleAuthStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/google/disconnect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disconnect Google Calendar
+         * @description Revokes access and deletes stored credentials
+         */
+        post: operations["disconnectGoogle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/calendars": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List available Google Calendars
+         * @description Returns all calendars from the user's Google account
+         */
+        get: operations["listCalendars"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/calendars/selected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get selected calendars
+         * @description Returns calendars the user has selected to monitor
+         */
+        get: operations["getSelectedCalendars"];
+        /**
+         * Set selected calendars
+         * @description Updates which calendars to monitor for conflicts and suggestions
+         */
+        put: operations["setSelectedCalendars"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/calendar/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List calendar events
+         * @description Returns events from selected calendars within date range
+         */
+        get: operations["listCalendarEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/calendar/conflicts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Detect calendar conflicts with trips
+         * @description Returns events where the event location differs from the user's trip location on that date
+         */
+        get: operations["getCalendarConflicts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/calendar/trip-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Suggest trips from calendar events
+         * @description Analyzes calendar events with locations to suggest potential trips
+         */
+        get: operations["suggestTripsFromCalendar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/calendar/trip-suggestions/{suggestionId}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a trip suggestion
+         * @description Creates a trip from a calendar-based suggestion
+         */
+        post: operations["importTripSuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trips/{tripId}/calendar-sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get calendar links for a trip
+         * @description Returns existing calendar event links for this trip
+         */
+        get: operations["getTripCalendarLinks"];
+        put?: never;
+        /**
+         * Sync trip to Google Calendar
+         * @description Creates or updates calendar events for trip and its items
+         */
+        post: operations["syncTripToCalendar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -425,6 +653,185 @@ export interface components {
             /** @description Location(s) for this segment */
             locations: string[];
             source: components["schemas"]["LocationSource"];
+        };
+        OAuthUrlResponse: {
+            /**
+             * Format: uri
+             * @description OAuth authorization URL to redirect the user to
+             */
+            url: string;
+        };
+        GoogleAuthStatus: {
+            /** @description Whether Google Calendar is connected */
+            connected: boolean;
+            /**
+             * Format: email
+             * @description Connected Google account email
+             */
+            email?: string;
+            /** @description Authorized OAuth scopes */
+            scopes?: string[];
+            /**
+             * Format: date-time
+             * @description When the access token expires
+             */
+            expiresAt?: string;
+        };
+        GoogleCalendar: {
+            /** @description Google Calendar ID */
+            id: string;
+            /** @description Calendar display name */
+            name: string;
+            /** @description Calendar description */
+            description?: string;
+            /** @description Whether this is the user's primary calendar */
+            primary?: boolean;
+            /** @description Calendar color (hex code) */
+            backgroundColor?: string;
+            /**
+             * @description User's access level to this calendar
+             * @enum {string}
+             */
+            accessRole?: "owner" | "writer" | "reader" | "freeBusyReader";
+        };
+        UserCalendar: {
+            /** @description Google Calendar ID */
+            calendarId: string;
+            /** @description Calendar display name */
+            name: string;
+            /** @description Whether this calendar is enabled for monitoring */
+            enabled: boolean;
+        };
+        SetSelectedCalendarsRequest: {
+            /** @description List of calendar IDs to enable for monitoring */
+            calendarIds: string[];
+        };
+        CalendarEvent: {
+            /** @description Google Calendar event ID */
+            id: string;
+            /** @description Calendar this event belongs to */
+            calendarId: string;
+            /** @description Event title */
+            summary: string;
+            /** @description Event description */
+            description?: string;
+            /** @description Event location */
+            location?: string;
+            /**
+             * Format: date-time
+             * @description Event start time
+             */
+            start: string;
+            /**
+             * Format: date-time
+             * @description Event end time
+             */
+            end: string;
+            /** @description Whether this is an all-day event */
+            allDay?: boolean;
+            /**
+             * Format: uri
+             * @description Link to view event in Google Calendar
+             */
+            htmlLink?: string;
+        };
+        CalendarConflict: {
+            event: components["schemas"]["CalendarEvent"];
+            /** @description Location of the calendar event */
+            eventLocation: string;
+            /** @description Where the user will actually be (from trip) */
+            userLocation: string;
+            /**
+             * Format: date
+             * @description Date of the conflict
+             */
+            date: string;
+            /**
+             * Format: uuid
+             * @description ID of the trip causing the conflict
+             */
+            tripId?: string;
+            /** @description Name of the trip causing the conflict */
+            tripName?: string;
+        };
+        TripSuggestion: {
+            /** @description Unique ID for this suggestion (for import) */
+            id: string;
+            /** @description Suggested trip name */
+            name: string;
+            /**
+             * Format: date
+             * @description Suggested start date
+             */
+            startDate: string;
+            /**
+             * Format: date
+             * @description Suggested end date
+             */
+            endDate: string;
+            /** @description Suggested destination */
+            location: string;
+            purpose?: components["schemas"]["TripPurpose"];
+            /** @description Calendar events that led to this suggestion */
+            sourceEvents: components["schemas"]["CalendarEvent"][];
+        };
+        SyncTripRequest: {
+            /** @description Which calendar to sync to (defaults to primary) */
+            targetCalendarId?: string;
+            /**
+             * @description Whether to create new events
+             * @default true
+             */
+            createEvents: boolean;
+            /**
+             * @description Whether to include flight items
+             * @default true
+             */
+            includeFlights: boolean;
+            /**
+             * @description Whether to include hotel items
+             * @default true
+             */
+            includeHotels: boolean;
+            /**
+             * @description Whether to include event items
+             * @default true
+             */
+            includeEvents: boolean;
+        };
+        SyncTripResult: {
+            /** @description Number of new events created */
+            eventsCreated: number;
+            /** @description Number of existing events updated */
+            eventsUpdated: number;
+            /** @description Links between trip items and calendar events */
+            calendarLinks?: components["schemas"]["CalendarLink"][];
+        };
+        CalendarLink: {
+            /**
+             * Format: uuid
+             * @description Trip ID
+             */
+            tripId: string;
+            /**
+             * Format: uuid
+             * @description Item ID (if linked to a specific item)
+             */
+            itemId?: string;
+            /** @description Google Calendar ID */
+            calendarId: string;
+            /** @description Google Calendar event ID */
+            eventId: string;
+            /**
+             * Format: date-time
+             * @description When this link was last synced
+             */
+            syncedAt: string;
+            /**
+             * Format: uri
+             * @description Link to view event in Google Calendar
+             */
+            htmlLink?: string;
         };
     };
     responses: never;
@@ -1040,6 +1447,407 @@ export interface operations {
             };
             /** @description Invalid date format or range */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getGoogleAuthUrl: {
+        parameters: {
+            query?: {
+                /** @description OAuth scopes to request (comma-separated). Defaults to calendar.readonly. */
+                scopes?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OAuth URL */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthUrlResponse"];
+                };
+            };
+        };
+    };
+    handleGoogleCallback: {
+        parameters: {
+            query: {
+                /** @description Authorization code from Google */
+                code: string;
+                /** @description State parameter for CSRF protection */
+                state?: string;
+                /** @description Error from Google if authorization failed */
+                error?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to settings page with success or error */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid callback parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getGoogleAuthStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authentication status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoogleAuthStatus"];
+                };
+            };
+        };
+    };
+    disconnectGoogle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successfully disconnected */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not connected */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listCalendars: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of calendars */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoogleCalendar"][];
+                };
+            };
+            /** @description Not authenticated with Google */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getSelectedCalendars: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Selected calendars */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserCalendar"][];
+                };
+            };
+        };
+    };
+    setSelectedCalendars: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSelectedCalendarsRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated selection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserCalendar"][];
+                };
+            };
+            /** @description Not authenticated with Google */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listCalendarEvents: {
+        parameters: {
+            query: {
+                /** @description Start date (YYYY-MM-DD) */
+                from: string;
+                /** @description End date (YYYY-MM-DD) */
+                to: string;
+                /** @description Filter to specific calendar */
+                calendarId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Calendar events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarEvent"][];
+                };
+            };
+            /** @description Not authenticated with Google */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCalendarConflicts: {
+        parameters: {
+            query?: {
+                /** @description Check conflicts for specific trip */
+                tripId?: string;
+                /** @description Start date for range check (YYYY-MM-DD) */
+                from?: string;
+                /** @description End date for range check (YYYY-MM-DD) */
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of conflicts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarConflict"][];
+                };
+            };
+            /** @description Not authenticated with Google */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    suggestTripsFromCalendar: {
+        parameters: {
+            query?: {
+                /** @description Start date (YYYY-MM-DD). Defaults to today. */
+                from?: string;
+                /** @description End date (YYYY-MM-DD). Defaults to 90 days from now. */
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Trip suggestions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TripSuggestion"][];
+                };
+            };
+            /** @description Not authenticated with Google */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    importTripSuggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Suggestion ID to import */
+                suggestionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Trip created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Trip"];
+                };
+            };
+            /** @description Suggestion not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getTripCalendarLinks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Trip ID */
+                tripId: components["parameters"]["TripId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Calendar links */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarLink"][];
+                };
+            };
+            /** @description Trip not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    syncTripToCalendar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Trip ID */
+                tripId: components["parameters"]["TripId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SyncTripRequest"];
+            };
+        };
+        responses: {
+            /** @description Sync result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncTripResult"];
+                };
+            };
+            /** @description Not authenticated with Google */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Trip not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

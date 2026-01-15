@@ -104,6 +104,47 @@ func (s *Store) migrate() error {
 
 	CREATE INDEX IF NOT EXISTS idx_trip_locations_trip_id ON trip_locations(trip_id);
 	CREATE INDEX IF NOT EXISTS idx_trip_locations_date ON trip_locations(date);
+
+	-- Google Calendar OAuth credentials (multi-user ready)
+	CREATE TABLE IF NOT EXISTS google_credentials (
+		user_id TEXT PRIMARY KEY DEFAULT 'default',
+		access_token TEXT NOT NULL,
+		refresh_token TEXT NOT NULL,
+		token_type TEXT NOT NULL DEFAULT 'Bearer',
+		expires_at TEXT NOT NULL,
+		scopes TEXT NOT NULL,
+		email TEXT,
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	);
+
+	-- User's selected calendars for monitoring
+	CREATE TABLE IF NOT EXISTS user_calendars (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL DEFAULT 'default',
+		calendar_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		enabled INTEGER NOT NULL DEFAULT 1,
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL,
+		UNIQUE(user_id, calendar_id)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_user_calendars_user ON user_calendars(user_id);
+
+	-- Trip-to-calendar event sync tracking
+	CREATE TABLE IF NOT EXISTS calendar_links (
+		id TEXT PRIMARY KEY,
+		trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+		item_id TEXT REFERENCES items(id) ON DELETE CASCADE,
+		calendar_id TEXT NOT NULL,
+		event_id TEXT NOT NULL,
+		synced_at TEXT NOT NULL,
+		UNIQUE(trip_id, calendar_id, event_id)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_calendar_links_trip ON calendar_links(trip_id);
+	CREATE INDEX IF NOT EXISTS idx_calendar_links_event ON calendar_links(calendar_id, event_id);
 	`
 
 	_, err := s.db.Exec(schema)
@@ -670,6 +711,387 @@ func (s *Store) GetTripLocationsForDateRange(tripID uuid.UUID, from, to time.Tim
 		locations = append(locations, loc)
 	}
 	return locations, rows.Err()
+}
+
+// Google Credentials methods
+
+// GetGoogleCredentials retrieves OAuth credentials for a user.
+func (s *Store) GetGoogleCredentials(userID string) (*entity.GoogleCredentials, error) {
+	query := `SELECT user_id, access_token, refresh_token, token_type, expires_at, scopes, email, created_at, updated_at
+		FROM google_credentials WHERE user_id = ?`
+	row := s.db.QueryRow(query, userID)
+
+	var creds entity.GoogleCredentials
+	var expiresAt, createdAt, updatedAt string
+	var email sql.NullString
+
+	err := row.Scan(
+		&creds.UserID, &creds.AccessToken, &creds.RefreshToken, &creds.TokenType,
+		&expiresAt, &creds.Scopes, &email, &createdAt, &updatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	creds.ExpiresAt, _ = time.Parse(time.RFC3339, expiresAt)
+	creds.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+	creds.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+	creds.Email = nullToPtr(email)
+
+	return &creds, nil
+}
+
+// SaveGoogleCredentials inserts or updates OAuth credentials.
+func (s *Store) SaveGoogleCredentials(creds *entity.GoogleCredentials) error {
+	query := `INSERT INTO google_credentials (user_id, access_token, refresh_token, token_type, expires_at, scopes, email, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(user_id) DO UPDATE SET
+			access_token = excluded.access_token,
+			refresh_token = excluded.refresh_token,
+			token_type = excluded.token_type,
+			expires_at = excluded.expires_at,
+			scopes = excluded.scopes,
+			email = excluded.email,
+			updated_at = excluded.updated_at`
+
+	_, err := s.db.Exec(query,
+		creds.UserID,
+		creds.AccessToken,
+		creds.RefreshToken,
+		creds.TokenType,
+		creds.ExpiresAt.Format(time.RFC3339),
+		creds.Scopes,
+		creds.Email,
+		creds.CreatedAt.Format(time.RFC3339),
+		creds.UpdatedAt.Format(time.RFC3339),
+	)
+	return err
+}
+
+// DeleteGoogleCredentials removes OAuth credentials for a user.
+func (s *Store) DeleteGoogleCredentials(userID string) error {
+	result, err := s.db.Exec("DELETE FROM google_credentials WHERE user_id = ?", userID)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// User Calendar methods
+
+// ListUserCalendars returns all selected calendars for a user.
+func (s *Store) ListUserCalendars(userID string) ([]entity.UserCalendar, error) {
+	query := `SELECT id, user_id, calendar_id, name, enabled, created_at, updated_at
+		FROM user_calendars WHERE user_id = ? ORDER BY name ASC`
+
+	rows, err := s.db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var calendars []entity.UserCalendar
+	for rows.Next() {
+		cal, err := scanUserCalendar(rows)
+		if err != nil {
+			return nil, err
+		}
+		calendars = append(calendars, cal)
+	}
+	return calendars, rows.Err()
+}
+
+// GetUserCalendar retrieves a specific user calendar by ID.
+func (s *Store) GetUserCalendar(id uuid.UUID) (*entity.UserCalendar, error) {
+	query := `SELECT id, user_id, calendar_id, name, enabled, created_at, updated_at
+		FROM user_calendars WHERE id = ?`
+	row := s.db.QueryRow(query, id.String())
+
+	cal, err := scanUserCalendarRow(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &cal, nil
+}
+
+// GetUserCalendarByCalendarID retrieves a user calendar by Google Calendar ID.
+func (s *Store) GetUserCalendarByCalendarID(userID, calendarID string) (*entity.UserCalendar, error) {
+	query := `SELECT id, user_id, calendar_id, name, enabled, created_at, updated_at
+		FROM user_calendars WHERE user_id = ? AND calendar_id = ?`
+	row := s.db.QueryRow(query, userID, calendarID)
+
+	cal, err := scanUserCalendarRow(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &cal, nil
+}
+
+// SaveUserCalendar inserts or updates a user calendar.
+func (s *Store) SaveUserCalendar(cal *entity.UserCalendar) error {
+	query := `INSERT INTO user_calendars (id, user_id, calendar_id, name, enabled, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(user_id, calendar_id) DO UPDATE SET
+			name = excluded.name,
+			enabled = excluded.enabled,
+			updated_at = excluded.updated_at`
+
+	_, err := s.db.Exec(query,
+		cal.ID.String(),
+		cal.UserID,
+		cal.CalendarID,
+		cal.Name,
+		cal.Enabled,
+		cal.CreatedAt.Format(time.RFC3339),
+		cal.UpdatedAt.Format(time.RFC3339),
+	)
+	return err
+}
+
+// DeleteUserCalendar removes a user calendar.
+func (s *Store) DeleteUserCalendar(id uuid.UUID) error {
+	result, err := s.db.Exec("DELETE FROM user_calendars WHERE id = ?", id.String())
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// DeleteUserCalendarsByUser removes all calendars for a user.
+func (s *Store) DeleteUserCalendarsByUser(userID string) error {
+	_, err := s.db.Exec("DELETE FROM user_calendars WHERE user_id = ?", userID)
+	return err
+}
+
+// SetUserCalendars replaces all calendars for a user.
+func (s *Store) SetUserCalendars(userID string, calendars []entity.UserCalendar) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Delete existing calendars for user
+	if _, err := tx.Exec("DELETE FROM user_calendars WHERE user_id = ?", userID); err != nil {
+		return err
+	}
+
+	// Insert new calendars
+	stmt, err := tx.Prepare(`INSERT INTO user_calendars (id, user_id, calendar_id, name, enabled, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, cal := range calendars {
+		_, err := stmt.Exec(
+			cal.ID.String(),
+			cal.UserID,
+			cal.CalendarID,
+			cal.Name,
+			cal.Enabled,
+			cal.CreatedAt.Format(time.RFC3339),
+			cal.UpdatedAt.Format(time.RFC3339),
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func scanUserCalendar(rows *sql.Rows) (entity.UserCalendar, error) {
+	var cal entity.UserCalendar
+	var id, createdAt, updatedAt string
+	err := rows.Scan(&id, &cal.UserID, &cal.CalendarID, &cal.Name, &cal.Enabled, &createdAt, &updatedAt)
+	if err != nil {
+		return cal, err
+	}
+	cal.ID, _ = uuid.Parse(id)
+	cal.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+	cal.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+	return cal, nil
+}
+
+func scanUserCalendarRow(row *sql.Row) (entity.UserCalendar, error) {
+	var cal entity.UserCalendar
+	var id, createdAt, updatedAt string
+	err := row.Scan(&id, &cal.UserID, &cal.CalendarID, &cal.Name, &cal.Enabled, &createdAt, &updatedAt)
+	if err != nil {
+		return cal, err
+	}
+	cal.ID, _ = uuid.Parse(id)
+	cal.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+	cal.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+	return cal, nil
+}
+
+// Calendar Link methods
+
+// ListCalendarLinks returns all calendar links for a trip.
+func (s *Store) ListCalendarLinks(tripID uuid.UUID) ([]entity.CalendarLink, error) {
+	query := `SELECT id, trip_id, item_id, calendar_id, event_id, synced_at
+		FROM calendar_links WHERE trip_id = ? ORDER BY synced_at DESC`
+
+	rows, err := s.db.Query(query, tripID.String())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var links []entity.CalendarLink
+	for rows.Next() {
+		link, err := scanCalendarLink(rows)
+		if err != nil {
+			return nil, err
+		}
+		links = append(links, link)
+	}
+	return links, rows.Err()
+}
+
+// GetCalendarLink retrieves a specific calendar link.
+func (s *Store) GetCalendarLink(id uuid.UUID) (*entity.CalendarLink, error) {
+	query := `SELECT id, trip_id, item_id, calendar_id, event_id, synced_at
+		FROM calendar_links WHERE id = ?`
+	row := s.db.QueryRow(query, id.String())
+
+	link, err := scanCalendarLinkRow(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &link, nil
+}
+
+// GetCalendarLinkByEvent retrieves a calendar link by trip and event ID.
+func (s *Store) GetCalendarLinkByEvent(tripID uuid.UUID, calendarID, eventID string) (*entity.CalendarLink, error) {
+	query := `SELECT id, trip_id, item_id, calendar_id, event_id, synced_at
+		FROM calendar_links WHERE trip_id = ? AND calendar_id = ? AND event_id = ?`
+	row := s.db.QueryRow(query, tripID.String(), calendarID, eventID)
+
+	link, err := scanCalendarLinkRow(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &link, nil
+}
+
+// CreateCalendarLink inserts a new calendar link.
+func (s *Store) CreateCalendarLink(link *entity.CalendarLink) error {
+	query := `INSERT INTO calendar_links (id, trip_id, item_id, calendar_id, event_id, synced_at)
+		VALUES (?, ?, ?, ?, ?, ?)`
+
+	var itemID interface{}
+	if link.ItemID != nil {
+		itemID = link.ItemID.String()
+	}
+
+	_, err := s.db.Exec(query,
+		link.ID.String(),
+		link.TripID.String(),
+		itemID,
+		link.CalendarID,
+		link.EventID,
+		link.SyncedAt.Format(time.RFC3339),
+	)
+	return err
+}
+
+// DeleteCalendarLink removes a calendar link.
+func (s *Store) DeleteCalendarLink(id uuid.UUID) error {
+	result, err := s.db.Exec("DELETE FROM calendar_links WHERE id = ?", id.String())
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// DeleteCalendarLinksByTrip removes all calendar links for a trip.
+func (s *Store) DeleteCalendarLinksByTrip(tripID uuid.UUID) error {
+	_, err := s.db.Exec("DELETE FROM calendar_links WHERE trip_id = ?", tripID.String())
+	return err
+}
+
+func scanCalendarLink(rows *sql.Rows) (entity.CalendarLink, error) {
+	var link entity.CalendarLink
+	var id, tripID, syncedAt string
+	var itemID sql.NullString
+
+	err := rows.Scan(&id, &tripID, &itemID, &link.CalendarID, &link.EventID, &syncedAt)
+	if err != nil {
+		return link, err
+	}
+
+	link.ID, _ = uuid.Parse(id)
+	link.TripID, _ = uuid.Parse(tripID)
+	link.SyncedAt, _ = time.Parse(time.RFC3339, syncedAt)
+
+	if itemID.Valid && itemID.String != "" {
+		iid, _ := uuid.Parse(itemID.String)
+		link.ItemID = &iid
+	}
+
+	return link, nil
+}
+
+func scanCalendarLinkRow(row *sql.Row) (entity.CalendarLink, error) {
+	var link entity.CalendarLink
+	var id, tripID, syncedAt string
+	var itemID sql.NullString
+
+	err := row.Scan(&id, &tripID, &itemID, &link.CalendarID, &link.EventID, &syncedAt)
+	if err != nil {
+		return link, err
+	}
+
+	link.ID, _ = uuid.Parse(id)
+	link.TripID, _ = uuid.Parse(tripID)
+	link.SyncedAt, _ = time.Parse(time.RFC3339, syncedAt)
+
+	if itemID.Valid && itemID.String != "" {
+		iid, _ := uuid.Parse(itemID.String)
+		link.ItemID = &iid
+	}
+
+	return link, nil
 }
 
 // Silence the unused import warning

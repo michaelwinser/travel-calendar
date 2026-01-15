@@ -24,6 +24,14 @@ const (
 	DocumentTypeVisa         DocumentType = "visa"
 )
 
+// Defines values for GoogleCalendarAccessRole.
+const (
+	FreeBusyReader GoogleCalendarAccessRole = "freeBusyReader"
+	Owner          GoogleCalendarAccessRole = "owner"
+	Reader         GoogleCalendarAccessRole = "reader"
+	Writer         GoogleCalendarAccessRole = "writer"
+)
+
 // Defines values for HealthResponseStatus.
 const (
 	Ok HealthResponseStatus = "ok"
@@ -70,6 +78,76 @@ type BaseLocations struct {
 
 	// Work Work location (optional)
 	Work *string `json:"work,omitempty"`
+}
+
+// CalendarConflict defines model for CalendarConflict.
+type CalendarConflict struct {
+	// Date Date of the conflict
+	Date  openapi_types.Date `json:"date"`
+	Event CalendarEvent      `json:"event"`
+
+	// EventLocation Location of the calendar event
+	EventLocation string `json:"eventLocation"`
+
+	// TripId ID of the trip causing the conflict
+	TripId *openapi_types.UUID `json:"tripId,omitempty"`
+
+	// TripName Name of the trip causing the conflict
+	TripName *string `json:"tripName,omitempty"`
+
+	// UserLocation Where the user will actually be (from trip)
+	UserLocation string `json:"userLocation"`
+}
+
+// CalendarEvent defines model for CalendarEvent.
+type CalendarEvent struct {
+	// AllDay Whether this is an all-day event
+	AllDay *bool `json:"allDay,omitempty"`
+
+	// CalendarId Calendar this event belongs to
+	CalendarId string `json:"calendarId"`
+
+	// Description Event description
+	Description *string `json:"description,omitempty"`
+
+	// End Event end time
+	End time.Time `json:"end"`
+
+	// HtmlLink Link to view event in Google Calendar
+	HtmlLink *string `json:"htmlLink,omitempty"`
+
+	// Id Google Calendar event ID
+	Id string `json:"id"`
+
+	// Location Event location
+	Location *string `json:"location,omitempty"`
+
+	// Start Event start time
+	Start time.Time `json:"start"`
+
+	// Summary Event title
+	Summary string `json:"summary"`
+}
+
+// CalendarLink defines model for CalendarLink.
+type CalendarLink struct {
+	// CalendarId Google Calendar ID
+	CalendarId string `json:"calendarId"`
+
+	// EventId Google Calendar event ID
+	EventId string `json:"eventId"`
+
+	// HtmlLink Link to view event in Google Calendar
+	HtmlLink *string `json:"htmlLink,omitempty"`
+
+	// ItemId Item ID (if linked to a specific item)
+	ItemId *openapi_types.UUID `json:"itemId,omitempty"`
+
+	// SyncedAt When this link was last synced
+	SyncedAt time.Time `json:"syncedAt"`
+
+	// TripId Trip ID
+	TripId openapi_types.UUID `json:"tripId"`
 }
 
 // CreateItemRequest defines model for CreateItemRequest.
@@ -128,6 +206,45 @@ type Error struct {
 	// Error Error message
 	Error string `json:"error"`
 }
+
+// GoogleAuthStatus defines model for GoogleAuthStatus.
+type GoogleAuthStatus struct {
+	// Connected Whether Google Calendar is connected
+	Connected bool `json:"connected"`
+
+	// Email Connected Google account email
+	Email *openapi_types.Email `json:"email,omitempty"`
+
+	// ExpiresAt When the access token expires
+	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
+
+	// Scopes Authorized OAuth scopes
+	Scopes *[]string `json:"scopes,omitempty"`
+}
+
+// GoogleCalendar defines model for GoogleCalendar.
+type GoogleCalendar struct {
+	// AccessRole User's access level to this calendar
+	AccessRole *GoogleCalendarAccessRole `json:"accessRole,omitempty"`
+
+	// BackgroundColor Calendar color (hex code)
+	BackgroundColor *string `json:"backgroundColor,omitempty"`
+
+	// Description Calendar description
+	Description *string `json:"description,omitempty"`
+
+	// Id Google Calendar ID
+	Id string `json:"id"`
+
+	// Name Calendar display name
+	Name string `json:"name"`
+
+	// Primary Whether this is the user's primary calendar
+	Primary *bool `json:"primary,omitempty"`
+}
+
+// GoogleCalendarAccessRole User's access level to this calendar
+type GoogleCalendarAccessRole string
 
 // HealthResponse defines model for HealthResponse.
 type HealthResponse struct {
@@ -205,10 +322,22 @@ type LocationSource struct {
 // LocationSourceType The source of the location (home, work, or a trip)
 type LocationSourceType string
 
+// OAuthUrlResponse defines model for OAuthUrlResponse.
+type OAuthUrlResponse struct {
+	// Url OAuth authorization URL to redirect the user to
+	Url string `json:"url"`
+}
+
 // SetBaseLocationsRequest defines model for SetBaseLocationsRequest.
 type SetBaseLocationsRequest struct {
 	Home *string `json:"home,omitempty"`
 	Work *string `json:"work,omitempty"`
+}
+
+// SetSelectedCalendarsRequest defines model for SetSelectedCalendarsRequest.
+type SetSelectedCalendarsRequest struct {
+	// CalendarIds List of calendar IDs to enable for monitoring
+	CalendarIds []string `json:"calendarIds"`
 }
 
 // SetTripLocationsRequest defines model for SetTripLocationsRequest.
@@ -218,6 +347,36 @@ type SetTripLocationsRequest struct {
 
 	// Locations Per-date location overrides
 	Locations *[]TripDayLocation `json:"locations,omitempty"`
+}
+
+// SyncTripRequest defines model for SyncTripRequest.
+type SyncTripRequest struct {
+	// CreateEvents Whether to create new events
+	CreateEvents *bool `json:"createEvents,omitempty"`
+
+	// IncludeEvents Whether to include event items
+	IncludeEvents *bool `json:"includeEvents,omitempty"`
+
+	// IncludeFlights Whether to include flight items
+	IncludeFlights *bool `json:"includeFlights,omitempty"`
+
+	// IncludeHotels Whether to include hotel items
+	IncludeHotels *bool `json:"includeHotels,omitempty"`
+
+	// TargetCalendarId Which calendar to sync to (defaults to primary)
+	TargetCalendarId *string `json:"targetCalendarId,omitempty"`
+}
+
+// SyncTripResult defines model for SyncTripResult.
+type SyncTripResult struct {
+	// CalendarLinks Links between trip items and calendar events
+	CalendarLinks *[]CalendarLink `json:"calendarLinks,omitempty"`
+
+	// EventsCreated Number of new events created
+	EventsCreated int `json:"eventsCreated"`
+
+	// EventsUpdated Number of existing events updated
+	EventsUpdated int `json:"eventsUpdated"`
 }
 
 // Trip defines model for Trip.
@@ -258,6 +417,28 @@ type TripPurpose string
 // TripStatus defines model for TripStatus.
 type TripStatus string
 
+// TripSuggestion defines model for TripSuggestion.
+type TripSuggestion struct {
+	// EndDate Suggested end date
+	EndDate openapi_types.Date `json:"endDate"`
+
+	// Id Unique ID for this suggestion (for import)
+	Id string `json:"id"`
+
+	// Location Suggested destination
+	Location string `json:"location"`
+
+	// Name Suggested trip name
+	Name    string       `json:"name"`
+	Purpose *TripPurpose `json:"purpose,omitempty"`
+
+	// SourceEvents Calendar events that led to this suggestion
+	SourceEvents []CalendarEvent `json:"sourceEvents"`
+
+	// StartDate Suggested start date
+	StartDate openapi_types.Date `json:"startDate"`
+}
+
 // UpdateTripRequest defines model for UpdateTripRequest.
 type UpdateTripRequest struct {
 	EndDate   *openapi_types.Date `json:"endDate,omitempty"`
@@ -268,11 +449,74 @@ type UpdateTripRequest struct {
 	Status    *TripStatus         `json:"status,omitempty"`
 }
 
+// UserCalendar defines model for UserCalendar.
+type UserCalendar struct {
+	// CalendarId Google Calendar ID
+	CalendarId string `json:"calendarId"`
+
+	// Enabled Whether this calendar is enabled for monitoring
+	Enabled bool `json:"enabled"`
+
+	// Name Calendar display name
+	Name string `json:"name"`
+}
+
 // ItemId defines model for ItemId.
 type ItemId = openapi_types.UUID
 
 // TripId defines model for TripId.
 type TripId = openapi_types.UUID
+
+// GetGoogleAuthUrlParams defines parameters for GetGoogleAuthUrl.
+type GetGoogleAuthUrlParams struct {
+	// Scopes OAuth scopes to request (comma-separated). Defaults to calendar.readonly.
+	Scopes *string `form:"scopes,omitempty" json:"scopes,omitempty"`
+}
+
+// HandleGoogleCallbackParams defines parameters for HandleGoogleCallback.
+type HandleGoogleCallbackParams struct {
+	// Code Authorization code from Google
+	Code string `form:"code" json:"code"`
+
+	// State State parameter for CSRF protection
+	State *string `form:"state,omitempty" json:"state,omitempty"`
+
+	// Error Error from Google if authorization failed
+	Error *string `form:"error,omitempty" json:"error,omitempty"`
+}
+
+// GetCalendarConflictsParams defines parameters for GetCalendarConflicts.
+type GetCalendarConflictsParams struct {
+	// TripId Check conflicts for specific trip
+	TripId *openapi_types.UUID `form:"tripId,omitempty" json:"tripId,omitempty"`
+
+	// From Start date for range check (YYYY-MM-DD)
+	From *openapi_types.Date `form:"from,omitempty" json:"from,omitempty"`
+
+	// To End date for range check (YYYY-MM-DD)
+	To *openapi_types.Date `form:"to,omitempty" json:"to,omitempty"`
+}
+
+// ListCalendarEventsParams defines parameters for ListCalendarEvents.
+type ListCalendarEventsParams struct {
+	// From Start date (YYYY-MM-DD)
+	From openapi_types.Date `form:"from" json:"from"`
+
+	// To End date (YYYY-MM-DD)
+	To openapi_types.Date `form:"to" json:"to"`
+
+	// CalendarId Filter to specific calendar
+	CalendarId *string `form:"calendarId,omitempty" json:"calendarId,omitempty"`
+}
+
+// SuggestTripsFromCalendarParams defines parameters for SuggestTripsFromCalendar.
+type SuggestTripsFromCalendarParams struct {
+	// From Start date (YYYY-MM-DD). Defaults to today.
+	From *openapi_types.Date `form:"from,omitempty" json:"from,omitempty"`
+
+	// To End date (YYYY-MM-DD). Defaults to 90 days from now.
+	To *openapi_types.Date `form:"to,omitempty" json:"to,omitempty"`
+}
 
 // ListDocumentsParams defines parameters for ListDocuments.
 type ListDocumentsParams struct {
@@ -310,6 +554,9 @@ type SearchTripsParams struct {
 	Q string `form:"q" json:"q"`
 }
 
+// SetSelectedCalendarsJSONRequestBody defines body for SetSelectedCalendars for application/json ContentType.
+type SetSelectedCalendarsJSONRequestBody = SetSelectedCalendarsRequest
+
 // SetBaseLocationsJSONRequestBody defines body for SetBaseLocations for application/json ContentType.
 type SetBaseLocationsJSONRequestBody = SetBaseLocationsRequest
 
@@ -319,6 +566,9 @@ type CreateTripJSONRequestBody = CreateTripRequest
 // UpdateTripJSONRequestBody defines body for UpdateTrip for application/json ContentType.
 type UpdateTripJSONRequestBody = UpdateTripRequest
 
+// SyncTripToCalendarJSONRequestBody defines body for SyncTripToCalendar for application/json ContentType.
+type SyncTripToCalendarJSONRequestBody = SyncTripRequest
+
 // CreateTripItemJSONRequestBody defines body for CreateTripItem for application/json ContentType.
 type CreateTripItemJSONRequestBody = CreateItemRequest
 
@@ -327,6 +577,39 @@ type SetTripLocationsJSONRequestBody = SetTripLocationsRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Get Google OAuth URL
+	// (GET /api/auth/google)
+	GetGoogleAuthUrl(w http.ResponseWriter, r *http.Request, params GetGoogleAuthUrlParams)
+	// Handle Google OAuth callback
+	// (GET /api/auth/google/callback)
+	HandleGoogleCallback(w http.ResponseWriter, r *http.Request, params HandleGoogleCallbackParams)
+	// Disconnect Google Calendar
+	// (POST /api/auth/google/disconnect)
+	DisconnectGoogle(w http.ResponseWriter, r *http.Request)
+	// Get Google authentication status
+	// (GET /api/auth/google/status)
+	GetGoogleAuthStatus(w http.ResponseWriter, r *http.Request)
+	// Detect calendar conflicts with trips
+	// (GET /api/calendar/conflicts)
+	GetCalendarConflicts(w http.ResponseWriter, r *http.Request, params GetCalendarConflictsParams)
+	// List calendar events
+	// (GET /api/calendar/events)
+	ListCalendarEvents(w http.ResponseWriter, r *http.Request, params ListCalendarEventsParams)
+	// Suggest trips from calendar events
+	// (GET /api/calendar/trip-suggestions)
+	SuggestTripsFromCalendar(w http.ResponseWriter, r *http.Request, params SuggestTripsFromCalendarParams)
+	// Import a trip suggestion
+	// (POST /api/calendar/trip-suggestions/{suggestionId}/import)
+	ImportTripSuggestion(w http.ResponseWriter, r *http.Request, suggestionId string)
+	// List available Google Calendars
+	// (GET /api/calendars)
+	ListCalendars(w http.ResponseWriter, r *http.Request)
+	// Get selected calendars
+	// (GET /api/calendars/selected)
+	GetSelectedCalendars(w http.ResponseWriter, r *http.Request)
+	// Set selected calendars
+	// (PUT /api/calendars/selected)
+	SetSelectedCalendars(w http.ResponseWriter, r *http.Request)
 	// Get base locations
 	// (GET /api/config/locations)
 	GetBaseLocations(w http.ResponseWriter, r *http.Request)
@@ -363,6 +646,12 @@ type ServerInterface interface {
 	// Update a trip
 	// (PATCH /api/trips/{tripId})
 	UpdateTrip(w http.ResponseWriter, r *http.Request, tripId TripId)
+	// Get calendar links for a trip
+	// (GET /api/trips/{tripId}/calendar-sync)
+	GetTripCalendarLinks(w http.ResponseWriter, r *http.Request, tripId TripId)
+	// Sync trip to Google Calendar
+	// (POST /api/trips/{tripId}/calendar-sync)
+	SyncTripToCalendar(w http.ResponseWriter, r *http.Request, tripId TripId)
 	// List items for a trip
 	// (GET /api/trips/{tripId}/items)
 	ListTripItems(w http.ResponseWriter, r *http.Request, tripId TripId)
@@ -383,6 +672,72 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// Get Google OAuth URL
+// (GET /api/auth/google)
+func (_ Unimplemented) GetGoogleAuthUrl(w http.ResponseWriter, r *http.Request, params GetGoogleAuthUrlParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Handle Google OAuth callback
+// (GET /api/auth/google/callback)
+func (_ Unimplemented) HandleGoogleCallback(w http.ResponseWriter, r *http.Request, params HandleGoogleCallbackParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Disconnect Google Calendar
+// (POST /api/auth/google/disconnect)
+func (_ Unimplemented) DisconnectGoogle(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get Google authentication status
+// (GET /api/auth/google/status)
+func (_ Unimplemented) GetGoogleAuthStatus(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Detect calendar conflicts with trips
+// (GET /api/calendar/conflicts)
+func (_ Unimplemented) GetCalendarConflicts(w http.ResponseWriter, r *http.Request, params GetCalendarConflictsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List calendar events
+// (GET /api/calendar/events)
+func (_ Unimplemented) ListCalendarEvents(w http.ResponseWriter, r *http.Request, params ListCalendarEventsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Suggest trips from calendar events
+// (GET /api/calendar/trip-suggestions)
+func (_ Unimplemented) SuggestTripsFromCalendar(w http.ResponseWriter, r *http.Request, params SuggestTripsFromCalendarParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Import a trip suggestion
+// (POST /api/calendar/trip-suggestions/{suggestionId}/import)
+func (_ Unimplemented) ImportTripSuggestion(w http.ResponseWriter, r *http.Request, suggestionId string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List available Google Calendars
+// (GET /api/calendars)
+func (_ Unimplemented) ListCalendars(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get selected calendars
+// (GET /api/calendars/selected)
+func (_ Unimplemented) GetSelectedCalendars(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Set selected calendars
+// (PUT /api/calendars/selected)
+func (_ Unimplemented) SetSelectedCalendars(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // Get base locations
 // (GET /api/config/locations)
@@ -456,6 +811,18 @@ func (_ Unimplemented) UpdateTrip(w http.ResponseWriter, r *http.Request, tripId
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Get calendar links for a trip
+// (GET /api/trips/{tripId}/calendar-sync)
+func (_ Unimplemented) GetTripCalendarLinks(w http.ResponseWriter, r *http.Request, tripId TripId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Sync trip to Google Calendar
+// (POST /api/trips/{tripId}/calendar-sync)
+func (_ Unimplemented) SyncTripToCalendar(w http.ResponseWriter, r *http.Request, tripId TripId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // List items for a trip
 // (GET /api/trips/{tripId}/items)
 func (_ Unimplemented) ListTripItems(w http.ResponseWriter, r *http.Request, tripId TripId) {
@@ -494,6 +861,313 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetGoogleAuthUrl operation middleware
+func (siw *ServerInterfaceWrapper) GetGoogleAuthUrl(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetGoogleAuthUrlParams
+
+	// ------------- Optional query parameter "scopes" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "scopes", r.URL.Query(), &params.Scopes)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scopes", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetGoogleAuthUrl(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// HandleGoogleCallback operation middleware
+func (siw *ServerInterfaceWrapper) HandleGoogleCallback(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params HandleGoogleCallbackParams
+
+	// ------------- Required query parameter "code" -------------
+
+	if paramValue := r.URL.Query().Get("code"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "code"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "code", r.URL.Query(), &params.Code)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "code", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "state", r.URL.Query(), &params.State)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "error" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "error", r.URL.Query(), &params.Error)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "error", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.HandleGoogleCallback(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DisconnectGoogle operation middleware
+func (siw *ServerInterfaceWrapper) DisconnectGoogle(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisconnectGoogle(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetGoogleAuthStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetGoogleAuthStatus(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetGoogleAuthStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCalendarConflicts operation middleware
+func (siw *ServerInterfaceWrapper) GetCalendarConflicts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetCalendarConflictsParams
+
+	// ------------- Optional query parameter "tripId" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "tripId", r.URL.Query(), &params.TripId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tripId", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "from", r.URL.Query(), &params.From)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "to", r.URL.Query(), &params.To)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCalendarConflicts(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCalendarEvents operation middleware
+func (siw *ServerInterfaceWrapper) ListCalendarEvents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCalendarEventsParams
+
+	// ------------- Required query parameter "from" -------------
+
+	if paramValue := r.URL.Query().Get("from"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "from", r.URL.Query(), &params.From)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "to" -------------
+
+	if paramValue := r.URL.Query().Get("to"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "to", r.URL.Query(), &params.To)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "calendarId" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "calendarId", r.URL.Query(), &params.CalendarId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "calendarId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCalendarEvents(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SuggestTripsFromCalendar operation middleware
+func (siw *ServerInterfaceWrapper) SuggestTripsFromCalendar(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SuggestTripsFromCalendarParams
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "from", r.URL.Query(), &params.From)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "to", r.URL.Query(), &params.To)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SuggestTripsFromCalendar(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ImportTripSuggestion operation middleware
+func (siw *ServerInterfaceWrapper) ImportTripSuggestion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "suggestionId" -------------
+	var suggestionId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "suggestionId", chi.URLParam(r, "suggestionId"), &suggestionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "suggestionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ImportTripSuggestion(w, r, suggestionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCalendars operation middleware
+func (siw *ServerInterfaceWrapper) ListCalendars(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCalendars(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSelectedCalendars operation middleware
+func (siw *ServerInterfaceWrapper) GetSelectedCalendars(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSelectedCalendars(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetSelectedCalendars operation middleware
+func (siw *ServerInterfaceWrapper) SetSelectedCalendars(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetSelectedCalendars(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetBaseLocations operation middleware
 func (siw *ServerInterfaceWrapper) GetBaseLocations(w http.ResponseWriter, r *http.Request) {
@@ -823,6 +1497,56 @@ func (siw *ServerInterfaceWrapper) UpdateTrip(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// GetTripCalendarLinks operation middleware
+func (siw *ServerInterfaceWrapper) GetTripCalendarLinks(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "tripId" -------------
+	var tripId TripId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tripId", chi.URLParam(r, "tripId"), &tripId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tripId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTripCalendarLinks(w, r, tripId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SyncTripToCalendar operation middleware
+func (siw *ServerInterfaceWrapper) SyncTripToCalendar(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "tripId" -------------
+	var tripId TripId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tripId", chi.URLParam(r, "tripId"), &tripId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tripId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SyncTripToCalendar(w, r, tripId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTripItems operation middleware
 func (siw *ServerInterfaceWrapper) ListTripItems(w http.ResponseWriter, r *http.Request) {
 
@@ -1051,6 +1775,39 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	}
 
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/auth/google", wrapper.GetGoogleAuthUrl)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/auth/google/callback", wrapper.HandleGoogleCallback)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/auth/google/disconnect", wrapper.DisconnectGoogle)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/auth/google/status", wrapper.GetGoogleAuthStatus)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/calendar/conflicts", wrapper.GetCalendarConflicts)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/calendar/events", wrapper.ListCalendarEvents)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/calendar/trip-suggestions", wrapper.SuggestTripsFromCalendar)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/calendar/trip-suggestions/{suggestionId}/import", wrapper.ImportTripSuggestion)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/calendars", wrapper.ListCalendars)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/calendars/selected", wrapper.GetSelectedCalendars)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/api/calendars/selected", wrapper.SetSelectedCalendars)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/config/locations", wrapper.GetBaseLocations)
 	})
 	r.Group(func(r chi.Router) {
@@ -1085,6 +1842,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/api/trips/{tripId}", wrapper.UpdateTrip)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/trips/{tripId}/calendar-sync", wrapper.GetTripCalendarLinks)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/trips/{tripId}/calendar-sync", wrapper.SyncTripToCalendar)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/trips/{tripId}/items", wrapper.ListTripItems)

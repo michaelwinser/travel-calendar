@@ -15,7 +15,7 @@ info:
     name: travel-calendar
     version: "1.0.0"
     instructions: |
-      Travel Calendar MCP Server. Use these tools to manage trips, items, documents, and location queries.
+      Travel Calendar MCP Server. Use these tools to manage trips, items, documents, location queries, and Google Calendar integration.
 
       Key tools:
       - get_trips: List and filter trips by upcoming/past/purpose
@@ -25,6 +25,9 @@ info:
       - add_item: Add flights, hotels, trains, drives, or events to a trip
       - get_location_on_date: Find where the user will be on a specific date
       - get_location_range: Get location timeline for a date range
+      - list_calendars: List available Google Calendars (requires OAuth)
+      - get_calendar_conflicts: Detect conflicts between calendar events and trip locations
+      - suggest_trips_from_calendar: Analyze calendar events to suggest potential trips
 
       All dates use YYYY-MM-DD format. IDs are UUIDs.
     resources: []
@@ -49,6 +52,8 @@ tags:
     description: User configuration (base locations, preferences)
   - name: Location
     description: Location queries (where is the user on a given date)
+  - name: Calendar
+    description: Google Calendar integration and OAuth
 
 paths:
   /health:
@@ -594,6 +599,367 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  # Google Calendar OAuth endpoints
+  /api/auth/google:
+    get:
+      operationId: getGoogleAuthUrl
+      tags: [Calendar]
+      summary: Get Google OAuth URL
+      description: Returns the URL to redirect the user for Google OAuth authorization
+      parameters:
+        - name: scopes
+          in: query
+          description: OAuth scopes to request (comma-separated). Defaults to calendar.readonly.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OAuth URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthUrlResponse'
+
+  /api/auth/google/callback:
+    get:
+      operationId: handleGoogleCallback
+      tags: [Calendar]
+      summary: Handle Google OAuth callback
+      description: Exchanges authorization code for tokens and stores credentials. Redirects to settings page.
+      parameters:
+        - name: code
+          in: query
+          required: true
+          description: Authorization code from Google
+          schema:
+            type: string
+        - name: state
+          in: query
+          description: State parameter for CSRF protection
+          schema:
+            type: string
+        - name: error
+          in: query
+          description: Error from Google if authorization failed
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to settings page with success or error
+        '400':
+          description: Invalid callback parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/google/status:
+    get:
+      operationId: getGoogleAuthStatus
+      tags: [Calendar]
+      summary: Get Google authentication status
+      description: Returns whether Google Calendar is connected and which scopes are authorized
+      responses:
+        '200':
+          description: Authentication status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoogleAuthStatus'
+
+  /api/auth/google/disconnect:
+    post:
+      operationId: disconnectGoogle
+      tags: [Calendar]
+      summary: Disconnect Google Calendar
+      description: Revokes access and deletes stored credentials
+      responses:
+        '204':
+          description: Successfully disconnected
+        '400':
+          description: Not connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # Calendar management endpoints
+  /api/calendars:
+    get:
+      operationId: listCalendars
+      tags: [Calendar]
+      summary: List available Google Calendars
+      description: Returns all calendars from the user's Google account
+      x-mcp:
+        tool: list_calendars
+        description: "List all available Google Calendars for the authenticated user."
+      responses:
+        '200':
+          description: List of calendars
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GoogleCalendar'
+        '401':
+          description: Not authenticated with Google
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/calendars/selected:
+    get:
+      operationId: getSelectedCalendars
+      tags: [Calendar]
+      summary: Get selected calendars
+      description: Returns calendars the user has selected to monitor
+      responses:
+        '200':
+          description: Selected calendars
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserCalendar'
+    put:
+      operationId: setSelectedCalendars
+      tags: [Calendar]
+      summary: Set selected calendars
+      description: Updates which calendars to monitor for conflicts and suggestions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetSelectedCalendarsRequest'
+      responses:
+        '200':
+          description: Updated selection
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserCalendar'
+        '401':
+          description: Not authenticated with Google
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # Calendar event and conflict endpoints
+  /api/calendar/events:
+    get:
+      operationId: listCalendarEvents
+      tags: [Calendar]
+      summary: List calendar events
+      description: Returns events from selected calendars within date range
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: Start date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          description: End date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: calendarId
+          in: query
+          description: Filter to specific calendar
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Calendar events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CalendarEvent'
+        '401':
+          description: Not authenticated with Google
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/calendar/conflicts:
+    get:
+      operationId: getCalendarConflicts
+      tags: [Calendar]
+      summary: Detect calendar conflicts with trips
+      description: Returns events where the event location differs from the user's trip location on that date
+      x-mcp:
+        tool: get_calendar_conflicts
+        description: "Detect calendar conflicts where events have locations that differ from the user's trip location on that date. Optionally filter by tripId or date range."
+      parameters:
+        - name: tripId
+          in: query
+          description: Check conflicts for specific trip
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          description: Start date for range check (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          description: End date for range check (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: List of conflicts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CalendarConflict'
+        '401':
+          description: Not authenticated with Google
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/calendar/trip-suggestions:
+    get:
+      operationId: suggestTripsFromCalendar
+      tags: [Calendar]
+      summary: Suggest trips from calendar events
+      description: Analyzes calendar events with locations to suggest potential trips
+      x-mcp:
+        tool: suggest_trips_from_calendar
+        description: "Analyze calendar events with locations to suggest potential trips. Returns events that appear to be travel-related based on location patterns."
+      parameters:
+        - name: from
+          in: query
+          description: Start date (YYYY-MM-DD). Defaults to today.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          description: End date (YYYY-MM-DD). Defaults to 90 days from now.
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Trip suggestions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TripSuggestion'
+        '401':
+          description: Not authenticated with Google
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/calendar/trip-suggestions/{suggestionId}/import:
+    post:
+      operationId: importTripSuggestion
+      tags: [Calendar]
+      summary: Import a trip suggestion
+      description: Creates a trip from a calendar-based suggestion
+      parameters:
+        - name: suggestionId
+          in: path
+          required: true
+          description: Suggestion ID to import
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Trip created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+        '404':
+          description: Suggestion not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # Trip calendar sync endpoint
+  /api/trips/{tripId}/calendar-sync:
+    post:
+      operationId: syncTripToCalendar
+      tags: [Calendar]
+      summary: Sync trip to Google Calendar
+      description: Creates or updates calendar events for trip and its items
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncTripRequest'
+      responses:
+        '200':
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncTripResult'
+        '401':
+          description: Not authenticated with Google
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Trip not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      operationId: getTripCalendarLinks
+      tags: [Calendar]
+      summary: Get calendar links for a trip
+      description: Returns existing calendar event links for this trip
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      responses:
+        '200':
+          description: Calendar links
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CalendarLink'
+        '404':
+          description: Trip not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
 components:
   parameters:
     TripId:
@@ -999,3 +1365,236 @@ components:
           description: Location(s) for this segment
         source:
           $ref: '#/components/schemas/LocationSource'
+
+    # Calendar integration schemas
+    OAuthUrlResponse:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: OAuth authorization URL to redirect the user to
+
+    GoogleAuthStatus:
+      type: object
+      required: [connected]
+      properties:
+        connected:
+          type: boolean
+          description: Whether Google Calendar is connected
+        email:
+          type: string
+          format: email
+          description: Connected Google account email
+        scopes:
+          type: array
+          items:
+            type: string
+          description: Authorized OAuth scopes
+        expiresAt:
+          type: string
+          format: date-time
+          description: When the access token expires
+
+    GoogleCalendar:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          description: Google Calendar ID
+        name:
+          type: string
+          description: Calendar display name
+        description:
+          type: string
+          description: Calendar description
+        primary:
+          type: boolean
+          description: Whether this is the user's primary calendar
+        backgroundColor:
+          type: string
+          description: Calendar color (hex code)
+        accessRole:
+          type: string
+          enum: [owner, writer, reader, freeBusyReader]
+          description: User's access level to this calendar
+
+    UserCalendar:
+      type: object
+      required: [calendarId, name, enabled]
+      properties:
+        calendarId:
+          type: string
+          description: Google Calendar ID
+        name:
+          type: string
+          description: Calendar display name
+        enabled:
+          type: boolean
+          description: Whether this calendar is enabled for monitoring
+
+    SetSelectedCalendarsRequest:
+      type: object
+      required: [calendarIds]
+      properties:
+        calendarIds:
+          type: array
+          items:
+            type: string
+          description: List of calendar IDs to enable for monitoring
+
+    CalendarEvent:
+      type: object
+      required: [id, calendarId, summary, start, end]
+      properties:
+        id:
+          type: string
+          description: Google Calendar event ID
+        calendarId:
+          type: string
+          description: Calendar this event belongs to
+        summary:
+          type: string
+          description: Event title
+        description:
+          type: string
+          description: Event description
+        location:
+          type: string
+          description: Event location
+        start:
+          type: string
+          format: date-time
+          description: Event start time
+        end:
+          type: string
+          format: date-time
+          description: Event end time
+        allDay:
+          type: boolean
+          description: Whether this is an all-day event
+        htmlLink:
+          type: string
+          format: uri
+          description: Link to view event in Google Calendar
+
+    CalendarConflict:
+      type: object
+      required: [event, eventLocation, userLocation, date]
+      properties:
+        event:
+          $ref: '#/components/schemas/CalendarEvent'
+        eventLocation:
+          type: string
+          description: Location of the calendar event
+        userLocation:
+          type: string
+          description: Where the user will actually be (from trip)
+        date:
+          type: string
+          format: date
+          description: Date of the conflict
+        tripId:
+          type: string
+          format: uuid
+          description: ID of the trip causing the conflict
+        tripName:
+          type: string
+          description: Name of the trip causing the conflict
+
+    TripSuggestion:
+      type: object
+      required: [id, name, startDate, endDate, location, sourceEvents]
+      properties:
+        id:
+          type: string
+          description: Unique ID for this suggestion (for import)
+        name:
+          type: string
+          description: Suggested trip name
+        startDate:
+          type: string
+          format: date
+          description: Suggested start date
+        endDate:
+          type: string
+          format: date
+          description: Suggested end date
+        location:
+          type: string
+          description: Suggested destination
+        purpose:
+          $ref: '#/components/schemas/TripPurpose'
+        sourceEvents:
+          type: array
+          items:
+            $ref: '#/components/schemas/CalendarEvent'
+          description: Calendar events that led to this suggestion
+
+    SyncTripRequest:
+      type: object
+      properties:
+        targetCalendarId:
+          type: string
+          description: Which calendar to sync to (defaults to primary)
+        createEvents:
+          type: boolean
+          default: true
+          description: Whether to create new events
+        includeFlights:
+          type: boolean
+          default: true
+          description: Whether to include flight items
+        includeHotels:
+          type: boolean
+          default: true
+          description: Whether to include hotel items
+        includeEvents:
+          type: boolean
+          default: true
+          description: Whether to include event items
+
+    SyncTripResult:
+      type: object
+      required: [eventsCreated, eventsUpdated]
+      properties:
+        eventsCreated:
+          type: integer
+          description: Number of new events created
+        eventsUpdated:
+          type: integer
+          description: Number of existing events updated
+        calendarLinks:
+          type: array
+          items:
+            $ref: '#/components/schemas/CalendarLink'
+          description: Links between trip items and calendar events
+
+    CalendarLink:
+      type: object
+      required: [tripId, calendarId, eventId, syncedAt]
+      properties:
+        tripId:
+          type: string
+          format: uuid
+          description: Trip ID
+        itemId:
+          type: string
+          format: uuid
+          description: Item ID (if linked to a specific item)
+        calendarId:
+          type: string
+          description: Google Calendar ID
+        eventId:
+          type: string
+          description: Google Calendar event ID
+        syncedAt:
+          type: string
+          format: date-time
+          description: When this link was last synced
+        htmlLink:
+          type: string
+          format: uri
+          description: Link to view event in Google Calendar
