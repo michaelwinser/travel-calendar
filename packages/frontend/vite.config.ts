@@ -15,5 +15,9 @@ export default defineConfig({
 				changeOrigin: true
 			}
 		}
+	},
+	test: {
+		exclude: ['tests/browser/**', 'node_modules/**'],
+		passWithNoTests: true
 	}
 });
