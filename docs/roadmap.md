@@ -20,27 +20,54 @@ This roadmap tracks implementation progress for the Travel Calendar application.
 | MCP server: Trip tools | Done | UC-TRP-007 | Go implementation |
 | Trip search | Done | UC-TRP-006 | Full-text search on name/notes |
 | Trip items (flights, hotels) | Done | UC-TRP-003 | Flights, hotels, trains, drives, events |
-| Document upload | Not Started | - | File storage + association |
+| Document upload | Not Started | - | File storage + association (deferred) |
 | JSON import/export | Not Started | - | Backup/restore capability |
 
-**Next priority**: Document upload for trip attachments
+**Next priority**: Phase 2B Calendar Trip Intelligence (document upload deferred)
 
 ---
 
-## Next Up
+## Current Focus
 
 ### Phase 2: Calendar Integration
 
 **Goal**: Google Calendar sync for conflict detection and trip suggestions
 
+#### Phase 2A: OAuth Foundation (DONE)
+
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Google Calendar OAuth | In Progress | Phase 2A complete: OAuth flow, settings UI |
-| Read calendar for conflicts | Not Started | Detect home events during trips |
-| Suggest trips from calendar | Not Started | Events with locations → trip suggestions |
-| Write trips to calendar | Not Started | Optional, dedicated "Travel" calendar |
+| Google Calendar OAuth | Done | OAuth flow, settings UI, calendar selection |
 
-**Depends on**: Phase 1 MVP completion
+#### Phase 2B: Calendar Trip Intelligence (CURRENT)
+
+**Goal**: Import trips with items, TripIt support, smart suggestions
+
+| Feature | Status | Use Cases | Notes |
+|---------|--------|-----------|-------|
+| Suggest trips from calendar | In Progress | - | Basic suggestions work, filtering done (#28) |
+| Filter virtual meetings | Done | UC-CAL-010 | URLs and meeting rooms excluded (#28) |
+| Import trips with items | Not Started | UC-CAL-001 | Calendar events → trip items (#25) |
+| TripIt event parsing | Not Started | UC-CAL-002, UC-CAL-003 | Parse TripIt calendar format (#27) |
+| Event type classification | Not Started | UC-CAL-006 | All-day → trips, timed → items (#29) |
+| Merge candidate detection | Not Started | UC-CAL-005 | Show similar existing trips (#26) |
+
+**PRD**: [prd/calendar-trip-intelligence.md](prd/calendar-trip-intelligence.md)
+
+#### Phase 2C: Trip Relationships (LATER)
+
+| Feature | Status | Use Cases | Notes |
+|---------|--------|-----------|-------|
+| Merge with existing trips | Not Started | UC-CAL-004 | Perform merge on import (#26) |
+| Merge existing trips | Not Started | UC-CAL-009 | Combine two trips (#30) |
+| Nested/related trips | Not Started | UC-CAL-007, UC-CAL-008 | Link related trips (#30) |
+
+#### Phase 2D: Additional Calendar Features (LATER)
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Read calendar for conflicts | Not Started | Detect home events during trips |
+| Write trips to calendar | Not Started | Optional, dedicated "Travel" calendar |
 
 ---
 
@@ -105,7 +132,7 @@ This roadmap tracks implementation progress for the Travel Calendar application.
 
 ## Use Case Reference
 
-All use cases are defined in [prd/trip-management.md](prd/trip-management.md):
+### Trip Management ([prd/trip-management.md](prd/trip-management.md))
 
 | ID | Description | Status |
 |----|-------------|--------|
@@ -116,6 +143,21 @@ All use cases are defined in [prd/trip-management.md](prd/trip-management.md):
 | UC-TRP-005 | Delete trip and all items | Done |
 | UC-TRP-006 | Search trips by name or location | Done |
 | UC-TRP-007 | Ask LLM about next trip | Done (MCP server) |
+
+### Calendar Trip Intelligence ([prd/calendar-trip-intelligence.md](prd/calendar-trip-intelligence.md))
+
+| ID | Description | Status |
+|----|-------------|--------|
+| UC-CAL-001 | Import trip with travel items | Not Started |
+| UC-CAL-002 | Parse TripIt all-day summary event | Not Started |
+| UC-CAL-003 | Parse TripIt flight segment event | Not Started |
+| UC-CAL-004 | Merge imported trip with existing trip | Not Started |
+| UC-CAL-005 | Detect merge candidates for trip suggestion | Not Started |
+| UC-CAL-006 | Distinguish all-day events vs timed events | Not Started |
+| UC-CAL-007 | Create nested/related trips | Not Started |
+| UC-CAL-008 | Show related trips in UI | Not Started |
+| UC-CAL-009 | Merge two existing trips | Not Started |
+| UC-CAL-010 | Filter virtual meetings from suggestions | Done (#28) |
 
 ---
 
