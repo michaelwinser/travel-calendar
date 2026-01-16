@@ -29,6 +29,10 @@
 	let suggestionsFrom = today;
 	let suggestionsTo = ninetyDaysFromNow;
 
+	// Reset processed events state
+	let resettingProcessedEvents = false;
+	let resetSuccess = false;
+
 	onMount(async () => {
 		await calendarStore.loadAuthStatus();
 		loading = false;
@@ -196,6 +200,27 @@
 				return item.name || item.location || 'Event';
 			default:
 				return item.name || 'Item';
+		}
+	}
+
+	async function resetProcessedEvents() {
+		if (!confirm('Are you sure you want to reset processed events? This will allow previously dismissed or imported suggestions to reappear.')) {
+			return;
+		}
+
+		resettingProcessedEvents = true;
+		resetSuccess = false;
+		suggestionsError = '';
+
+		try {
+			await api.calendar.resetProcessedEvents();
+			resetSuccess = true;
+			// Clear current suggestions so user can re-fetch
+			suggestions = [];
+		} catch (err) {
+			suggestionsError = err instanceof Error ? err.message : 'Failed to reset processed events';
+		} finally {
+			resettingProcessedEvents = false;
 		}
 	}
 </script>
@@ -425,6 +450,27 @@
 								</button>
 							</div>
 						</div>
+
+						<!-- Reset processed events -->
+						<div class="flex items-center justify-between p-3 bg-gray-50 rounded-md mb-4">
+							<div>
+								<p class="text-sm font-medium text-gray-700">Reset processed events</p>
+								<p class="text-xs text-gray-500">Allow previously dismissed or imported suggestions to reappear</p>
+							</div>
+							<button
+								class="px-3 py-1.5 text-sm text-red-600 border border-red-200 rounded-md hover:bg-red-50 disabled:opacity-50"
+								disabled={resettingProcessedEvents}
+								on:click={resetProcessedEvents}
+							>
+								{resettingProcessedEvents ? 'Resetting...' : 'Reset'}
+							</button>
+						</div>
+
+						{#if resetSuccess}
+							<div class="mb-4 p-3 bg-green-50 text-green-700 rounded-md">
+								Processed events reset. Click "Find Travel Events" to see all suggestions again.
+							</div>
+						{/if}
 
 						{#if suggestionsError}
 							<div class="mb-4 p-3 bg-red-50 text-red-700 rounded-md">
