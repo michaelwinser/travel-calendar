@@ -16,6 +16,7 @@
 #   shell           Open shell in a container
 #   test            Run tests
 #   test-precommit  Fast pre-commit checks
+#   generate        Generate code from OpenAPI spec
 #
 #   db:reset    Reset database (delete and recreate)
 #   db:backup   Backup database to file
@@ -469,12 +470,54 @@ cmd_curl() {
 
     # Ensure backend is running (has curl installed)
     if ! docker compose ps backend 2>/dev/null | grep -q "running"; then
-        info "Starting backend container..."
-        docker compose up -d backend
+        info "Starting backend container..." >&2
+        docker compose up -d backend >/dev/null 2>&1
         sleep 3
     fi
 
-    docker compose exec backend curl "$@"
+    docker compose exec -T backend curl -s "$@"
+}
+
+# ===========================================
+# Commands: Code Generation
+# ===========================================
+
+cmd_generate() {
+    require_docker
+
+    target="${1:-all}"
+
+    case "$target" in
+        all)
+            info "Generating all code from OpenAPI spec..."
+            cmd_generate_backend
+            cmd_generate_shared
+            success "All code generation complete"
+            ;;
+        backend)
+            cmd_generate_backend
+            ;;
+        shared)
+            cmd_generate_shared
+            ;;
+        *)
+            error "Unknown generate target: $target. Use: all, backend, shared"
+            ;;
+    esac
+}
+
+cmd_generate_backend() {
+    info "Generating backend Go types from OpenAPI..."
+    docker compose run --rm --no-deps -T dev sh -c \
+        "cd packages/backend && oapi-codegen -generate types,chi-server -package api ../api/openapi.yaml > internal/api/openapi.gen.go 2>/dev/null"
+    success "Backend types generated"
+}
+
+cmd_generate_shared() {
+    info "Generating shared TypeScript types from OpenAPI..."
+    docker compose run --rm --no-deps -T dev sh -c \
+        "cd /app && pnpm --filter @travel-calendar/shared generate"
+    success "Shared types generated"
 }
 
 # ===========================================
@@ -543,6 +586,9 @@ Testing & Quality:
   test browser --video   Run browser tests with video recording
   test-precommit         Pre-commit checks (Go tests, type checking)
 
+Code Generation:
+  generate [target]      Generate code from OpenAPI (all, backend, shared)
+
 Health & Diagnostics:
   health [service]       Check service health (all, backend)
   curl <url> [opts]      Run curl inside backend container
@@ -566,6 +612,8 @@ Examples:
   ./tc curl http://localhost:3000/api/trips  # Call API endpoint
   ./tc test backend             # Run backend tests
   ./tc test-precommit           # Run pre-commit checks
+  ./tc generate                 # Regenerate all code from OpenAPI
+  ./tc generate backend         # Regenerate backend Go types only
   ./tc db:backup before-refactor  # Create named backup
   ./tc shell backend            # Shell into backend container
   ./tc clean volumes            # Remove containers and Go cache
@@ -590,6 +638,7 @@ case "$command" in
 
     test)       cmd_test "$@" ;;
     test-precommit)  cmd_test_precommit "$@" ;;
+    generate)   cmd_generate "$@" ;;
 
     db:reset)   cmd_db_reset "$@" ;;
     db:backup)  cmd_db_backup "$@" ;;

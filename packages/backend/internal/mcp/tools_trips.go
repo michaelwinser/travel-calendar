@@ -324,3 +324,111 @@ func (h *Handler) handleDeleteItem(args map[string]interface{}) (interface{}, er
 
 	return textResult("Item deleted successfully."), nil
 }
+
+func (h *Handler) handleMergeTrips(args map[string]interface{}) (interface{}, error) {
+	sourceIDStr, ok := args["source_id"].(string)
+	if !ok {
+		sourceIDStr, ok = args["sourceId"].(string)
+	}
+	if !ok || sourceIDStr == "" {
+		return errorResult(fmt.Errorf("missing required argument: source_id")), nil
+	}
+
+	targetIDStr, ok := args["target_id"].(string)
+	if !ok {
+		targetIDStr, ok = args["targetId"].(string)
+	}
+	if !ok || targetIDStr == "" {
+		return errorResult(fmt.Errorf("missing required argument: target_id")), nil
+	}
+
+	sourceID, err := uuid.Parse(sourceIDStr)
+	if err != nil {
+		return errorResult(fmt.Errorf("invalid source_id: %v", err)), nil
+	}
+
+	targetID, err := uuid.Parse(targetIDStr)
+	if err != nil {
+		return errorResult(fmt.Errorf("invalid target_id: %v", err)), nil
+	}
+
+	if sourceID == targetID {
+		return errorResult(fmt.Errorf("cannot merge trip into itself")), nil
+	}
+
+	req := &api.MergeTripsRequest{}
+	if v, ok := args["delete_source"].(bool); ok {
+		req.DeleteSource = &v
+	}
+	if v, ok := args["merge_notes"].(bool); ok {
+		req.MergeNotes = &v
+	}
+
+	trip, err := h.svc.MergeTrips(sourceID, targetID, req)
+	if err != nil {
+		return errorResult(fmt.Errorf("failed to merge trips: %w", err)), nil
+	}
+	if trip == nil {
+		return errorResult(fmt.Errorf("source or target trip not found")), nil
+	}
+
+	return textResult(fmt.Sprintf("Trips merged successfully!\n\n%s", FormatTrip(*trip))), nil
+}
+
+func (h *Handler) handleMoveItem(args map[string]interface{}) (interface{}, error) {
+	itemIDStr, ok := args["item_id"].(string)
+	if !ok {
+		itemIDStr, ok = args["itemId"].(string)
+	}
+	if !ok || itemIDStr == "" {
+		return errorResult(fmt.Errorf("missing required argument: item_id")), nil
+	}
+
+	itemID, err := uuid.Parse(itemIDStr)
+	if err != nil {
+		return errorResult(fmt.Errorf("invalid item_id: %v", err)), nil
+	}
+
+	req := &api.MoveItemRequest{}
+
+	// Check for target_trip_id (move to existing trip)
+	if targetIDStr, ok := args["target_trip_id"].(string); ok && targetIDStr != "" {
+		targetID, err := uuid.Parse(targetIDStr)
+		if err != nil {
+			return errorResult(fmt.Errorf("invalid target_trip_id: %v", err)), nil
+		}
+		openapiUUID := openapi_types.UUID(targetID)
+		req.TargetTripId = &openapiUUID
+	}
+
+	// Check for new trip creation
+	if name, ok := args["new_trip_name"].(string); ok && name != "" {
+		purposeStr, _ := args["new_trip_purpose"].(string)
+		if purposeStr == "" {
+			purposeStr = "other"
+		}
+		purpose := api.TripPurpose(purposeStr)
+		req.NewTrip = &api.CreateTripRequest{
+			Name:    name,
+			Purpose: purpose,
+		}
+	}
+
+	if req.TargetTripId == nil && req.NewTrip == nil {
+		return errorResult(fmt.Errorf("must provide target_trip_id or new_trip_name")), nil
+	}
+
+	result, err := h.svc.MoveItem(itemID, req)
+	if err != nil {
+		return errorResult(fmt.Errorf("failed to move item: %w", err)), nil
+	}
+	if result == nil {
+		return errorResult(fmt.Errorf("item not found")), nil
+	}
+
+	if result.Trip != nil {
+		return textResult(fmt.Sprintf("Item moved to new trip successfully!\n\nTrip:\n%s\n\nItem:\n%s",
+			FormatTrip(*result.Trip), FormatItem(result.Item))), nil
+	}
+	return textResult(fmt.Sprintf("Item moved successfully!\n\n%s", FormatItem(result.Item))), nil
+}

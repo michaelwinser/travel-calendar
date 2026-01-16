@@ -62,6 +62,19 @@ function createTripsStore() {
 		},
 
 		/**
+		 * Merge source trip into target trip
+		 * Source trip is deleted, all items moved to target
+		 */
+		async merge(sourceId: string, targetId: string): Promise<Trip> {
+			const merged = await api.trips.merge(sourceId, targetId);
+			// Remove source trip and update target
+			update((trips) =>
+				trips.filter((t) => t.id !== sourceId).map((t) => (t.id === targetId ? merged : t))
+			);
+			return merged;
+		},
+
+		/**
 		 * Clear the store
 		 */
 		clear(): void {

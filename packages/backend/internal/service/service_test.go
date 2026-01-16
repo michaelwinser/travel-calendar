@@ -402,3 +402,275 @@ func TestListDocuments_Empty(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, docs)
 }
+
+// =============================================================================
+// Trip Organization Tests
+// =============================================================================
+
+func TestMergeTrips_Success(t *testing.T) {
+	svc := setupTestService(t)
+
+	// Create source trip with items
+	source := createTestTrip(t, svc, "Source Trip", api.TripPurposeVacation)
+	sourceID := uuid.UUID(source.Id)
+	_, err := svc.CreateTripItem(sourceID, &api.CreateItemRequest{Type: api.Flight})
+	require.NoError(t, err)
+	_, err = svc.CreateTripItem(sourceID, &api.CreateItemRequest{Type: api.Hotel})
+	require.NoError(t, err)
+
+	// Create target trip with an item
+	target := createTestTrip(t, svc, "Target Trip", api.TripPurposeBusiness)
+	targetID := uuid.UUID(target.Id)
+	_, err = svc.CreateTripItem(targetID, &api.CreateItemRequest{Type: api.Event})
+	require.NoError(t, err)
+
+	// Merge source into target
+	req := &api.MergeTripsRequest{}
+	merged, err := svc.MergeTrips(sourceID, targetID, req)
+	require.NoError(t, err)
+	require.NotNil(t, merged)
+
+	// Target trip should now have all 3 items
+	assert.Len(t, *merged.Items, 3)
+
+	// Source trip should be deleted
+	deleted, err := svc.GetTrip(sourceID)
+	require.NoError(t, err)
+	assert.Nil(t, deleted)
+}
+
+func TestMergeTrips_ExtendsDates(t *testing.T) {
+	svc := setupTestService(t)
+
+	// Create source with wider date range
+	sourceReq := &api.CreateTripRequest{
+		Name:      "Source",
+		Purpose:   api.TripPurposeVacation,
+		StartDate: apiDate(2025, 1, 1),
+		EndDate:   apiDate(2025, 1, 20),
+	}
+	source, err := svc.CreateTrip(sourceReq)
+	require.NoError(t, err)
+	sourceID := uuid.UUID(source.Id)
+
+	// Create target with narrower date range
+	targetReq := &api.CreateTripRequest{
+		Name:      "Target",
+		Purpose:   api.TripPurposeBusiness,
+		StartDate: apiDate(2025, 1, 5),
+		EndDate:   apiDate(2025, 1, 15),
+	}
+	target, err := svc.CreateTrip(targetReq)
+	require.NoError(t, err)
+	targetID := uuid.UUID(target.Id)
+
+	// Merge - target dates should be extended
+	merged, err := svc.MergeTrips(sourceID, targetID, &api.MergeTripsRequest{})
+	require.NoError(t, err)
+	require.NotNil(t, merged)
+
+	// Target should have source's wider date range
+	assert.Equal(t, 2025, merged.StartDate.Time.Year())
+	assert.Equal(t, 1, int(merged.StartDate.Time.Month()))
+	assert.Equal(t, 1, merged.StartDate.Time.Day())
+	assert.Equal(t, 20, merged.EndDate.Time.Day())
+}
+
+func TestMergeTrips_ConcatenatesNotes(t *testing.T) {
+	svc := setupTestService(t)
+
+	// Create trips with notes
+	sourceNotes := "Source notes"
+	sourceReq := &api.CreateTripRequest{
+		Name:    "Source",
+		Purpose: api.TripPurposeVacation,
+		Notes:   &sourceNotes,
+	}
+	source, err := svc.CreateTrip(sourceReq)
+	require.NoError(t, err)
+
+	targetNotes := "Target notes"
+	targetReq := &api.CreateTripRequest{
+		Name:    "Target",
+		Purpose: api.TripPurposeBusiness,
+		Notes:   &targetNotes,
+	}
+	target, err := svc.CreateTrip(targetReq)
+	require.NoError(t, err)
+
+	// Merge with mergeNotes=true (default)
+	merged, err := svc.MergeTrips(uuid.UUID(source.Id), uuid.UUID(target.Id), &api.MergeTripsRequest{})
+	require.NoError(t, err)
+	require.NotNil(t, merged)
+	require.NotNil(t, merged.Notes)
+
+	// Notes should be concatenated
+	assert.Contains(t, *merged.Notes, "Target notes")
+	assert.Contains(t, *merged.Notes, "Source notes")
+}
+
+func TestMergeTrips_SameTripError(t *testing.T) {
+	svc := setupTestService(t)
+
+	trip := createTestTrip(t, svc, "Trip", api.TripPurposeVacation)
+	tripID := uuid.UUID(trip.Id)
+
+	// Try to merge trip into itself
+	_, err := svc.MergeTrips(tripID, tripID, &api.MergeTripsRequest{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot merge trip into itself")
+}
+
+func TestMergeTrips_SourceNotFound(t *testing.T) {
+	svc := setupTestService(t)
+
+	target := createTestTrip(t, svc, "Target", api.TripPurposeBusiness)
+
+	// Try to merge non-existent source
+	merged, err := svc.MergeTrips(uuid.New(), uuid.UUID(target.Id), &api.MergeTripsRequest{})
+	require.NoError(t, err)
+	assert.Nil(t, merged)
+}
+
+func TestMergeTrips_TargetNotFound(t *testing.T) {
+	svc := setupTestService(t)
+
+	source := createTestTrip(t, svc, "Source", api.TripPurposeVacation)
+
+	// Try to merge into non-existent target
+	merged, err := svc.MergeTrips(uuid.UUID(source.Id), uuid.New(), &api.MergeTripsRequest{})
+	require.NoError(t, err)
+	assert.Nil(t, merged)
+}
+
+func TestMoveItem_ToExistingTrip(t *testing.T) {
+	svc := setupTestService(t)
+
+	// Create two trips
+	trip1 := createTestTrip(t, svc, "Trip 1", api.TripPurposeVacation)
+	trip1ID := uuid.UUID(trip1.Id)
+	trip2 := createTestTrip(t, svc, "Trip 2", api.TripPurposeBusiness)
+	trip2ID := uuid.UUID(trip2.Id)
+
+	// Create item on trip 1
+	item, err := svc.CreateTripItem(trip1ID, &api.CreateItemRequest{Type: api.Flight})
+	require.NoError(t, err)
+	itemID := uuid.UUID(item.Id)
+
+	// Move item to trip 2
+	targetID := types.UUID(trip2ID)
+	result, err := svc.MoveItem(itemID, &api.MoveItemRequest{
+		TargetTripId: &targetID,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Item should now be on trip 2
+	assert.Equal(t, trip2ID, uuid.UUID(result.Item.TripId))
+
+	// Trip 1 should have no items
+	items1, err := svc.ListTripItems(trip1ID)
+	require.NoError(t, err)
+	assert.Empty(t, items1)
+
+	// Trip 2 should have the item
+	items2, err := svc.ListTripItems(trip2ID)
+	require.NoError(t, err)
+	assert.Len(t, items2, 1)
+}
+
+func TestMoveItem_CreateNewTrip(t *testing.T) {
+	svc := setupTestService(t)
+
+	// Create trip with item
+	trip := createTestTrip(t, svc, "Original Trip", api.TripPurposeVacation)
+	tripID := uuid.UUID(trip.Id)
+	item, err := svc.CreateTripItem(tripID, &api.CreateItemRequest{Type: api.Hotel})
+	require.NoError(t, err)
+	itemID := uuid.UUID(item.Id)
+
+	// Move item to new trip
+	result, err := svc.MoveItem(itemID, &api.MoveItemRequest{
+		NewTrip: &api.CreateTripRequest{
+			Name:    "New Trip",
+			Purpose: api.TripPurposeBusiness,
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.Trip)
+
+	// New trip should be created
+	assert.Equal(t, "New Trip", result.Trip.Name)
+	assert.Equal(t, api.TripPurposeBusiness, result.Trip.Purpose)
+
+	// Item should be on new trip
+	newTripID := uuid.UUID(result.Trip.Id)
+	assert.Equal(t, newTripID, uuid.UUID(result.Item.TripId))
+
+	// Original trip should have no items
+	items, err := svc.ListTripItems(tripID)
+	require.NoError(t, err)
+	assert.Empty(t, items)
+}
+
+func TestMoveItem_SameTripError(t *testing.T) {
+	svc := setupTestService(t)
+
+	trip := createTestTrip(t, svc, "Trip", api.TripPurposeVacation)
+	tripID := uuid.UUID(trip.Id)
+	item, err := svc.CreateTripItem(tripID, &api.CreateItemRequest{Type: api.Flight})
+	require.NoError(t, err)
+
+	// Try to move item to same trip
+	targetID := types.UUID(tripID)
+	_, err = svc.MoveItem(uuid.UUID(item.Id), &api.MoveItemRequest{
+		TargetTripId: &targetID,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "already on this trip")
+}
+
+func TestMoveItem_ItemNotFound(t *testing.T) {
+	svc := setupTestService(t)
+
+	trip := createTestTrip(t, svc, "Trip", api.TripPurposeVacation)
+	targetID := types.UUID(uuid.UUID(trip.Id))
+
+	// Try to move non-existent item
+	result, err := svc.MoveItem(uuid.New(), &api.MoveItemRequest{
+		TargetTripId: &targetID,
+	})
+	require.NoError(t, err)
+	assert.Nil(t, result)
+}
+
+func TestMoveItem_TargetTripNotFound(t *testing.T) {
+	svc := setupTestService(t)
+
+	// Create trip with item
+	trip := createTestTrip(t, svc, "Trip", api.TripPurposeVacation)
+	item, err := svc.CreateTripItem(uuid.UUID(trip.Id), &api.CreateItemRequest{Type: api.Flight})
+	require.NoError(t, err)
+
+	// Try to move to non-existent trip
+	nonExistentID := types.UUID(uuid.New())
+	_, err = svc.MoveItem(uuid.UUID(item.Id), &api.MoveItemRequest{
+		TargetTripId: &nonExistentID,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestMoveItem_MissingTarget(t *testing.T) {
+	svc := setupTestService(t)
+
+	trip := createTestTrip(t, svc, "Trip", api.TripPurposeVacation)
+	item, err := svc.CreateTripItem(uuid.UUID(trip.Id), &api.CreateItemRequest{Type: api.Flight})
+	require.NoError(t, err)
+
+	// Try to move without providing target
+	_, err = svc.MoveItem(uuid.UUID(item.Id), &api.MoveItemRequest{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must provide targetTripId or newTrip")
+}

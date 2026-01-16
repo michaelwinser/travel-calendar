@@ -163,6 +163,50 @@ func ptr(s string) *string {
 	return &s
 }
 
+func TestLocationsMatch(t *testing.T) {
+	tests := []struct {
+		loc1, loc2 string
+		want       bool
+	}{
+		// Exact matches
+		{"Paris", "Paris", true},
+		{"Paris", "paris", true},
+		{"paris", "Paris", true},
+
+		// With comma normalization
+		{"Paris", "Paris, France", true},
+		{"Brussels", "Brussels, Belgium", true},
+		{"New York", "New York, NY, USA", true},
+
+		// Aliases
+		{"NYC", "New York", true},
+		{"New York", "NYC", true},
+		{"SF", "San Francisco", true},
+		{"LA", "Los Angeles", true},
+		{"DC", "Washington", true},
+
+		// Non-matches
+		{"Paris", "London", false},
+		{"New York", "Los Angeles", false},
+		{"Brussels", "Amsterdam", false},
+
+		// Empty strings
+		{"", "Paris", false},
+		{"Paris", "", false},
+		{"", "", false},
+	}
+
+	for _, tt := range tests {
+		name := tt.loc1 + " vs " + tt.loc2
+		t.Run(name, func(t *testing.T) {
+			got := locationsMatch(tt.loc1, tt.loc2)
+			if got != tt.want {
+				t.Errorf("locationsMatch(%q, %q) = %v, want %v", tt.loc1, tt.loc2, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsMeetingRoomLocation(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -71,6 +71,12 @@ const (
 	Planning   TripStatus = "planning"
 )
 
+// Defines values for TripSuggestionSource.
+const (
+	Google TripSuggestionSource = "google"
+	Tripit TripSuggestionSource = "tripit"
+)
+
 // BaseLocations defines model for BaseLocations.
 type BaseLocations struct {
 	// Home Home location (default "Home" if not configured)
@@ -322,6 +328,37 @@ type LocationSource struct {
 // LocationSourceType The source of the location (home, work, or a trip)
 type LocationSourceType string
 
+// MergeCandidate defines model for MergeCandidate.
+type MergeCandidate struct {
+	// MatchReason Why this trip matches (e.g., "Same location, overlapping dates")
+	MatchReason string             `json:"matchReason"`
+	TripId      openapi_types.UUID `json:"tripId"`
+	TripName    string             `json:"tripName"`
+}
+
+// MergeTripsRequest defines model for MergeTripsRequest.
+type MergeTripsRequest struct {
+	// DeleteSource Whether to delete the source trip after merge
+	DeleteSource *bool `json:"deleteSource,omitempty"`
+
+	// MergeNotes Whether to concatenate notes from both trips
+	MergeNotes *bool `json:"mergeNotes,omitempty"`
+}
+
+// MoveItemRequest defines model for MoveItemRequest.
+type MoveItemRequest struct {
+	NewTrip *CreateTripRequest `json:"newTrip,omitempty"`
+
+	// TargetTripId ID of existing trip to move item to
+	TargetTripId *openapi_types.UUID `json:"targetTripId,omitempty"`
+}
+
+// MoveItemResponse defines model for MoveItemResponse.
+type MoveItemResponse struct {
+	Item Item  `json:"item"`
+	Trip *Trip `json:"trip,omitempty"`
+}
+
 // OAuthUrlResponse defines model for OAuthUrlResponse.
 type OAuthUrlResponse struct {
 	// Url OAuth authorization URL to redirect the user to
@@ -347,6 +384,23 @@ type SetTripLocationsRequest struct {
 
 	// Locations Per-date location overrides
 	Locations *[]TripDayLocation `json:"locations,omitempty"`
+}
+
+// SuggestedItem defines model for SuggestedItem.
+type SuggestedItem struct {
+	// CalendarEventId Source calendar event ID
+	CalendarEventId string              `json:"calendarEventId"`
+	Carrier         *string             `json:"carrier,omitempty"`
+	Confirmation    *string             `json:"confirmation,omitempty"`
+	Date            *openapi_types.Date `json:"date,omitempty"`
+	FlightNumber    *string             `json:"flightNumber,omitempty"`
+	From            *string             `json:"from,omitempty"`
+	Location        *string             `json:"location,omitempty"`
+	Name            *string             `json:"name,omitempty"`
+	Notes           *string             `json:"notes,omitempty"`
+	Time            *string             `json:"time,omitempty"`
+	To              *string             `json:"to,omitempty"`
+	Type            ItemType            `json:"type"`
 }
 
 // SyncTripRequest defines model for SyncTripRequest.
@@ -428,16 +482,28 @@ type TripSuggestion struct {
 	// Location Suggested destination
 	Location string `json:"location"`
 
+	// MergeCandidates Existing trips that could be merged with this suggestion
+	MergeCandidates *[]MergeCandidate `json:"mergeCandidates,omitempty"`
+
 	// Name Suggested trip name
 	Name    string       `json:"name"`
 	Purpose *TripPurpose `json:"purpose,omitempty"`
+
+	// Source Source of the suggestion (google calendar or tripit)
+	Source *TripSuggestionSource `json:"source,omitempty"`
 
 	// SourceEvents Calendar events that led to this suggestion
 	SourceEvents []CalendarEvent `json:"sourceEvents"`
 
 	// StartDate Suggested start date
 	StartDate openapi_types.Date `json:"startDate"`
+
+	// SuggestedItems Items parsed from source events (flights, hotels, events)
+	SuggestedItems *[]SuggestedItem `json:"suggestedItems,omitempty"`
 }
+
+// TripSuggestionSource Source of the suggestion (google calendar or tripit)
+type TripSuggestionSource string
 
 // UpdateTripRequest defines model for UpdateTripRequest.
 type UpdateTripRequest struct {
@@ -560,8 +626,14 @@ type SetSelectedCalendarsJSONRequestBody = SetSelectedCalendarsRequest
 // SetBaseLocationsJSONRequestBody defines body for SetBaseLocations for application/json ContentType.
 type SetBaseLocationsJSONRequestBody = SetBaseLocationsRequest
 
+// MoveItemJSONRequestBody defines body for MoveItem for application/json ContentType.
+type MoveItemJSONRequestBody = MoveItemRequest
+
 // CreateTripJSONRequestBody defines body for CreateTrip for application/json ContentType.
 type CreateTripJSONRequestBody = CreateTripRequest
+
+// MergeTripsJSONRequestBody defines body for MergeTrips for application/json ContentType.
+type MergeTripsJSONRequestBody = MergeTripsRequest
 
 // UpdateTripJSONRequestBody defines body for UpdateTrip for application/json ContentType.
 type UpdateTripJSONRequestBody = UpdateTripRequest
@@ -595,12 +667,21 @@ type ServerInterface interface {
 	// List calendar events
 	// (GET /api/calendar/events)
 	ListCalendarEvents(w http.ResponseWriter, r *http.Request, params ListCalendarEventsParams)
+	// Reset all processed calendar events
+	// (DELETE /api/calendar/processed-events)
+	ResetProcessedEvents(w http.ResponseWriter, r *http.Request)
 	// Suggest trips from calendar events
 	// (GET /api/calendar/trip-suggestions)
 	SuggestTripsFromCalendar(w http.ResponseWriter, r *http.Request, params SuggestTripsFromCalendarParams)
+	// Dismiss a trip suggestion
+	// (POST /api/calendar/trip-suggestions/{suggestionId}/dismiss)
+	DismissTripSuggestion(w http.ResponseWriter, r *http.Request, suggestionId string)
 	// Import a trip suggestion
 	// (POST /api/calendar/trip-suggestions/{suggestionId}/import)
 	ImportTripSuggestion(w http.ResponseWriter, r *http.Request, suggestionId string)
+	// Merge a trip suggestion into an existing trip
+	// (POST /api/calendar/trip-suggestions/{suggestionId}/merge/{tripId})
+	MergeTripSuggestion(w http.ResponseWriter, r *http.Request, suggestionId string, tripId openapi_types.UUID)
 	// List available Google Calendars
 	// (GET /api/calendars)
 	ListCalendars(w http.ResponseWriter, r *http.Request)
@@ -622,6 +703,9 @@ type ServerInterface interface {
 	// Delete an item
 	// (DELETE /api/items/{itemId})
 	DeleteItem(w http.ResponseWriter, r *http.Request, itemId ItemId)
+	// Move an item to another trip
+	// (POST /api/items/{itemId}/move)
+	MoveItem(w http.ResponseWriter, r *http.Request, itemId ItemId)
 	// Get user location on a specific date
 	// (GET /api/location/on/{date})
 	GetLocationOnDate(w http.ResponseWriter, r *http.Request, date openapi_types.Date)
@@ -637,6 +721,9 @@ type ServerInterface interface {
 	// Search trips
 	// (GET /api/trips/search)
 	SearchTrips(w http.ResponseWriter, r *http.Request, params SearchTripsParams)
+	// Merge one trip into another
+	// (POST /api/trips/{sourceId}/merge/{targetId})
+	MergeTrips(w http.ResponseWriter, r *http.Request, sourceId openapi_types.UUID, targetId openapi_types.UUID)
 	// Delete a trip
 	// (DELETE /api/trips/{tripId})
 	DeleteTrip(w http.ResponseWriter, r *http.Request, tripId TripId)
@@ -709,15 +796,33 @@ func (_ Unimplemented) ListCalendarEvents(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Reset all processed calendar events
+// (DELETE /api/calendar/processed-events)
+func (_ Unimplemented) ResetProcessedEvents(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Suggest trips from calendar events
 // (GET /api/calendar/trip-suggestions)
 func (_ Unimplemented) SuggestTripsFromCalendar(w http.ResponseWriter, r *http.Request, params SuggestTripsFromCalendarParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Dismiss a trip suggestion
+// (POST /api/calendar/trip-suggestions/{suggestionId}/dismiss)
+func (_ Unimplemented) DismissTripSuggestion(w http.ResponseWriter, r *http.Request, suggestionId string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Import a trip suggestion
 // (POST /api/calendar/trip-suggestions/{suggestionId}/import)
 func (_ Unimplemented) ImportTripSuggestion(w http.ResponseWriter, r *http.Request, suggestionId string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Merge a trip suggestion into an existing trip
+// (POST /api/calendar/trip-suggestions/{suggestionId}/merge/{tripId})
+func (_ Unimplemented) MergeTripSuggestion(w http.ResponseWriter, r *http.Request, suggestionId string, tripId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -763,6 +868,12 @@ func (_ Unimplemented) DeleteItem(w http.ResponseWriter, r *http.Request, itemId
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Move an item to another trip
+// (POST /api/items/{itemId}/move)
+func (_ Unimplemented) MoveItem(w http.ResponseWriter, r *http.Request, itemId ItemId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Get user location on a specific date
 // (GET /api/location/on/{date})
 func (_ Unimplemented) GetLocationOnDate(w http.ResponseWriter, r *http.Request, date openapi_types.Date) {
@@ -790,6 +901,12 @@ func (_ Unimplemented) CreateTrip(w http.ResponseWriter, r *http.Request) {
 // Search trips
 // (GET /api/trips/search)
 func (_ Unimplemented) SearchTrips(w http.ResponseWriter, r *http.Request, params SearchTripsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Merge one trip into another
+// (POST /api/trips/{sourceId}/merge/{targetId})
+func (_ Unimplemented) MergeTrips(w http.ResponseWriter, r *http.Request, sourceId openapi_types.UUID, targetId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1067,6 +1184,20 @@ func (siw *ServerInterfaceWrapper) ListCalendarEvents(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// ResetProcessedEvents operation middleware
+func (siw *ServerInterfaceWrapper) ResetProcessedEvents(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResetProcessedEvents(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SuggestTripsFromCalendar operation middleware
 func (siw *ServerInterfaceWrapper) SuggestTripsFromCalendar(w http.ResponseWriter, r *http.Request) {
 
@@ -1102,6 +1233,31 @@ func (siw *ServerInterfaceWrapper) SuggestTripsFromCalendar(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
+// DismissTripSuggestion operation middleware
+func (siw *ServerInterfaceWrapper) DismissTripSuggestion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "suggestionId" -------------
+	var suggestionId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "suggestionId", chi.URLParam(r, "suggestionId"), &suggestionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "suggestionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DismissTripSuggestion(w, r, suggestionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ImportTripSuggestion operation middleware
 func (siw *ServerInterfaceWrapper) ImportTripSuggestion(w http.ResponseWriter, r *http.Request) {
 
@@ -1118,6 +1274,40 @@ func (siw *ServerInterfaceWrapper) ImportTripSuggestion(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ImportTripSuggestion(w, r, suggestionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MergeTripSuggestion operation middleware
+func (siw *ServerInterfaceWrapper) MergeTripSuggestion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "suggestionId" -------------
+	var suggestionId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "suggestionId", chi.URLParam(r, "suggestionId"), &suggestionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "suggestionId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "tripId" -------------
+	var tripId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "tripId", chi.URLParam(r, "tripId"), &tripId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tripId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MergeTripSuggestion(w, r, suggestionId, tripId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1248,6 +1438,31 @@ func (siw *ServerInterfaceWrapper) DeleteItem(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteItem(w, r, itemId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MoveItem operation middleware
+func (siw *ServerInterfaceWrapper) MoveItem(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "itemId" -------------
+	var itemId ItemId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "itemId", chi.URLParam(r, "itemId"), &itemId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "itemId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MoveItem(w, r, itemId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1413,6 +1628,40 @@ func (siw *ServerInterfaceWrapper) SearchTrips(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SearchTrips(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MergeTrips operation middleware
+func (siw *ServerInterfaceWrapper) MergeTrips(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "sourceId" -------------
+	var sourceId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sourceId", chi.URLParam(r, "sourceId"), &sourceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "targetId" -------------
+	var targetId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "targetId", chi.URLParam(r, "targetId"), &targetId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MergeTrips(w, r, sourceId, targetId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1793,10 +2042,19 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/api/calendar/events", wrapper.ListCalendarEvents)
 	})
 	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/api/calendar/processed-events", wrapper.ResetProcessedEvents)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/calendar/trip-suggestions", wrapper.SuggestTripsFromCalendar)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/calendar/trip-suggestions/{suggestionId}/dismiss", wrapper.DismissTripSuggestion)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/api/calendar/trip-suggestions/{suggestionId}/import", wrapper.ImportTripSuggestion)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/calendar/trip-suggestions/{suggestionId}/merge/{tripId}", wrapper.MergeTripSuggestion)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/calendars", wrapper.ListCalendars)
@@ -1820,6 +2078,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Delete(options.BaseURL+"/api/items/{itemId}", wrapper.DeleteItem)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/items/{itemId}/move", wrapper.MoveItem)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/location/on/{date}", wrapper.GetLocationOnDate)
 	})
 	r.Group(func(r chi.Router) {
@@ -1833,6 +2094,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/trips/search", wrapper.SearchTrips)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/trips/{sourceId}/merge/{targetId}", wrapper.MergeTrips)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/api/trips/{tripId}", wrapper.DeleteTrip)

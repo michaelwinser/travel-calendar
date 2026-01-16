@@ -124,6 +124,144 @@ func (s *Service) SearchTrips(q string) ([]api.Trip, error) {
 	return result, nil
 }
 
+// Trip Organization operations
+
+// MergeTrips merges a source trip into a target trip.
+// All items are moved from source to target, dates are extended if needed,
+// notes are concatenated if mergeNotes is true, and source is deleted.
+func (s *Service) MergeTrips(sourceID, targetID uuid.UUID, req *api.MergeTripsRequest) (*api.Trip, error) {
+	// Validate both trips exist
+	source, err := s.store.GetTrip(sourceID)
+	if err != nil {
+		return nil, fmt.Errorf("getting source trip: %w", err)
+	}
+	if source == nil {
+		return nil, nil // Not found
+	}
+
+	target, err := s.store.GetTrip(targetID)
+	if err != nil {
+		return nil, fmt.Errorf("getting target trip: %w", err)
+	}
+	if target == nil {
+		return nil, nil // Not found
+	}
+
+	// Cannot merge trip into itself
+	if sourceID == targetID {
+		return nil, fmt.Errorf("cannot merge trip into itself")
+	}
+
+	// Extend target dates if source dates are outside target range
+	datesChanged := false
+	if source.StartDate != nil {
+		if target.StartDate == nil || source.StartDate.Before(*target.StartDate) {
+			target.StartDate = source.StartDate
+			datesChanged = true
+		}
+	}
+	if source.EndDate != nil {
+		if target.EndDate == nil || source.EndDate.After(*target.EndDate) {
+			target.EndDate = source.EndDate
+			datesChanged = true
+		}
+	}
+
+	// Concatenate notes if requested (defaults to true)
+	mergeNotes := req.MergeNotes == nil || *req.MergeNotes
+	if mergeNotes && source.Notes != nil && *source.Notes != "" {
+		if target.Notes != nil && *target.Notes != "" {
+			combined := *target.Notes + "\n\n---\n\n" + *source.Notes
+			target.Notes = &combined
+		} else {
+			target.Notes = source.Notes
+		}
+	}
+
+	// Update target trip with extended dates/notes if changed
+	if datesChanged || (mergeNotes && source.Notes != nil) {
+		target.UpdatedAt = time.Now()
+		if err := s.store.UpdateTrip(target); err != nil {
+			return nil, fmt.Errorf("updating target trip: %w", err)
+		}
+	}
+
+	// Execute merge transaction (moves items, merges locations, deletes source)
+	deleteSource := req.DeleteSource == nil || *req.DeleteSource
+	if deleteSource {
+		if err := s.store.MergeTripsTransaction(sourceID, targetID); err != nil {
+			return nil, fmt.Errorf("executing merge: %w", err)
+		}
+	}
+
+	// Return updated target trip with items
+	return s.GetTrip(targetID)
+}
+
+// MoveItem moves an item to a different trip.
+// If targetTripId is provided, moves to that trip.
+// If newTrip is provided, creates a new trip and moves item to it.
+func (s *Service) MoveItem(itemID uuid.UUID, req *api.MoveItemRequest) (*api.MoveItemResponse, error) {
+	// Get the item to verify it exists
+	item, err := s.store.GetItem(itemID)
+	if err != nil {
+		return nil, fmt.Errorf("getting item: %w", err)
+	}
+	if item == nil {
+		return nil, nil // Not found
+	}
+
+	var targetTripID uuid.UUID
+	var createdTrip *api.Trip
+
+	// Determine target trip
+	if req.TargetTripId != nil {
+		// Move to existing trip
+		targetTripID = uuid.UUID(*req.TargetTripId)
+
+		// Verify target trip exists
+		targetTrip, err := s.store.GetTrip(targetTripID)
+		if err != nil {
+			return nil, fmt.Errorf("getting target trip: %w", err)
+		}
+		if targetTrip == nil {
+			return nil, fmt.Errorf("target trip not found")
+		}
+
+		// Cannot move to same trip
+		if targetTripID == item.TripID {
+			return nil, fmt.Errorf("item is already on this trip")
+		}
+	} else if req.NewTrip != nil {
+		// Create new trip
+		trip, err := s.CreateTrip(req.NewTrip)
+		if err != nil {
+			return nil, fmt.Errorf("creating new trip: %w", err)
+		}
+		targetTripID = uuid.UUID(trip.Id)
+		createdTrip = trip
+	} else {
+		return nil, fmt.Errorf("must provide targetTripId or newTrip")
+	}
+
+	// Update item's trip assignment
+	if err := s.store.UpdateItemTrip(itemID, targetTripID); err != nil {
+		return nil, fmt.Errorf("moving item: %w", err)
+	}
+
+	// Get updated item
+	item, err = s.store.GetItem(itemID)
+	if err != nil {
+		return nil, fmt.Errorf("getting moved item: %w", err)
+	}
+
+	apiItem := item.ToAPI()
+	return &api.MoveItemResponse{
+		Item: apiItem,
+		Trip: createdTrip,
+	}, nil
+}
+
 // Item operations
 
 // ListTripItems returns all items for a trip.

@@ -8,18 +8,19 @@
 
 	export let item: Item;
 	export let onDelete: ((item: Item) => void) | undefined = undefined;
+	export let onMove: ((item: Item) => void) | undefined = undefined;
 </script>
 
 {#if item.type === 'flight'}
-	<FlightCard {item} {onDelete} />
+	<FlightCard {item} {onDelete} {onMove} />
 {:else if item.type === 'hotel'}
-	<HotelCard {item} {onDelete} />
+	<HotelCard {item} {onDelete} {onMove} />
 {:else if item.type === 'train'}
-	<TrainCard {item} {onDelete} />
+	<TrainCard {item} {onDelete} {onMove} />
 {:else if item.type === 'event'}
-	<EventCard {item} {onDelete} />
+	<EventCard {item} {onDelete} {onMove} />
 {:else if item.type === 'drive'}
-	<DriveCard {item} {onDelete} />
+	<DriveCard {item} {onDelete} {onMove} />
 {:else}
 	<!-- Fallback for unknown types -->
 	<div class="bg-white rounded-lg shadow-sm border p-4">

@@ -145,6 +145,20 @@ func (s *Store) migrate() error {
 
 	CREATE INDEX IF NOT EXISTS idx_calendar_links_trip ON calendar_links(trip_id);
 	CREATE INDEX IF NOT EXISTS idx_calendar_links_event ON calendar_links(calendar_id, event_id);
+
+	-- Processed calendar events tracking (for suggestion deduplication)
+	CREATE TABLE IF NOT EXISTS processed_calendar_events (
+		id TEXT PRIMARY KEY,
+		calendar_event_id TEXT NOT NULL,
+		calendar_id TEXT NOT NULL,
+		action TEXT NOT NULL,
+		trip_id TEXT,
+		item_id TEXT,
+		processed_at TEXT NOT NULL,
+		UNIQUE(calendar_id, calendar_event_id)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_processed_events_calendar ON processed_calendar_events(calendar_id);
 	`
 
 	_, err := s.db.Exec(schema)
@@ -368,6 +382,111 @@ func (s *Store) DeleteItem(id uuid.UUID) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+// UpdateItemTrip updates an item's trip assignment.
+func (s *Store) UpdateItemTrip(itemID, newTripID uuid.UUID) error {
+	query := `UPDATE items SET trip_id = ?, updated_at = ? WHERE id = ?`
+	result, err := s.db.Exec(query, newTripID.String(), time.Now().Format(time.RFC3339), itemID.String())
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// MergeTripsTransaction executes a complete trip merge within a transaction.
+// Moves all items from source to target, merges locations, and deletes source.
+func (s *Store) MergeTripsTransaction(sourceID, targetID uuid.UUID) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	now := time.Now().Format(time.RFC3339)
+
+	// Move all items from source to target
+	_, err = tx.Exec(
+		`UPDATE items SET trip_id = ?, updated_at = ? WHERE trip_id = ?`,
+		targetID.String(),
+		now,
+		sourceID.String(),
+	)
+	if err != nil {
+		return fmt.Errorf("moving items: %w", err)
+	}
+
+	// Copy locations from source to target for dates not already in target.
+	// First get target dates to exclude.
+	rows, err := tx.Query(
+		`SELECT date FROM trip_locations WHERE trip_id = ?`,
+		targetID.String(),
+	)
+	if err != nil {
+		return fmt.Errorf("getting target dates: %w", err)
+	}
+	targetDates := make(map[string]bool)
+	for rows.Next() {
+		var date string
+		if err := rows.Scan(&date); err != nil {
+			rows.Close()
+			return fmt.Errorf("scanning target date: %w", err)
+		}
+		targetDates[date] = true
+	}
+	rows.Close()
+
+	// Get source locations and insert those for dates not in target.
+	rows, err = tx.Query(
+		`SELECT date, location FROM trip_locations WHERE trip_id = ?`,
+		sourceID.String(),
+	)
+	if err != nil {
+		return fmt.Errorf("getting source locations: %w", err)
+	}
+
+	insertStmt, err := tx.Prepare(
+		`INSERT INTO trip_locations (id, trip_id, date, location, created_at) VALUES (?, ?, ?, ?, ?)`,
+	)
+	if err != nil {
+		rows.Close()
+		return fmt.Errorf("preparing insert: %w", err)
+	}
+	defer insertStmt.Close()
+
+	for rows.Next() {
+		var date, location string
+		if err := rows.Scan(&date, &location); err != nil {
+			rows.Close()
+			return fmt.Errorf("scanning source location: %w", err)
+		}
+		// Only insert if target doesn't have this date
+		if !targetDates[date] {
+			newID := uuid.New()
+			_, err := insertStmt.Exec(newID.String(), targetID.String(), date, location, now)
+			if err != nil {
+				rows.Close()
+				return fmt.Errorf("inserting location: %w", err)
+			}
+			targetDates[date] = true // Avoid duplicates if source has multiple locations per date
+		}
+	}
+	rows.Close()
+
+	// Delete source trip (cascade will delete orphaned locations)
+	_, err = tx.Exec("DELETE FROM trips WHERE id = ?", sourceID.String())
+	if err != nil {
+		return fmt.Errorf("deleting source trip: %w", err)
+	}
+
+	return tx.Commit()
 }
 
 // Document methods
@@ -1092,6 +1211,142 @@ func scanCalendarLinkRow(row *sql.Row) (entity.CalendarLink, error) {
 	}
 
 	return link, nil
+}
+
+// Processed Calendar Events methods
+
+// CreateProcessedEvent saves a record of a processed calendar event.
+func (s *Store) CreateProcessedEvent(event *entity.ProcessedCalendarEvent) error {
+	query := `INSERT INTO processed_calendar_events
+		(id, calendar_event_id, calendar_id, action, trip_id, item_id, processed_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`
+
+	var tripID, itemID sql.NullString
+	if event.TripID != nil {
+		tripID = sql.NullString{String: event.TripID.String(), Valid: true}
+	}
+	if event.ItemID != nil {
+		itemID = sql.NullString{String: event.ItemID.String(), Valid: true}
+	}
+
+	_, err := s.db.Exec(query,
+		event.ID.String(),
+		event.CalendarEventID,
+		event.CalendarID,
+		event.Action,
+		tripID,
+		itemID,
+		event.ProcessedAt.Format(time.RFC3339),
+	)
+	return err
+}
+
+// GetProcessedEventByCalendarEvent retrieves a processed event by its calendar event ID.
+func (s *Store) GetProcessedEventByCalendarEvent(calendarID, eventID string) (*entity.ProcessedCalendarEvent, error) {
+	query := `SELECT id, calendar_event_id, calendar_id, action, trip_id, item_id, processed_at
+		FROM processed_calendar_events WHERE calendar_id = ? AND calendar_event_id = ?`
+
+	row := s.db.QueryRow(query, calendarID, eventID)
+	event, err := scanProcessedEventRow(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &event, nil
+}
+
+// IsEventProcessed checks if a calendar event has already been processed.
+func (s *Store) IsEventProcessed(calendarID, eventID string) (bool, error) {
+	query := `SELECT 1 FROM processed_calendar_events WHERE calendar_id = ? AND calendar_event_id = ? LIMIT 1`
+	var exists int
+	err := s.db.QueryRow(query, calendarID, eventID).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// ListProcessedEvents returns all processed events for a calendar.
+func (s *Store) ListProcessedEvents(calendarID string) ([]entity.ProcessedCalendarEvent, error) {
+	query := `SELECT id, calendar_event_id, calendar_id, action, trip_id, item_id, processed_at
+		FROM processed_calendar_events WHERE calendar_id = ? ORDER BY processed_at DESC`
+
+	rows, err := s.db.Query(query, calendarID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []entity.ProcessedCalendarEvent
+	for rows.Next() {
+		event, err := scanProcessedEvent(rows)
+		if err != nil {
+			return nil, err
+		}
+		events = append(events, event)
+	}
+	return events, rows.Err()
+}
+
+// DeleteAllProcessedEvents removes all processed event records (for reset functionality).
+func (s *Store) DeleteAllProcessedEvents() error {
+	_, err := s.db.Exec("DELETE FROM processed_calendar_events")
+	return err
+}
+
+func scanProcessedEvent(rows *sql.Rows) (entity.ProcessedCalendarEvent, error) {
+	var event entity.ProcessedCalendarEvent
+	var id, processedAt string
+	var tripID, itemID sql.NullString
+
+	err := rows.Scan(&id, &event.CalendarEventID, &event.CalendarID, &event.Action, &tripID, &itemID, &processedAt)
+	if err != nil {
+		return event, err
+	}
+
+	event.ID, _ = uuid.Parse(id)
+	event.ProcessedAt, _ = time.Parse(time.RFC3339, processedAt)
+
+	if tripID.Valid && tripID.String != "" {
+		tid, _ := uuid.Parse(tripID.String)
+		event.TripID = &tid
+	}
+	if itemID.Valid && itemID.String != "" {
+		iid, _ := uuid.Parse(itemID.String)
+		event.ItemID = &iid
+	}
+
+	return event, nil
+}
+
+func scanProcessedEventRow(row *sql.Row) (entity.ProcessedCalendarEvent, error) {
+	var event entity.ProcessedCalendarEvent
+	var id, processedAt string
+	var tripID, itemID sql.NullString
+
+	err := row.Scan(&id, &event.CalendarEventID, &event.CalendarID, &event.Action, &tripID, &itemID, &processedAt)
+	if err != nil {
+		return event, err
+	}
+
+	event.ID, _ = uuid.Parse(id)
+	event.ProcessedAt, _ = time.Parse(time.RFC3339, processedAt)
+
+	if tripID.Valid && tripID.String != "" {
+		tid, _ := uuid.Parse(tripID.String)
+		event.TripID = &tid
+	}
+	if itemID.Valid && itemID.String != "" {
+		iid, _ := uuid.Parse(itemID.String)
+		event.ItemID = &iid
+	}
+
+	return event, nil
 }
 
 // Silence the unused import warning

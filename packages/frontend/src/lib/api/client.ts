@@ -24,7 +24,12 @@ import type {
 	GoogleAuthStatus,
 	GoogleCalendar,
 	UserCalendar,
-	SetSelectedCalendarsRequest
+	SetSelectedCalendarsRequest,
+	CalendarEvent,
+	TripSuggestion,
+	MergeTripsRequest,
+	MoveItemRequest,
+	MoveItemResponse
 } from '@travel-calendar/shared';
 
 // In development, Vite proxies /api to localhost:3000
@@ -127,6 +132,15 @@ export const api = {
 				method: 'DELETE'
 			});
 			return handleResponse<void>(response);
+		},
+
+		async merge(sourceId: string, targetId: string, options?: MergeTripsRequest): Promise<Trip> {
+			const response = await fetch(`${API_BASE}/api/trips/${sourceId}/merge/${targetId}`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(options || {})
+			});
+			return handleResponse<Trip>(response);
 		}
 	},
 
@@ -150,6 +164,15 @@ export const api = {
 				method: 'DELETE'
 			});
 			return handleResponse<void>(response);
+		},
+
+		async move(itemId: string, request: MoveItemRequest): Promise<MoveItemResponse> {
+			const response = await fetch(`${API_BASE}/api/items/${itemId}/move`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(request)
+			});
+			return handleResponse<MoveItemResponse>(response);
 		}
 	},
 
@@ -238,6 +261,51 @@ export const api = {
 				body: JSON.stringify(input)
 			});
 			return handleResponse<UserCalendar[]>(response);
+		},
+
+		async listEvents(from: string, to: string, calendarId?: string): Promise<CalendarEvent[]> {
+			const params: Record<string, string | undefined> = { from, to };
+			if (calendarId) params.calendarId = calendarId;
+			const qs = buildQueryString(params);
+			const response = await fetch(`${API_BASE}/api/calendar/events${qs}`);
+			return handleResponse<CalendarEvent[]>(response);
+		},
+
+		async getTripSuggestions(from?: string, to?: string): Promise<TripSuggestion[]> {
+			const params: Record<string, string | undefined> = {};
+			if (from) params.from = from;
+			if (to) params.to = to;
+			const qs = buildQueryString(params);
+			const response = await fetch(`${API_BASE}/api/calendar/trip-suggestions${qs}`);
+			return handleResponse<TripSuggestion[]>(response);
+		},
+
+		async importSuggestion(suggestionId: string): Promise<Trip> {
+			const response = await fetch(`${API_BASE}/api/calendar/trip-suggestions/${suggestionId}/import`, {
+				method: 'POST'
+			});
+			return handleResponse<Trip>(response);
+		},
+
+		async dismissSuggestion(suggestionId: string): Promise<void> {
+			const response = await fetch(`${API_BASE}/api/calendar/trip-suggestions/${suggestionId}/dismiss`, {
+				method: 'POST'
+			});
+			return handleResponse<void>(response);
+		},
+
+		async mergeSuggestion(suggestionId: string, tripId: string): Promise<Trip> {
+			const response = await fetch(`${API_BASE}/api/calendar/trip-suggestions/${suggestionId}/merge/${tripId}`, {
+				method: 'POST'
+			});
+			return handleResponse<Trip>(response);
+		},
+
+		async resetProcessedEvents(): Promise<void> {
+			const response = await fetch(`${API_BASE}/api/calendar/processed-events`, {
+				method: 'DELETE'
+			});
+			return handleResponse<void>(response);
 		}
 	}
 };

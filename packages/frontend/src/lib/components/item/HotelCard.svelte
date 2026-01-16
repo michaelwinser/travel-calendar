@@ -3,6 +3,7 @@
 
 	export let item: Item;
 	export let onDelete: ((item: Item) => void) | undefined = undefined;
+	export let onMove: ((item: Item) => void) | undefined = undefined;
 
 	function getNights(checkIn: string | undefined, checkOut: string | undefined): number {
 		if (!checkIn || !checkOut) return 0;
@@ -51,21 +52,43 @@
 			{/if}
 		</div>
 
-		{#if onDelete}
-			<button
-				type="button"
-				on:click={() => onDelete?.(item)}
-				class="text-gray-400 hover:text-red-500"
-			>
-				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M6 18L18 6M6 6l12 12"
-					/>
-				</svg>
-			</button>
+		{#if onMove || onDelete}
+			<div class="flex gap-1">
+				{#if onMove}
+					<button
+						type="button"
+						on:click={() => onMove?.(item)}
+						class="text-gray-400 hover:text-blue-500"
+						title="Move to another trip"
+					>
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+							/>
+						</svg>
+					</button>
+				{/if}
+				{#if onDelete}
+					<button
+						type="button"
+						on:click={() => onDelete?.(item)}
+						class="text-gray-400 hover:text-red-500"
+						title="Delete"
+					>
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M6 18L18 6M6 6l12 12"
+							/>
+						</svg>
+					</button>
+				{/if}
+			</div>
 		{/if}
 	</div>
 </div>

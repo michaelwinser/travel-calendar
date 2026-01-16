@@ -2,20 +2,24 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import type { Item } from '@travel-calendar/shared';
-	import { currentTrip } from '$lib/stores';
+	import type { Item, Trip } from '@travel-calendar/shared';
+	import { currentTrip, trips } from '$lib/stores';
 	import { api } from '$lib/api';
 	import Header from '$lib/components/ui/Header.svelte';
 	import TripBadge from '$lib/components/trip/TripBadge.svelte';
 	import ItemCard from '$lib/components/item/ItemCard.svelte';
 	import ItemForm from '$lib/components/item/ItemForm.svelte';
 	import LocationEditor from '$lib/components/location/LocationEditor.svelte';
+	import TripPickerModal from '$lib/components/trip/TripPickerModal.svelte';
 
 	let loading = true;
 	let error: string | null = null;
 	let deleting = false;
 	let showLocations = false;
 	let showAddItem = false;
+	let showMergeModal = false;
+	let showMoveModal = false;
+	let itemToMove: Item | null = null;
 
 	$: tripId = $page.params.id;
 
@@ -58,6 +62,43 @@
 		// Reload the trip to get updated items
 		await currentTrip.load(tripId);
 		showAddItem = false;
+	}
+
+	async function handleMerge(targetTrip: Trip) {
+		if (!$currentTrip) return;
+		if (!confirm(`Merge "${$currentTrip.name}" into "${targetTrip.name}"? All items will be moved and this trip will be deleted.`)) {
+			showMergeModal = false;
+			return;
+		}
+
+		try {
+			await trips.merge($currentTrip.id, targetTrip.id);
+			goto(`/trips/${targetTrip.id}`);
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to merge trips';
+			showMergeModal = false;
+		}
+	}
+
+	function handleMoveItem(item: Item) {
+		itemToMove = item;
+		showMoveModal = true;
+	}
+
+	async function handleMoveToTrip(targetTrip: Trip) {
+		if (!itemToMove) return;
+
+		try {
+			await api.items.move(itemToMove.id, { targetTripId: targetTrip.id });
+			// Reload the current trip to reflect the moved item
+			await currentTrip.load(tripId);
+			showMoveModal = false;
+			itemToMove = null;
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to move item';
+			showMoveModal = false;
+			itemToMove = null;
+		}
 	}
 
 	// Group items by date
@@ -190,6 +231,21 @@
 				</p>
 			</div>
 			<TripBadge purpose={$currentTrip.purpose} />
+			<button
+				type="button"
+				class="text-gray-400 hover:text-gray-600 p-2"
+				on:click={() => (showMergeModal = true)}
+				title="Merge with another trip"
+			>
+				<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+					/>
+				</svg>
+			</button>
 			<a
 				href="/trips/{$currentTrip.id}/edit"
 				class="text-gray-400 hover:text-gray-600 p-2"
@@ -351,11 +407,34 @@
 					<!-- Items for this day -->
 					{#each items as item (item.id)}
 						<div class="ml-12">
-							<ItemCard {item} onDelete={handleDeleteItem} />
+							<ItemCard {item} onDelete={handleDeleteItem} onMove={handleMoveItem} />
 						</div>
 					{/each}
 				{/each}
 			</div>
 		{/if}
 	</main>
+{/if}
+
+<!-- Merge Trip Modal -->
+{#if showMergeModal && $currentTrip}
+	<TripPickerModal
+		excludeTripId={$currentTrip.id}
+		title="Merge into..."
+		onSelect={handleMerge}
+		onCancel={() => (showMergeModal = false)}
+	/>
+{/if}
+
+<!-- Move Item Modal -->
+{#if showMoveModal && itemToMove && $currentTrip}
+	<TripPickerModal
+		excludeTripId={$currentTrip.id}
+		title="Move item to..."
+		onSelect={handleMoveToTrip}
+		onCancel={() => {
+			showMoveModal = false;
+			itemToMove = null;
+		}}
+	/>
 {/if}

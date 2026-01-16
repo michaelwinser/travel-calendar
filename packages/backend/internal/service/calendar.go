@@ -710,6 +710,9 @@ func (c *CalendarService) SuggestTripsFromCalendar(ctx context.Context, from, to
 		}
 	}
 
+	// Filter out already-processed events
+	travelEvents = c.filterProcessedEvents(travelEvents)
+
 	if len(travelEvents) == 0 {
 		return []api.TripSuggestion{}, nil
 	}
@@ -721,6 +724,17 @@ func (c *CalendarService) SuggestTripsFromCalendar(ctx context.Context, from, to
 
 	// Group events into trip suggestions
 	suggestions := groupEventsIntoSuggestions(travelEvents)
+
+	// Detect merge candidates for each suggestion
+	existingTrips, err := c.store.GetTripsForDateRange(from, to)
+	if err == nil && len(existingTrips) > 0 {
+		for i := range suggestions {
+			candidates := c.detectMergeCandidates(&suggestions[i], existingTrips)
+			if len(candidates) > 0 {
+				suggestions[i].MergeCandidates = &candidates
+			}
+		}
+	}
 
 	return suggestions, nil
 }
@@ -810,7 +824,10 @@ func createSuggestion(events []api.CalendarEvent, location string) *api.TripSugg
 		location = "Unknown Location"
 	}
 
-	return &api.TripSuggestion{
+	// Build suggested items from events
+	suggestedItems, source := buildSuggestedItems(events)
+
+	suggestion := &api.TripSuggestion{
 		Id:           suggestionID,
 		Name:         name,
 		Location:     location,
@@ -818,6 +835,81 @@ func createSuggestion(events []api.CalendarEvent, location string) *api.TripSugg
 		EndDate:      types.Date{Time: endDate},
 		SourceEvents: events,
 	}
+
+	// Add optional fields
+	if len(suggestedItems) > 0 {
+		suggestion.SuggestedItems = &suggestedItems
+	}
+	if source != "" {
+		sourceEnum := api.TripSuggestionSource(source)
+		suggestion.Source = &sourceEnum
+	}
+
+	return suggestion
+}
+
+// buildSuggestedItems converts calendar events to suggested trip items.
+func buildSuggestedItems(events []api.CalendarEvent) ([]api.SuggestedItem, string) {
+	var items []api.SuggestedItem
+	var source string
+
+	for _, event := range events {
+		classified := ClassifyEvent(event)
+
+		// Track source (first non-empty wins)
+		if source == "" {
+			source = classified.Source
+		}
+
+		// Only item-level events become suggested items
+		if classified.Classification != ClassificationItemLevel {
+			continue
+		}
+
+		item := eventToSuggestedItem(event, classified)
+		items = append(items, item)
+	}
+
+	return items, source
+}
+
+// eventToSuggestedItem converts a calendar event to a SuggestedItem.
+func eventToSuggestedItem(event api.CalendarEvent, classified ClassifiedEvent) api.SuggestedItem {
+	item := api.SuggestedItem{
+		Type:            api.ItemType(classified.ItemType),
+		CalendarEventId: event.Id,
+	}
+
+	// Set date and time
+	date := types.Date{Time: event.Start}
+	item.Date = &date
+	timeStr := event.Start.Format("15:04")
+	item.Time = &timeStr
+
+	// Try TripIt flight parsing for more details
+	if classified.Source == "tripit" && classified.ItemType == "flight" {
+		if flight, ok := ParseTripItFlight(event); ok {
+			item.From = &flight.Origin
+			item.To = &flight.Destination
+			item.Carrier = &flight.Carrier
+			item.FlightNumber = &flight.FlightNumber
+			if flight.Confirmation != "" {
+				item.Confirmation = &flight.Confirmation
+			}
+			if flight.Notes != "" {
+				item.Notes = &flight.Notes
+			}
+			return item
+		}
+	}
+
+	// Generic event handling
+	item.Name = &event.Summary
+	if event.Location != nil && *event.Location != "" {
+		item.Location = event.Location
+	}
+
+	return item
 }
 
 // generateSuggestionID creates a deterministic ID from the event IDs.
@@ -856,21 +948,11 @@ func generateTripName(events []api.CalendarEvent, location string) string {
 
 // ImportTripSuggestion creates a new trip from a suggestion.
 func (c *CalendarService) ImportTripSuggestion(ctx context.Context, svc *Service, suggestionID string, from, to time.Time) (*api.Trip, error) {
-	// Re-generate suggestions to find the matching one
-	suggestions, err := c.SuggestTripsFromCalendar(ctx, from, to)
+	// Find the suggestion (including processed events, since we're acting on it)
+	suggestion, err := c.findSuggestionByID(ctx, suggestionID, from, to)
 	if err != nil {
-		return nil, fmt.Errorf("generating suggestions: %w", err)
+		return nil, err
 	}
-
-	// Find the suggestion by ID
-	var suggestion *api.TripSuggestion
-	for _, s := range suggestions {
-		if s.Id == suggestionID {
-			suggestion = &s
-			break
-		}
-	}
-
 	if suggestion == nil {
 		return nil, fmt.Errorf("suggestion not found: %s", suggestionID)
 	}
@@ -890,5 +972,314 @@ func (c *CalendarService) ImportTripSuggestion(ctx context.Context, svc *Service
 		return nil, fmt.Errorf("creating trip: %w", err)
 	}
 
-	return trip, nil
+	tripID := uuid.UUID(trip.Id)
+
+	// Import items from suggested items
+	if suggestion.SuggestedItems != nil {
+		for _, suggestedItem := range *suggestion.SuggestedItems {
+			itemReq := suggestedItemToCreateRequest(suggestedItem)
+			_, err := svc.CreateTripItem(tripID, &itemReq)
+			if err != nil {
+				// Log but continue - partial import is better than none
+				continue
+			}
+		}
+	}
+
+	// Mark all source events as processed
+	c.markEventsAsProcessed(suggestion.SourceEvents, entity.ProcessedActionImported, &tripID)
+
+	// Return trip with items
+	return svc.GetTrip(tripID)
+}
+
+// findSuggestionByID looks up a suggestion by ID, including processed events.
+// This is used for import/dismiss/merge operations where we need to find the
+// suggestion even if its events have already been processed.
+func (c *CalendarService) findSuggestionByID(ctx context.Context, suggestionID string, from, to time.Time) (*api.TripSuggestion, error) {
+	// Fetch all events without filtering processed ones
+	events, err := c.ListCalendarEvents(ctx, from, to, nil)
+	if err != nil {
+		return nil, fmt.Errorf("listing events: %w", err)
+	}
+
+	// Filter to travel-related events only
+	var travelEvents []api.CalendarEvent
+	for _, event := range events {
+		if isTravelRelatedEvent(event) {
+			travelEvents = append(travelEvents, event)
+		}
+	}
+
+	if len(travelEvents) == 0 {
+		return nil, nil
+	}
+
+	// Sort and group into suggestions
+	sort.Slice(travelEvents, func(i, j int) bool {
+		return travelEvents[i].Start.Before(travelEvents[j].Start)
+	})
+	suggestions := groupEventsIntoSuggestions(travelEvents)
+
+	// Find matching suggestion
+	for _, s := range suggestions {
+		if s.Id == suggestionID {
+			return &s, nil
+		}
+	}
+
+	return nil, nil
+}
+
+// markEventsAsProcessed records that calendar events have been processed.
+func (c *CalendarService) markEventsAsProcessed(events []api.CalendarEvent, action string, tripID *uuid.UUID) {
+	for _, event := range events {
+		processedEvent := entity.NewProcessedCalendarEvent(event.Id, event.CalendarId, action)
+		processedEvent.TripID = tripID
+		_ = c.store.CreateProcessedEvent(processedEvent) // Best effort, don't fail import
+	}
+}
+
+// DismissTripSuggestion marks a suggestion as dismissed so it won't appear again.
+func (c *CalendarService) DismissTripSuggestion(ctx context.Context, suggestionID string, from, to time.Time) error {
+	suggestion, err := c.findSuggestionByID(ctx, suggestionID, from, to)
+	if err != nil {
+		return err
+	}
+	if suggestion == nil {
+		return fmt.Errorf("suggestion not found: %s", suggestionID)
+	}
+
+	c.markEventsAsProcessed(suggestion.SourceEvents, entity.ProcessedActionDismissed, nil)
+	return nil
+}
+
+// MergeTripSuggestion merges a suggestion into an existing trip.
+func (c *CalendarService) MergeTripSuggestion(ctx context.Context, svc *Service, suggestionID string, tripID uuid.UUID, from, to time.Time) (*api.Trip, error) {
+	// Find the suggestion
+	suggestion, err := c.findSuggestionByID(ctx, suggestionID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	if suggestion == nil {
+		return nil, fmt.Errorf("suggestion not found: %s", suggestionID)
+	}
+
+	// Get existing trip
+	trip, err := svc.GetTrip(tripID)
+	if err != nil {
+		return nil, fmt.Errorf("trip not found: %w", err)
+	}
+
+	// Add items from suggestion to trip
+	if suggestion.SuggestedItems != nil {
+		for _, suggestedItem := range *suggestion.SuggestedItems {
+			itemReq := suggestedItemToCreateRequest(suggestedItem)
+			_, err := svc.CreateTripItem(tripID, &itemReq)
+			if err != nil {
+				// Log but continue - partial merge is better than none
+				continue
+			}
+		}
+	}
+
+	// Extend trip dates if needed
+	suggStart := suggestion.StartDate.Time
+	suggEnd := suggestion.EndDate.Time
+	tripStart := trip.StartDate.Time
+	tripEnd := trip.EndDate.Time
+
+	needsUpdate := false
+	updateReq := api.UpdateTripRequest{}
+
+	if suggStart.Before(tripStart) {
+		newStart := types.Date{Time: suggStart}
+		updateReq.StartDate = &newStart
+		needsUpdate = true
+	}
+	if suggEnd.After(tripEnd) {
+		newEnd := types.Date{Time: suggEnd}
+		updateReq.EndDate = &newEnd
+		needsUpdate = true
+	}
+
+	if needsUpdate {
+		_, err := svc.UpdateTrip(tripID, &updateReq)
+		if err != nil {
+			// Log but don't fail - items were added successfully
+		}
+	}
+
+	// Mark events as processed (merged)
+	c.markEventsAsProcessed(suggestion.SourceEvents, entity.ProcessedActionMerged, &tripID)
+
+	// Return updated trip
+	return svc.GetTrip(tripID)
+}
+
+// ResetProcessedEvents clears all processed event records.
+func (c *CalendarService) ResetProcessedEvents() error {
+	return c.store.DeleteAllProcessedEvents()
+}
+
+// suggestedItemToCreateRequest converts a SuggestedItem to a CreateItemRequest.
+func suggestedItemToCreateRequest(item api.SuggestedItem) api.CreateItemRequest {
+	req := api.CreateItemRequest{
+		Type: item.Type,
+	}
+
+	if item.Date != nil {
+		req.Date = item.Date
+	}
+	if item.Time != nil {
+		req.Time = item.Time
+	}
+	if item.From != nil {
+		req.From = item.From
+	}
+	if item.To != nil {
+		req.To = item.To
+	}
+	if item.Carrier != nil {
+		req.Carrier = item.Carrier
+	}
+	if item.FlightNumber != nil {
+		req.FlightNumber = item.FlightNumber
+	}
+	if item.Name != nil {
+		req.Name = item.Name
+	}
+	if item.Location != nil {
+		req.Location = item.Location
+	}
+	if item.Confirmation != nil {
+		req.Confirmation = item.Confirmation
+	}
+	if item.Notes != nil {
+		req.Notes = item.Notes
+	}
+
+	return req
+}
+
+// detectMergeCandidates finds existing trips that could be merged with a suggestion.
+func (c *CalendarService) detectMergeCandidates(suggestion *api.TripSuggestion, existingTrips []entity.Trip) []api.MergeCandidate {
+	var candidates []api.MergeCandidate
+
+	suggStart := suggestion.StartDate.Time
+	suggEnd := suggestion.EndDate.Time
+
+	for _, trip := range existingTrips {
+		if trip.StartDate == nil || trip.EndDate == nil {
+			continue
+		}
+
+		tripStart := *trip.StartDate
+		tripEnd := *trip.EndDate
+
+		// Check location match (fuzzy)
+		tripLocation := c.getTripMainLocation(&trip)
+		locationMatch := locationsMatch(suggestion.Location, tripLocation)
+
+		// Check date overlap
+		datesOverlap := !suggEnd.Before(tripStart) && !suggStart.After(tripEnd)
+
+		// Check date proximity (within 2 days)
+		daysFromSuggEndToTripStart := tripStart.Sub(suggEnd).Hours() / 24
+		daysFromTripEndToSuggStart := suggStart.Sub(tripEnd).Hours() / 24
+		datesClose := daysFromSuggEndToTripStart <= 2 || daysFromTripEndToSuggStart <= 2
+
+		var matchReason string
+		if locationMatch && datesOverlap {
+			matchReason = "Same location, overlapping dates"
+		} else if locationMatch && datesClose {
+			matchReason = "Same location, dates within 2 days"
+		} else if datesOverlap && !locationMatch && tripLocation != "" {
+			matchReason = "Overlapping dates, different location"
+		}
+
+		if matchReason != "" {
+			candidates = append(candidates, api.MergeCandidate{
+				TripId:      trip.ID,
+				TripName:    trip.Name,
+				MatchReason: matchReason,
+			})
+		}
+	}
+
+	return candidates
+}
+
+// getTripMainLocation gets the primary location of a trip.
+func (c *CalendarService) getTripMainLocation(trip *entity.Trip) string {
+	// Try to get from trip locations table
+	if trip.StartDate != nil && trip.EndDate != nil {
+		locations, err := c.store.GetTripLocationsForDateRange(trip.ID, *trip.StartDate, *trip.EndDate)
+		if err == nil && len(locations) > 0 {
+			return locations[0].Location
+		}
+	}
+	return ""
+}
+
+// locationsMatch performs fuzzy location comparison.
+func locationsMatch(loc1, loc2 string) bool {
+	if loc1 == "" || loc2 == "" {
+		return false
+	}
+
+	// Normalize: lowercase, extract city (before comma)
+	normalize := func(loc string) string {
+		loc = strings.ToLower(strings.TrimSpace(loc))
+		if idx := strings.Index(loc, ","); idx > 0 {
+			loc = loc[:idx]
+		}
+		return loc
+	}
+
+	norm1 := normalize(loc1)
+	norm2 := normalize(loc2)
+
+	if norm1 == norm2 {
+		return true
+	}
+
+	// Check common aliases
+	aliases := map[string][]string{
+		"nyc":        {"new york", "ny", "manhattan"},
+		"new york":   {"nyc", "ny", "manhattan"},
+		"sf":         {"san francisco"},
+		"san francisco": {"sf"},
+		"la":         {"los angeles"},
+		"los angeles": {"la"},
+		"dc":         {"washington", "washington dc"},
+		"washington": {"dc", "washington dc"},
+		"london":     {"london uk", "london england"},
+		"paris":      {"paris france"},
+	}
+
+	for _, alias := range aliases[norm1] {
+		if alias == norm2 {
+			return true
+		}
+	}
+
+	return false
+}
+
+// filterProcessedEvents removes events that have already been processed (imported, dismissed, or merged).
+func (c *CalendarService) filterProcessedEvents(events []api.CalendarEvent) []api.CalendarEvent {
+	var filtered []api.CalendarEvent
+	for _, event := range events {
+		processed, err := c.store.IsEventProcessed(event.CalendarId, event.Id)
+		if err != nil {
+			// On error, include the event (fail open)
+			filtered = append(filtered, event)
+			continue
+		}
+		if !processed {
+			filtered = append(filtered, event)
+		}
+	}
+	return filtered
 }

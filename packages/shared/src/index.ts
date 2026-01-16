@@ -25,6 +25,11 @@ export type Item = components['schemas']['Item'];
 export type ItemType = components['schemas']['ItemType'];
 export type CreateItemRequest = components['schemas']['CreateItemRequest'];
 
+// Trip organization types
+export type MergeTripsRequest = components['schemas']['MergeTripsRequest'];
+export type MoveItemRequest = components['schemas']['MoveItemRequest'];
+export type MoveItemResponse = components['schemas']['MoveItemResponse'];
+
 export type Document = components['schemas']['Document'];
 
 export type HealthResponse = components['schemas']['HealthResponse'];

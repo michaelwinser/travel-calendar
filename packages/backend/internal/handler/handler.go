@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -121,6 +123,70 @@ func (h *Handler) DeleteTrip(w http.ResponseWriter, r *http.Request, tripId api.
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// MergeTrips merges one trip into another.
+func (h *Handler) MergeTrips(w http.ResponseWriter, r *http.Request, sourceId openapi_types.UUID, targetId openapi_types.UUID) {
+	var req api.MergeTripsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// Validate not same trip
+	if sourceId == targetId {
+		respondError(w, http.StatusBadRequest, "cannot merge trip into itself")
+		return
+	}
+
+	trip, err := h.svc.MergeTrips(uuid.UUID(sourceId), uuid.UUID(targetId), &req)
+	if err != nil {
+		if strings.Contains(err.Error(), "cannot merge trip into itself") {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if trip == nil {
+		respondError(w, http.StatusNotFound, "source or target trip not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, trip)
+}
+
+// MoveItem moves an item to another trip.
+func (h *Handler) MoveItem(w http.ResponseWriter, r *http.Request, itemId api.ItemId) {
+	var req api.MoveItemRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// Validate request has either targetTripId or newTrip
+	if req.TargetTripId == nil && req.NewTrip == nil {
+		respondError(w, http.StatusBadRequest, "must provide targetTripId or newTrip")
+		return
+	}
+
+	result, err := h.svc.MoveItem(uuid.UUID(itemId), &req)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			respondError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if strings.Contains(err.Error(), "already on this trip") {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if result == nil {
+		respondError(w, http.StatusNotFound, "item not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, result)
 }
 
 // ListTripItems returns items for a trip.
@@ -428,8 +494,22 @@ func (h *Handler) SetSelectedCalendars(w http.ResponseWriter, r *http.Request) {
 
 // ListCalendarEvents returns calendar events for a date range.
 func (h *Handler) ListCalendarEvents(w http.ResponseWriter, r *http.Request, params api.ListCalendarEventsParams) {
-	// TODO: Implement when CalendarService is ready
-	respondError(w, http.StatusNotImplemented, "Google Calendar integration not yet implemented")
+	if h.calendar == nil || !h.calendar.IsConfigured() {
+		respondError(w, http.StatusServiceUnavailable, "Google Calendar not configured")
+		return
+	}
+
+	// Convert dates to time.Time
+	from := time.Time(params.From.Time)
+	to := time.Time(params.To.Time)
+
+	events, err := h.calendar.ListCalendarEvents(r.Context(), from, to, params.CalendarId)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, events)
 }
 
 // GetCalendarConflicts detects conflicts between calendar events and trips.
@@ -440,14 +520,117 @@ func (h *Handler) GetCalendarConflicts(w http.ResponseWriter, r *http.Request, p
 
 // SuggestTripsFromCalendar suggests trips based on calendar events.
 func (h *Handler) SuggestTripsFromCalendar(w http.ResponseWriter, r *http.Request, params api.SuggestTripsFromCalendarParams) {
-	// TODO: Implement when CalendarService is ready
-	respondJSON(w, http.StatusOK, []api.TripSuggestion{})
+	if h.calendar == nil || !h.calendar.IsConfigured() {
+		respondError(w, http.StatusServiceUnavailable, "Google Calendar not configured")
+		return
+	}
+
+	// Default date range: today to 90 days from now
+	from := time.Now()
+	to := from.AddDate(0, 0, 90)
+
+	if params.From != nil {
+		from = time.Time(params.From.Time)
+	}
+	if params.To != nil {
+		to = time.Time(params.To.Time)
+	}
+
+	suggestions, err := h.calendar.SuggestTripsFromCalendar(r.Context(), from, to)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, suggestions)
 }
 
 // ImportTripSuggestion imports a trip suggestion as a new trip.
 func (h *Handler) ImportTripSuggestion(w http.ResponseWriter, r *http.Request, suggestionId string) {
-	// TODO: Implement when CalendarService is ready
-	respondError(w, http.StatusNotImplemented, "Google Calendar integration not yet implemented")
+	if h.calendar == nil || !h.calendar.IsConfigured() {
+		respondError(w, http.StatusServiceUnavailable, "Google Calendar not configured")
+		return
+	}
+
+	// Use same default date range as SuggestTripsFromCalendar
+	from := time.Now()
+	to := from.AddDate(0, 0, 90)
+
+	trip, err := h.calendar.ImportTripSuggestion(r.Context(), h.svc, suggestionId, from, to)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			respondError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, trip)
+}
+
+// DismissTripSuggestion marks a suggestion as dismissed so it won't appear again.
+func (h *Handler) DismissTripSuggestion(w http.ResponseWriter, r *http.Request, suggestionId string) {
+	if h.calendar == nil || !h.calendar.IsConfigured() {
+		respondError(w, http.StatusServiceUnavailable, "Google Calendar not configured")
+		return
+	}
+
+	// Use same default date range as SuggestTripsFromCalendar
+	from := time.Now()
+	to := from.AddDate(0, 0, 90)
+
+	err := h.calendar.DismissTripSuggestion(r.Context(), suggestionId, from, to)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			respondError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// MergeTripSuggestion merges a suggestion into an existing trip.
+func (h *Handler) MergeTripSuggestion(w http.ResponseWriter, r *http.Request, suggestionId string, tripId api.TripId) {
+	if h.calendar == nil || !h.calendar.IsConfigured() {
+		respondError(w, http.StatusServiceUnavailable, "Google Calendar not configured")
+		return
+	}
+
+	// Use same default date range as SuggestTripsFromCalendar
+	from := time.Now()
+	to := from.AddDate(0, 0, 90)
+
+	trip, err := h.calendar.MergeTripSuggestion(r.Context(), h.svc, suggestionId, uuid.UUID(tripId), from, to)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			respondError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, trip)
+}
+
+// ResetProcessedEvents clears all processed event records.
+func (h *Handler) ResetProcessedEvents(w http.ResponseWriter, r *http.Request) {
+	if h.calendar == nil || !h.calendar.IsConfigured() {
+		respondError(w, http.StatusServiceUnavailable, "Google Calendar not configured")
+		return
+	}
+
+	err := h.calendar.ResetProcessedEvents()
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // Calendar sync endpoints

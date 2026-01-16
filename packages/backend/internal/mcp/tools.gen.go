@@ -16,7 +16,7 @@ func GetServerInfo() ServerInfo {
 	return ServerInfo{
 		Name:         "travel-calendar",
 		Version:      "1.0.0",
-		Instructions: "Travel Calendar MCP Server. Use these tools to manage trips, items, documents, and location queries.\n\nKey tools:\n- get_trips: List and filter trips by upcoming/past/purpose\n- get_trip: Get detailed trip info including items and locations\n- create_trip: Create a new trip with optional default location\n- search_trips: Full-text search across trips\n- add_item: Add flights, hotels, trains, drives, or events to a trip\n- get_location_on_date: Find where the user will be on a specific date\n- get_location_range: Get location timeline for a date range\n\nAll dates use YYYY-MM-DD format. IDs are UUIDs.\n",
+		Instructions: "Travel Calendar MCP Server. Use these tools to manage trips, items, documents, location queries, and Google Calendar integration.\n\nKey tools:\n- get_trips: List and filter trips by upcoming/past/purpose\n- get_trip: Get detailed trip info including items and locations\n- create_trip: Create a new trip with optional default location\n- search_trips: Full-text search across trips\n- add_item: Add flights, hotels, trains, drives, or events to a trip\n- get_location_on_date: Find where the user will be on a specific date\n- get_location_range: Get location timeline for a date range\n- list_calendars: List available Google Calendars (requires OAuth)\n- get_calendar_conflicts: Detect conflicts between calendar events and trip locations\n- suggest_trips_from_calendar: Analyze calendar events to suggest potential trips\n\nAll dates use YYYY-MM-DD format. IDs are UUIDs.\n",
 	}
 }
 
@@ -197,6 +197,27 @@ func GetTools() []Tool {
 			}`),
 		},
 		{
+			Name:        "get_calendar_conflicts",
+			Description: "Detect calendar conflicts where events have locations that differ from the user's trip location on that date. Optionally filter by tripId or date range.",
+			InputSchema: parseSchema(`{
+				"properties": {
+					"from": {
+						"description": "Start date for range check (YYYY-MM-DD)",
+						"type": "string"
+					},
+					"to": {
+						"description": "End date for range check (YYYY-MM-DD)",
+						"type": "string"
+					},
+					"trip_id": {
+						"description": "Check conflicts for specific trip",
+						"type": "string"
+					}
+				},
+				"type": "object"
+			}`),
+		},
+		{
 			Name:        "get_documents",
 			Description: "Get a list of documents. Filter by tripId to get documents for a specific trip, or use unassociated=true to get documents not linked to any trip.",
 			InputSchema: parseSchema(`{
@@ -311,6 +332,14 @@ func GetTools() []Tool {
 			}`),
 		},
 		{
+			Name:        "list_calendars",
+			Description: "List all available Google Calendars for the authenticated user.",
+			InputSchema: parseSchema(`{
+				"properties": {},
+				"type": "object"
+			}`),
+		},
+		{
 			Name:        "search_trips",
 			Description: "Search trips by text. Searches across trip names, notes, and item details. Returns matching trips.",
 			InputSchema: parseSchema(`{
@@ -378,6 +407,23 @@ func GetTools() []Tool {
 				"required": [
 					"trip_id"
 				],
+				"type": "object"
+			}`),
+		},
+		{
+			Name:        "suggest_trips_from_calendar",
+			Description: "Analyze calendar events with locations to suggest potential trips. Returns events that appear to be travel-related based on location patterns.",
+			InputSchema: parseSchema(`{
+				"properties": {
+					"from": {
+						"description": "Start date (YYYY-MM-DD). Defaults to today.",
+						"type": "string"
+					},
+					"to": {
+						"description": "End date (YYYY-MM-DD). Defaults to 90 days from now.",
+						"type": "string"
+					}
+				},
 				"type": "object"
 			}`),
 		},

@@ -166,6 +166,12 @@ func (h *Handler) callTool(name string, args map[string]interface{}) (interface{
 		return h.handleAddItem(args)
 	case "delete_item":
 		return h.handleDeleteItem(args)
+	case "move_item":
+		return h.handleMoveItem(args)
+
+	// Trip organization tools
+	case "merge_trips":
+		return h.handleMergeTrips(args)
 
 	// Document tools
 	case "get_documents":

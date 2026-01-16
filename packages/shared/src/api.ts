@@ -84,6 +84,30 @@ export interface paths {
         patch: operations["updateTrip"];
         trace?: never;
     };
+    "/api/trips/{sourceId}/merge/{targetId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge one trip into another
+         * @description Merges the source trip into the target trip:
+         *     - All items from source are moved to target
+         *     - Target dates extended if source dates are outside range
+         *     - Notes concatenated (target + source) if mergeNotes is true
+         *     - Source trip deleted after merge if deleteSource is true
+         */
+        post: operations["mergeTrips"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/trips/{tripId}/items": {
         parameters: {
             query?: never;
@@ -114,6 +138,28 @@ export interface paths {
         post?: never;
         /** Delete an item */
         delete: operations["deleteItem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/items/{itemId}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move an item to another trip
+         * @description Moves an item to a different trip. Can either:
+         *     - Move to an existing trip (provide targetTripId)
+         *     - Create a new trip and move item to it (provide newTrip)
+         */
+        post: operations["moveItem"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -427,6 +473,66 @@ export interface paths {
          */
         post: operations["importTripSuggestion"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/calendar/trip-suggestions/{suggestionId}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss a trip suggestion
+         * @description Marks a trip suggestion as dismissed so it won't appear again
+         */
+        post: operations["dismissTripSuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/calendar/trip-suggestions/{suggestionId}/merge/{tripId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge a trip suggestion into an existing trip
+         * @description Adds items from the suggestion to an existing trip and extends dates if needed
+         */
+        post: operations["mergeTripSuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/calendar/processed-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Reset all processed calendar events
+         * @description Clears the record of processed events, allowing dismissed suggestions to reappear
+         */
+        delete: operations["resetProcessedEvents"];
         options?: never;
         head?: never;
         patch?: never;
@@ -774,6 +880,38 @@ export interface components {
             purpose?: components["schemas"]["TripPurpose"];
             /** @description Calendar events that led to this suggestion */
             sourceEvents: components["schemas"]["CalendarEvent"][];
+            /**
+             * @description Source of the suggestion (google calendar or tripit)
+             * @enum {string}
+             */
+            source?: "google" | "tripit";
+            /** @description Items parsed from source events (flights, hotels, events) */
+            suggestedItems?: components["schemas"]["SuggestedItem"][];
+            /** @description Existing trips that could be merged with this suggestion */
+            mergeCandidates?: components["schemas"]["MergeCandidate"][];
+        };
+        SuggestedItem: {
+            type: components["schemas"]["ItemType"];
+            /** @description Source calendar event ID */
+            calendarEventId: string;
+            /** Format: date */
+            date?: string;
+            time?: string;
+            from?: string;
+            to?: string;
+            carrier?: string;
+            flightNumber?: string;
+            name?: string;
+            location?: string;
+            confirmation?: string;
+            notes?: string;
+        };
+        MergeCandidate: {
+            /** Format: uuid */
+            tripId: string;
+            tripName: string;
+            /** @description Why this trip matches (e.g., "Same location, overlapping dates") */
+            matchReason: string;
         };
         SyncTripRequest: {
             /** @description Which calendar to sync to (defaults to primary) */
@@ -832,6 +970,33 @@ export interface components {
              * @description Link to view event in Google Calendar
              */
             htmlLink?: string;
+        };
+        MergeTripsRequest: {
+            /**
+             * @description Whether to delete the source trip after merge
+             * @default true
+             */
+            deleteSource: boolean;
+            /**
+             * @description Whether to concatenate notes from both trips
+             * @default true
+             */
+            mergeNotes: boolean;
+        };
+        MoveItemRequest: {
+            /**
+             * Format: uuid
+             * @description ID of existing trip to move item to
+             */
+            targetTripId?: string;
+            /** @description Details for creating a new trip (if not moving to existing) */
+            newTrip?: components["schemas"]["CreateTripRequest"];
+        };
+        MoveItemResponse: {
+            /** @description The moved item with updated tripId */
+            item: components["schemas"]["Item"];
+            /** @description The target trip (included if newTrip was created) */
+            trip?: components["schemas"]["Trip"];
         };
     };
     responses: never;
@@ -1099,6 +1264,53 @@ export interface operations {
             };
         };
     };
+    mergeTrips: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Source trip ID (to be merged and deleted) */
+                sourceId: string;
+                /** @description Target trip ID (will receive items) */
+                targetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeTripsRequest"];
+            };
+        };
+        responses: {
+            /** @description Trips merged successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Trip"];
+                };
+            };
+            /** @description Invalid request (e.g., same trip for source and target) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Source or target trip not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     listTripItems: {
         parameters: {
             query?: never;
@@ -1196,6 +1408,51 @@ export interface operations {
                 content?: never;
             };
             /** @description Item not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    moveItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item ID */
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveItemRequest"];
+            };
+        };
+        responses: {
+            /** @description Item moved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoveItemResponse"];
+                };
+            };
+            /** @description Invalid request (must provide targetTripId or newTrip, or item already on target trip) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Item or target trip not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1777,6 +2034,88 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Error"];
                 };
+            };
+        };
+    };
+    dismissTripSuggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Suggestion ID to dismiss */
+                suggestionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Suggestion dismissed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Suggestion not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    mergeTripSuggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Suggestion ID to merge */
+                suggestionId: string;
+                /** @description Target trip ID to merge into */
+                tripId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Trip updated with merged items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Trip"];
+                };
+            };
+            /** @description Suggestion or trip not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    resetProcessedEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Processed events reset */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

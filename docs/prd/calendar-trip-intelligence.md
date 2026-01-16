@@ -412,6 +412,56 @@ travel trips delete $TRIP1
 
 ---
 
+### [UC-CAL-011] Remember processed calendar events
+
+**Actor**: System
+
+**Preconditions**:
+- User imports or dismisses trip suggestions
+- Calendar events are associated with suggestions
+
+**Steps**:
+1. User imports a trip suggestion OR
+2. User dismisses a trip suggestion
+3. System records all source calendar event IDs as processed
+4. Next time suggestions are fetched, processed events are excluded
+
+**Expected Result**:
+- Imported events don't reappear as new suggestions
+- Dismissed events don't reappear
+- User can "reset" processed events if needed
+- Events processed as part of a merge are tracked
+
+**Database Schema**:
+```sql
+CREATE TABLE processed_calendar_events (
+    id TEXT PRIMARY KEY,
+    calendar_event_id TEXT NOT NULL,
+    calendar_id TEXT NOT NULL,
+    action TEXT NOT NULL,  -- 'imported', 'dismissed', 'merged'
+    trip_id TEXT,          -- which trip received this event (if imported/merged)
+    item_id TEXT,          -- which item was created (if applicable)
+    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(calendar_id, calendar_event_id)
+);
+```
+
+**API Additions**:
+- `POST /api/calendar/suggestions/:id/dismiss` - Mark suggestion as dismissed
+- Query param on suggestions: `?includeProcessed=true` to show all (for debugging)
+
+**UI Additions**:
+- "Dismiss" button on suggestion cards
+- Visual indicator for "previously imported" if re-shown
+- Settings option to "Reset processed events"
+
+**Rationale**:
+TripIt creates multiple calendar events for the same trip (summary + flight segments).
+After importing the summary, the flight segments still appear as suggestions, creating noise.
+Tracking processed events eliminates this redundancy.
+
+---
+
 ## API Endpoints
 
 | Method | Endpoint | Description | Use Cases |
@@ -419,6 +469,8 @@ travel trips delete $TRIP1
 | GET | `/api/calendar/suggestions` | Get trip suggestions with merge candidates | UC-CAL-005, UC-CAL-006 |
 | POST | `/api/calendar/suggestions/:id/import` | Import suggestion as new trip with items | UC-CAL-001 |
 | POST | `/api/calendar/suggestions/:id/merge/:tripId` | Merge suggestion into existing trip | UC-CAL-004 |
+| POST | `/api/calendar/suggestions/:id/dismiss` | Mark suggestion as dismissed | UC-CAL-011 |
+| DELETE | `/api/calendar/processed-events` | Reset all processed events | UC-CAL-011 |
 | POST | `/api/trips/:id/merge/:sourceId` | Merge two existing trips | UC-CAL-009 |
 | GET | `/api/trips/:id/related` | Get related trips | UC-CAL-008 |
 | PUT | `/api/trips/:id/related` | Set related trips | UC-CAL-007 |
@@ -548,19 +600,48 @@ type MergeCandidate struct {
 
 ## MVP Scope
 
-### Included in MVP
-- [UC-CAL-001] Import trip with travel items
-- [UC-CAL-002] Parse TripIt all-day summary event
-- [UC-CAL-003] Parse TripIt flight segment event
-- [UC-CAL-005] Detect merge candidates for suggestions
-- [UC-CAL-006] Distinguish all-day events vs timed events
-- [UC-CAL-010] Filter virtual meetings (DONE)
+### Phase 2B MVP (COMPLETED)
+- [UC-CAL-001] Import trip with travel items ✅
+- [UC-CAL-002] Parse TripIt all-day summary event ✅
+- [UC-CAL-003] Parse TripIt flight segment event ✅
+- [UC-CAL-005] Detect merge candidates for suggestions ✅
+- [UC-CAL-006] Distinguish all-day events vs timed events ✅
+- [UC-CAL-010] Filter virtual meetings ✅
 
-### Deferred to Later (Phase 2B)
+### Phase 2B.1: Smart Merging & Event Memory
 - [UC-CAL-004] Merge imported trip with existing trip
+- [UC-CAL-011] Remember processed calendar events (NEW)
+
+### Deferred to Later (Phase 2C)
 - [UC-CAL-007] Create nested/related trips
 - [UC-CAL-008] Show related trips in UI
 - [UC-CAL-009] Merge two existing trips
+
+---
+
+## Lessons Learned (Phase 2B MVP)
+
+### What Worked Well
+1. **TripIt parsing** - Successfully extracts flight details from TripIt calendar events
+2. **Event classification** - Correctly distinguishes trips vs items, filters virtual meetings
+3. **Merge candidate detection** - Identifies overlapping trips with fuzzy location matching
+4. **Item preview UI** - Shows users what will be created before import
+
+### Pain Points Discovered
+1. **Redundant suggestions** - TripIt creates multiple events for the same trip (summary + segments). After importing the summary, flight segments still appear as new suggestions. This creates noise and confusion.
+
+2. **No event memory** - The system doesn't remember which events have been imported or dismissed. Users see the same suggestions repeatedly.
+
+3. **Merge is informational only** - Phase 2B shows "Similar trip exists" but doesn't let users merge. Users must import a duplicate and then manually manage it.
+
+### Priority Adjustments
+Based on real-world usage, **Phase 2B.1 priorities** are:
+1. **UC-CAL-011 (Event memory)** - Highest impact for reducing noise
+2. **UC-CAL-004 (Merge into existing)** - Enables proper workflow when similar trips exist
+
+**Phase 2C (Related trips)** remains lower priority - useful for complex itineraries but not blocking daily use.
+
+---
 
 ### MVP Rationale
 

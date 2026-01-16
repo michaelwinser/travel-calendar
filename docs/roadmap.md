@@ -54,13 +54,19 @@ This roadmap tracks implementation progress for the Travel Calendar application.
 
 **PRD**: [prd/calendar-trip-intelligence.md](prd/calendar-trip-intelligence.md)
 
-#### Phase 2C: Trip Relationships (LATER)
+#### Phase 2C: Trip Organization (LATER)
+
+**Goal**: Reorganize trips and items after creation
 
 | Feature | Status | Use Cases | Notes |
 |---------|--------|-----------|-------|
-| Merge with existing trips | Not Started | UC-CAL-004 | Perform merge on import (#26) |
-| Merge existing trips | Not Started | UC-CAL-009 | Combine two trips (#30) |
-| Nested/related trips | Not Started | UC-CAL-007, UC-CAL-008 | Link related trips (#30) |
+| Merge existing trips | Not Started | UC-ORG-001 | Combine two trips into one |
+| Convert trip to item | Not Started | UC-ORG-002 | Day trip → event on larger trip |
+| Move item between trips | Not Started | UC-ORG-003 | Reassign items |
+| Create trip from item(s) | Not Started | UC-ORG-004 | Split trip workflow |
+| Bulk move items | Not Started | UC-ORG-005 | Multi-select operations |
+
+**PRD**: [prd/trip-organization.md](prd/trip-organization.md)
 
 #### Phase 2D: Additional Calendar Features (LATER)
 
@@ -158,6 +164,16 @@ This roadmap tracks implementation progress for the Travel Calendar application.
 | UC-CAL-008 | Show related trips in UI | Not Started |
 | UC-CAL-009 | Merge two existing trips | Not Started |
 | UC-CAL-010 | Filter virtual meetings from suggestions | Done (#28) |
+
+### Trip Organization ([prd/trip-organization.md](prd/trip-organization.md))
+
+| ID | Description | Status |
+|----|-------------|--------|
+| UC-ORG-001 | Merge two existing trips | Not Started |
+| UC-ORG-002 | Convert trip to item on another trip | Not Started |
+| UC-ORG-003 | Move item to another trip | Not Started |
+| UC-ORG-004 | Create trip from item(s) | Not Started |
+| UC-ORG-005 | Bulk move items between trips | Not Started |
 
 ---
 
