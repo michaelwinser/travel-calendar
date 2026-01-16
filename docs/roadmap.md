@@ -23,7 +23,7 @@ This roadmap tracks implementation progress for the Travel Calendar application.
 | Document upload | Not Started | - | File storage + association (deferred) |
 | JSON import/export | Not Started | - | Backup/restore capability |
 
-**Next priority**: Phase 2B Calendar Trip Intelligence (document upload deferred)
+**Next priority**: Phase 2C Trip Organization (document upload deferred)
 
 ---
 
@@ -39,18 +39,20 @@ This roadmap tracks implementation progress for the Travel Calendar application.
 |---------|--------|-------|
 | Google Calendar OAuth | Done | OAuth flow, settings UI, calendar selection |
 
-#### Phase 2B: Calendar Trip Intelligence (CURRENT)
+#### Phase 2B: Calendar Trip Intelligence (DONE)
 
 **Goal**: Import trips with items, TripIt support, smart suggestions
 
 | Feature | Status | Use Cases | Notes |
 |---------|--------|-----------|-------|
-| Suggest trips from calendar | In Progress | - | Basic suggestions work, filtering done (#28) |
+| Suggest trips from calendar | Done | - | Basic suggestions with filtering |
 | Filter virtual meetings | Done | UC-CAL-010 | URLs and meeting rooms excluded (#28) |
-| Import trips with items | Not Started | UC-CAL-001 | Calendar events → trip items (#25) |
-| TripIt event parsing | Not Started | UC-CAL-002, UC-CAL-003 | Parse TripIt calendar format (#27) |
-| Event type classification | Not Started | UC-CAL-006 | All-day → trips, timed → items (#29) |
-| Merge candidate detection | Not Started | UC-CAL-005 | Show similar existing trips (#26) |
+| Import trips with items | Done | UC-CAL-001 | Calendar events → trip items with preview |
+| TripIt event parsing | Done | UC-CAL-002, UC-CAL-003 | Parse TripIt calendar format |
+| Event type classification | Done | UC-CAL-006 | All-day → trips, timed → items |
+| Merge candidate detection | Done | UC-CAL-005 | Show similar existing trips |
+| Merge suggestion into trip | Done | UC-CAL-004 | Merge dropdown in suggestions UI |
+| Remember processed events | Done | UC-CAL-011 | Dismiss button + reset in settings |
 
 **PRD**: [prd/calendar-trip-intelligence.md](prd/calendar-trip-intelligence.md)
 
@@ -154,16 +156,17 @@ This roadmap tracks implementation progress for the Travel Calendar application.
 
 | ID | Description | Status |
 |----|-------------|--------|
-| UC-CAL-001 | Import trip with travel items | Not Started |
-| UC-CAL-002 | Parse TripIt all-day summary event | Not Started |
-| UC-CAL-003 | Parse TripIt flight segment event | Not Started |
-| UC-CAL-004 | Merge imported trip with existing trip | Not Started |
-| UC-CAL-005 | Detect merge candidates for trip suggestion | Not Started |
-| UC-CAL-006 | Distinguish all-day events vs timed events | Not Started |
+| UC-CAL-001 | Import trip with travel items | Done |
+| UC-CAL-002 | Parse TripIt all-day summary event | Done |
+| UC-CAL-003 | Parse TripIt flight segment event | Done |
+| UC-CAL-004 | Merge imported trip with existing trip | Done |
+| UC-CAL-005 | Detect merge candidates for trip suggestion | Done |
+| UC-CAL-006 | Distinguish all-day events vs timed events | Done |
 | UC-CAL-007 | Create nested/related trips | Not Started |
 | UC-CAL-008 | Show related trips in UI | Not Started |
-| UC-CAL-009 | Merge two existing trips | Not Started |
-| UC-CAL-010 | Filter virtual meetings from suggestions | Done (#28) |
+| UC-CAL-009 | Merge two existing trips | Done (via UC-ORG-001) |
+| UC-CAL-010 | Filter virtual meetings from suggestions | Done |
+| UC-CAL-011 | Remember processed calendar events | Done |
 
 ### Trip Organization ([prd/trip-organization.md](prd/trip-organization.md))
 
