@@ -23,10 +23,16 @@ Maintain a microblog of development progress by:
 
 ## When to Invoke
 
+**Claude should proactively invoke this agent** (without waiting to be asked) when:
+
 1. **After commits** - Commit Agent invokes after Tools Agent
-2. **On request** - User asks "summarize this session" or similar
-3. **Session end** - User says "done for today" or conversation ends
-4. **Topic shift** - When detecting work has moved to a new area
+2. **After significant work** - Completing a feature, fixing a bug, finishing a PRD
+3. **Session end signals** - User says "done", "wrap up", "that's all for now", etc.
+4. **Topic shift** - Work is moving to a substantially different area
+5. **On request** - User explicitly asks for a summary
+6. **Before compaction** - If conversation is getting long and may be compacted
+
+**The goal is to capture progress continuously**, not just when explicitly asked. If in doubt, invoke the agent - it's better to have too much history than too little.
 
 ## Workflow
 

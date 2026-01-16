@@ -29,7 +29,7 @@ model: opus
 
 ## Checklist After Changes
 
-- [ ] Run `./tc exec pnpm test:frontend`
+- [ ] Run `./tc test frontend`
 - [ ] Verify no ID-based lookups added
 - [ ] Verify data flows via props/stores
 
@@ -52,8 +52,11 @@ model: opus
 
 ```bash
 # Run tests
-./tc exec pnpm test:frontend
+./tc test frontend
 
-# Run linting
-./tc exec pnpm lint
+# Run browser tests
+./tc test browser
+
+# Run browser tests with video recording
+./tc test browser --video
 ```

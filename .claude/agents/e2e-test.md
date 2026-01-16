@@ -78,7 +78,7 @@ echo "✓ [UC-001] Create a trip with flights"
 ./tests/e2e/uc-001-create-trip-with-flights.sh
 
 # Run all e2e tests
-./tc exec pnpm test:e2e
+./tc test e2e
 
 # Check CLI is working
 ./cli/travel --help

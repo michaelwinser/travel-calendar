@@ -10,6 +10,15 @@
             "command": "bash .claude/hooks/audit-tool.sh"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/commit-reminder.sh"
+          }
+        ]
       }
     ],
     "PreCompact": [
@@ -49,6 +58,8 @@
       "Bash(git show:*)",
       "Bash(gh issue:*)",
       "Bash(gh pr:*)",
+      "Bash(gh label:*)",
+      "Bash(gh milestone:*)",
       "Bash(chmod:*)",
       "Bash(ls:*)",
       "Bash(mkdir:*)",
@@ -66,7 +77,15 @@
       "Bash(pnpm:*)",
       "Bash(npm:*)",
       "Bash(npx:*)",
-      "Bash(go:*)"
+      "Bash(go:*)",
+      "Bash(grep:*)",
+      "Bash(tree:*)",
+      "Bash(realpath:*)",
+      "Bash(dirname:*)",
+      "Bash(basename:*)",
+      "Bash(./tests/e2e/*)",
+      "mcp__travel-calendar__*",
+      "Edit(/Users/michaelw/claude/projects/travel-calendar/**)"
     ],
     "deny": [
       "Bash(rm -rf /:*)",

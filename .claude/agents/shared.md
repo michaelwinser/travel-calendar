@@ -39,14 +39,11 @@ description: TypeScript type definitions and interfaces shared across packages i
 ## Command Reference
 
 ```bash
-# Regenerate types from OpenAPI spec
-./tc exec pnpm --filter @travel-calendar/shared generate
+# Regenerate all types from OpenAPI spec (backend + shared)
+./tc generate
 
-# Or manually
-npx openapi-typescript packages/api/openapi.yaml -o packages/shared/src/api.ts
-
-# Build shared types
-./tc exec pnpm --filter @travel-calendar/shared build
+# Regenerate shared TypeScript types only
+./tc generate shared
 ```
 
 ## Workflow
@@ -54,6 +51,5 @@ npx openapi-typescript packages/api/openapi.yaml -o packages/shared/src/api.ts
 When API changes:
 
 1. **Edit OpenAPI spec** at `packages/api/openapi.yaml`
-2. **Regenerate Go types** in backend and CLI
-3. **Regenerate TypeScript types** with `pnpm generate` in shared
-4. **Update consumers** if type structure changed significantly
+2. **Regenerate all types** with `./tc generate`
+3. **Update consumers** if type structure changed significantly

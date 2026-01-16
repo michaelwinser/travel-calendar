@@ -2,13 +2,32 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { calendarStore, isCalendarConnected } from '$lib/stores/calendar';
-	import type { GoogleCalendar } from '@travel-calendar/shared';
+	import { api } from '$lib/api/client';
+	import type { GoogleCalendar, TripSuggestion, Trip, SuggestedItem } from '@travel-calendar/shared';
 
 	let loading = true;
 	let connecting = false;
 	let availableCalendars: GoogleCalendar[] = [];
 	let selectedIds: Set<string> = new Set();
 	let saving = false;
+
+	// Trip suggestions state
+	let suggestions: TripSuggestion[] = [];
+	let loadingSuggestions = false;
+	let suggestionsError = '';
+	let expandedSuggestions: Set<string> = new Set();
+	let importingId: string | null = null;
+	let dismissingId: string | null = null;
+	let mergingId: string | null = null;
+	let importedTrip: Trip | null = null;
+	let mergedTrip: Trip | null = null;
+	let selectedMergeTarget: Record<string, string> = {};
+
+	// Date range for suggestions (default: next 90 days)
+	const today = new Date().toISOString().split('T')[0];
+	const ninetyDaysFromNow = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+	let suggestionsFrom = today;
+	let suggestionsTo = ninetyDaysFromNow;
 
 	onMount(async () => {
 		await calendarStore.loadAuthStatus();
@@ -33,6 +52,7 @@
 			await calendarStore.disconnect();
 			availableCalendars = [];
 			selectedIds = new Set();
+			suggestions = [];
 		}
 	}
 
@@ -49,6 +69,134 @@
 		saving = true;
 		await calendarStore.setSelectedCalendars(Array.from(selectedIds));
 		saving = false;
+	}
+
+	async function findTravelEvents() {
+		loadingSuggestions = true;
+		suggestionsError = '';
+		importedTrip = null;
+
+		try {
+			suggestions = await api.calendar.getTripSuggestions(suggestionsFrom, suggestionsTo);
+		} catch (err) {
+			suggestionsError = err instanceof Error ? err.message : 'Failed to load suggestions';
+		} finally {
+			loadingSuggestions = false;
+		}
+	}
+
+	function toggleSuggestionExpanded(id: string) {
+		if (expandedSuggestions.has(id)) {
+			expandedSuggestions.delete(id);
+		} else {
+			expandedSuggestions.add(id);
+		}
+		expandedSuggestions = expandedSuggestions; // Trigger reactivity
+	}
+
+	async function importSuggestion(suggestionId: string) {
+		importingId = suggestionId;
+		importedTrip = null;
+		mergedTrip = null;
+		suggestionsError = '';
+
+		try {
+			importedTrip = await api.calendar.importSuggestion(suggestionId);
+			// Remove the imported suggestion from the list
+			suggestions = suggestions.filter((s) => s.id !== suggestionId);
+		} catch (err) {
+			suggestionsError = err instanceof Error ? err.message : 'Failed to import trip';
+		} finally {
+			importingId = null;
+		}
+	}
+
+	async function dismissSuggestion(suggestionId: string) {
+		dismissingId = suggestionId;
+		suggestionsError = '';
+
+		try {
+			await api.calendar.dismissSuggestion(suggestionId);
+			// Remove the dismissed suggestion from the list
+			suggestions = suggestions.filter((s) => s.id !== suggestionId);
+		} catch (err) {
+			suggestionsError = err instanceof Error ? err.message : 'Failed to dismiss suggestion';
+		} finally {
+			dismissingId = null;
+		}
+	}
+
+	async function mergeSuggestion(suggestionId: string) {
+		const tripId = selectedMergeTarget[suggestionId];
+		if (!tripId) return;
+
+		mergingId = suggestionId;
+		importedTrip = null;
+		mergedTrip = null;
+		suggestionsError = '';
+
+		try {
+			mergedTrip = await api.calendar.mergeSuggestion(suggestionId, tripId);
+			// Remove the merged suggestion from the list
+			suggestions = suggestions.filter((s) => s.id !== suggestionId);
+			// Clear the selection
+			delete selectedMergeTarget[suggestionId];
+			selectedMergeTarget = selectedMergeTarget;
+		} catch (err) {
+			suggestionsError = err instanceof Error ? err.message : 'Failed to merge suggestion';
+		} finally {
+			mergingId = null;
+		}
+	}
+
+	function formatDate(dateStr: string): string {
+		return new Date(dateStr).toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric'
+		});
+	}
+
+	function formatEventTime(dateStr: string): string {
+		const date = new Date(dateStr);
+		return date.toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric'
+		}) + ' at ' + date.toLocaleTimeString('en-US', {
+			hour: 'numeric',
+			minute: '2-digit'
+		});
+	}
+
+	function getItemIcon(type: SuggestedItem['type']): string {
+		switch (type) {
+			case 'flight': return '✈️';
+			case 'hotel': return '🏨';
+			case 'train': return '🚆';
+			case 'drive': return '🚗';
+			case 'event': return '📍';
+			default: return '📌';
+		}
+	}
+
+	function formatItemSummary(item: SuggestedItem): string {
+		switch (item.type) {
+			case 'flight':
+				if (item.carrier && item.flightNumber) {
+					return `${item.carrier}${item.flightNumber}${item.from && item.to ? `: ${item.from} → ${item.to}` : ''}`;
+				}
+				return item.from && item.to ? `${item.from} → ${item.to}` : item.name || 'Flight';
+			case 'hotel':
+				return item.name || item.location || 'Hotel';
+			case 'train':
+				return item.from && item.to ? `${item.from} → ${item.to}` : item.name || 'Train';
+			case 'drive':
+				return item.from && item.to ? `${item.from} → ${item.to}` : item.name || 'Drive';
+			case 'event':
+				return item.name || item.location || 'Event';
+			default:
+				return item.name || 'Item';
+		}
 	}
 </script>
 
@@ -219,6 +367,247 @@
 					{/if}
 				</div>
 			</section>
+
+			<!-- Trip Suggestions Section -->
+			{#if $isCalendarConnected && $calendarStore.selectedCalendars.length > 0}
+				<section class="bg-white rounded-lg shadow mb-6">
+					<div class="p-6 border-b">
+						<h2 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
+							<svg class="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+							</svg>
+							Trip Suggestions
+						</h2>
+					</div>
+
+					<div class="p-6">
+						<p class="text-sm text-gray-600 mb-4">
+							Find travel-related events in your calendar (events with locations or travel keywords like
+							Flight, Hotel, Train, etc.) and import them as trips.
+						</p>
+
+						<!-- Date range selector -->
+						<div class="flex flex-wrap gap-4 mb-4">
+							<div>
+								<label class="block text-sm font-medium text-gray-700 mb-1">From</label>
+								<input
+									type="date"
+									bind:value={suggestionsFrom}
+									class="px-3 py-2 border rounded-md text-sm"
+								/>
+							</div>
+							<div>
+								<label class="block text-sm font-medium text-gray-700 mb-1">To</label>
+								<input
+									type="date"
+									bind:value={suggestionsTo}
+									class="px-3 py-2 border rounded-md text-sm"
+								/>
+							</div>
+							<div class="flex items-end">
+								<button
+									class="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+									disabled={loadingSuggestions}
+									on:click={findTravelEvents}
+								>
+									{#if loadingSuggestions}
+										<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+											<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+											<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+										</svg>
+										Searching...
+									{:else}
+										<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+										</svg>
+										Find Travel Events
+									{/if}
+								</button>
+							</div>
+						</div>
+
+						{#if suggestionsError}
+							<div class="mb-4 p-3 bg-red-50 text-red-700 rounded-md">
+								{suggestionsError}
+							</div>
+						{/if}
+
+						{#if importedTrip}
+							<div class="mb-4 p-3 bg-green-50 text-green-700 rounded-md flex items-center justify-between">
+								<span>
+									Trip "{importedTrip.name}" created{importedTrip.items && importedTrip.items.length > 0 ? ` with ${importedTrip.items.length} item${importedTrip.items.length !== 1 ? 's' : ''}` : ''}!
+								</span>
+								<a
+									href="/trips/{importedTrip.id}"
+									class="text-green-800 underline hover:no-underline"
+								>
+									View Trip
+								</a>
+							</div>
+						{/if}
+
+						{#if mergedTrip}
+							<div class="mb-4 p-3 bg-blue-50 text-blue-700 rounded-md flex items-center justify-between">
+								<span>
+									Items merged into "{mergedTrip.name}"{mergedTrip.items && mergedTrip.items.length > 0 ? ` (now has ${mergedTrip.items.length} item${mergedTrip.items.length !== 1 ? 's' : ''})` : ''}!
+								</span>
+								<a
+									href="/trips/{mergedTrip.id}"
+									class="text-blue-800 underline hover:no-underline"
+								>
+									View Trip
+								</a>
+							</div>
+						{/if}
+
+						<!-- Suggestions list -->
+						{#if suggestions.length > 0}
+							<div class="space-y-3">
+								{#each suggestions as suggestion (suggestion.id)}
+									<div class="border rounded-lg overflow-hidden">
+										<div class="p-4 bg-gray-50">
+											<div class="flex items-start justify-between">
+												<div class="flex-1">
+													<div class="flex items-center gap-2 flex-wrap">
+														<h3 class="font-medium text-gray-900">{suggestion.name}</h3>
+														{#if suggestion.source === 'tripit'}
+															<span class="px-2 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-700 rounded-full">
+																TripIt
+															</span>
+														{/if}
+													</div>
+													<p class="text-sm text-gray-600">{suggestion.location}</p>
+													<p class="text-sm text-gray-500 mt-1">
+														{formatDate(suggestion.startDate)} - {formatDate(suggestion.endDate)}
+													</p>
+
+													{#if suggestion.mergeCandidates && suggestion.mergeCandidates.length > 0}
+														<div class="mt-2">
+															{#each suggestion.mergeCandidates as candidate}
+																<div class="flex items-center gap-1.5 text-sm text-amber-700 bg-amber-50 px-2 py-1 rounded-md inline-flex">
+																	<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																		<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+																	</svg>
+																	<span>Similar: <a href="/trips/{candidate.tripId}" class="underline hover:no-underline">{candidate.tripName}</a></span>
+																	<span class="text-amber-600">({candidate.matchReason})</span>
+																</div>
+															{/each}
+														</div>
+													{/if}
+												</div>
+												<!-- Action buttons -->
+												<div class="ml-4 flex items-center gap-2">
+													<!-- Dismiss button -->
+													<button
+														class="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md disabled:opacity-50"
+														title="Dismiss suggestion"
+														disabled={dismissingId === suggestion.id}
+														on:click={() => dismissSuggestion(suggestion.id)}
+													>
+														{#if dismissingId === suggestion.id}
+															<svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+																<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+																<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+															</svg>
+														{:else}
+															<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+															</svg>
+														{/if}
+													</button>
+
+													{#if suggestion.mergeCandidates && suggestion.mergeCandidates.length > 0}
+														<!-- Merge dropdown -->
+														<div class="flex items-center gap-1">
+															<select
+																class="px-2 py-1.5 text-sm border rounded-md bg-white"
+																bind:value={selectedMergeTarget[suggestion.id]}
+															>
+																<option value="">Merge into...</option>
+																{#each suggestion.mergeCandidates as candidate}
+																	<option value={candidate.tripId}>{candidate.tripName}</option>
+																{/each}
+															</select>
+															{#if selectedMergeTarget[suggestion.id]}
+																<button
+																	class="px-3 py-1.5 bg-amber-600 text-white text-sm rounded-md hover:bg-amber-700 disabled:opacity-50"
+																	disabled={mergingId === suggestion.id}
+																	on:click={() => mergeSuggestion(suggestion.id)}
+																>
+																	{mergingId === suggestion.id ? 'Merging...' : 'Merge'}
+																</button>
+															{/if}
+														</div>
+														<span class="text-gray-300">|</span>
+													{/if}
+
+													<!-- Import button -->
+													<button
+														class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50"
+														disabled={importingId === suggestion.id}
+														on:click={() => importSuggestion(suggestion.id)}
+													>
+														{importingId === suggestion.id ? 'Importing...' : 'Import as New'}
+													</button>
+												</div>
+											</div>
+
+											{#if suggestion.suggestedItems && suggestion.suggestedItems.length > 0}
+												<div class="mt-3 pt-3 border-t border-gray-200">
+													<p class="text-xs font-medium text-gray-500 uppercase mb-2">Items to create</p>
+													<div class="flex flex-wrap gap-2">
+														{#each suggestion.suggestedItems as item}
+															<span class="inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded text-sm text-gray-700">
+																<span>{getItemIcon(item.type)}</span>
+																<span>{formatItemSummary(item)}</span>
+															</span>
+														{/each}
+													</div>
+												</div>
+											{/if}
+
+											<!-- Toggle source events -->
+											<button
+												class="mt-3 text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
+												on:click={() => toggleSuggestionExpanded(suggestion.id)}
+											>
+												<svg
+													class="w-4 h-4 transition-transform {expandedSuggestions.has(suggestion.id) ? 'rotate-90' : ''}"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+												</svg>
+												{suggestion.sourceEvents.length} source event{suggestion.sourceEvents.length !== 1 ? 's' : ''}
+											</button>
+										</div>
+
+										<!-- Source events (collapsible) -->
+										{#if expandedSuggestions.has(suggestion.id)}
+											<div class="border-t bg-white divide-y">
+												{#each suggestion.sourceEvents as event (event.id)}
+													<div class="p-3 text-sm">
+														<div class="font-medium text-gray-900">{event.summary}</div>
+														{#if event.location}
+															<div class="text-gray-600">{event.location}</div>
+														{/if}
+														<div class="text-gray-500">{formatEventTime(event.start)}</div>
+													</div>
+												{/each}
+											</div>
+										{/if}
+									</div>
+								{/each}
+							</div>
+						{:else if !loadingSuggestions && suggestions.length === 0}
+							<p class="text-gray-500 text-sm">
+								Click "Find Travel Events" to search for travel-related events in your selected calendars.
+							</p>
+						{/if}
+					</div>
+				</section>
+			{/if}
 
 			<!-- Info section -->
 			<section class="bg-white rounded-lg shadow">

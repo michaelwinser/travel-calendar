@@ -60,9 +60,9 @@ This roadmap tracks implementation progress for the Travel Calendar application.
 
 | Feature | Status | Use Cases | Notes |
 |---------|--------|-----------|-------|
-| Merge existing trips | Not Started | UC-ORG-001 | Combine two trips into one |
+| Merge existing trips | Done | UC-ORG-001 | Combine two trips into one |
 | Convert trip to item | Not Started | UC-ORG-002 | Day trip → event on larger trip |
-| Move item between trips | Not Started | UC-ORG-003 | Reassign items |
+| Move item between trips | Done | UC-ORG-003 | Reassign items |
 | Create trip from item(s) | Not Started | UC-ORG-004 | Split trip workflow |
 | Bulk move items | Not Started | UC-ORG-005 | Multi-select operations |
 
@@ -169,9 +169,9 @@ This roadmap tracks implementation progress for the Travel Calendar application.
 
 | ID | Description | Status |
 |----|-------------|--------|
-| UC-ORG-001 | Merge two existing trips | Not Started |
+| UC-ORG-001 | Merge two existing trips | Done |
 | UC-ORG-002 | Convert trip to item on another trip | Not Started |
-| UC-ORG-003 | Move item to another trip | Not Started |
+| UC-ORG-003 | Move item to another trip | Done |
 | UC-ORG-004 | Create trip from item(s) | Not Started |
 | UC-ORG-005 | Bulk move items between trips | Not Started |
 

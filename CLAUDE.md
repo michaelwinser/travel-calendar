@@ -68,19 +68,33 @@ This codebase is designed for **AI-assisted development** with strong component 
 
 ### Git Workflow
 
-**CRITICAL: Only the Commit Agent may execute `git commit` or `git push` commands.**
+```
+╔══════════════════════════════════════════════════════════════════════════╗
+║  ⚠️  MANDATORY: ALL COMMITS MUST GO THROUGH THE COMMIT AGENT            ║
+║                                                                          ║
+║  NEVER run `git commit` or `git push` directly.                          ║
+║  ALWAYS spawn the Commit Agent: Task(subagent_type="Commit")            ║
+║                                                                          ║
+║  This is NOT optional. A PreToolUse hook will remind you if you forget. ║
+╚══════════════════════════════════════════════════════════════════════════╝
+```
 
-All other agents must delegate commit/push operations to the Commit Agent. This ensures:
-- Code Review Agent is always invoked before commits
-- Pre-commit checks (`./tc test-precommit`) always run
-- Consistent commit message formatting
+**Why this matters:** The Commit Agent ensures the full workflow runs:
+1. Pre-commit tests (`./tc test-precommit`)
+2. Code Review Agent reviews all changes
+3. Tools Agent analyzes session for permission optimizations
+4. Session Summary Agent updates progress tracking
 
-1. **Every commit references an issue**: `feat(backend): add expense entity (#42)`
-2. **Commit format**: `type(component): description (#issue)`
-   - Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
-   - Component: `api`, `backend`, `frontend`, `cli`, `shared`, `infra`
-3. **No direct commits to main** - all changes via PR
-4. **PR title matches commit format**
+**If you skip the Commit Agent, these steps are skipped**, degrading project quality and losing session history.
+
+**Commit message format**: `type(component): description (#issue)`
+- Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
+- Component: `api`, `backend`, `frontend`, `cli`, `shared`, `infra`
+
+**Other rules:**
+- Every commit references an issue when applicable
+- No direct commits to main - all changes via PR
+- PR title matches commit format
 
 ### Code Changes
 
@@ -146,11 +160,10 @@ Raw `docker` and `docker-compose` commands are denied in `.claude/settings.json`
 ./tc stop                       # Stop services
 ./tc health                     # Check service health
 ./tc curl <service:port/path>   # HTTP requests inside container
-./tc exec <command>             # Run command in backend container
 ./tc logs [service]             # View service logs
-
-# Backend testing (Go, includes MCP):
-./tc exec sh -c "cd packages/backend && go test ./..."
+./tc test backend               # Run backend Go tests
+./tc test frontend              # Run frontend tests
+./tc generate                   # Regenerate code from OpenAPI
 
 # NOT these (will be denied):
 docker compose up       # DENIED
@@ -206,13 +219,13 @@ Each agent has detailed checklists. Here are the key rules:
 
 #### Backend Agent (Go)
 - **Read first**: `packages/backend/ARCHITECTURE.md`
-- **Test**: `./tc exec sh -c "cd packages/backend && go test ./..."`
+- **Test**: `./tc test backend`
 - **Forbidden**: UI code, frontend imports, direct DB queries in handlers
 - **MCP**: Tool definitions auto-generated from OpenAPI `x-mcp` extensions; handlers in `internal/mcp/`
 
 #### Frontend Agent
 - **Read first**: `packages/frontend/ARCHITECTURE.md`
-- **Test**: `./tc exec pnpm test:frontend`
+- **Test**: `./tc test frontend`
 - **Forbidden**: Direct API calls in components, ID-based lookups, business logic
 
 #### CLI Agent (Go)
@@ -222,7 +235,7 @@ Each agent has detailed checklists. Here are the key rules:
 
 #### Shared Agent
 - **Read first**: `packages/shared/ARCHITECTURE.md`
-- **Regenerate**: `./tc exec pnpm --filter @travel-calendar/shared generate`
+- **Regenerate**: `./tc generate` (or `./tc generate shared` for TypeScript only)
 - **Forbidden**: Editing api.ts directly, runtime code, manual type definitions
 
 #### Cross-Component Agent
@@ -262,11 +275,17 @@ Each agent has detailed checklists. Here are the key rules:
 - **Works with**: Infra Agent (implements approved changes)
 
 #### Session Summary Agent
-- **When**: After commits (via Commit Agent), on request, or at session end
+- **When**: Proactively invoked - see triggers below
 - **Does**: Maintains running summary in `blog/.current.md`, detects session boundaries
 - **Output**: Dated blog entries in `blog/YYYY-MM-DD-slug.md` when sessions conclude
-- **Invoked by**: Commit Agent (after Tools Agent step)
 - **Files**: `blog/.current.md` (working file, gitignored), `blog/*.md` (finalized entries)
+
+**Proactive invocation triggers** (Claude should invoke without being asked):
+1. After commits (via Commit Agent workflow)
+2. After completing a significant feature or fix
+3. When user says "done", "wrap up", "that's all", or similar
+4. Before conversation compaction (if detected)
+5. When switching to a substantially different topic
 
 #### Product Management Agent
 - **When**: New feature requests, scope clarification, feature completion review, roadmap planning

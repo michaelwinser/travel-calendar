@@ -89,17 +89,9 @@ When adding or modifying API endpoints:
 
 1. **Edit OpenAPI spec** at `packages/api/openapi.yaml`
 2. **Validate** with `npx @redocly/cli lint packages/api/openapi.yaml`
-3. **Regenerate backend types**
+3. **Regenerate all types** (backend Go + shared TypeScript)
    ```bash
-   ./tc exec sh -c "cd packages/backend && oapi-codegen -generate types,chi-server -package api ../api/openapi.yaml > internal/api/openapi.gen.go"
+   ./tc generate
    ```
-4. **Regenerate CLI client**
-   ```bash
-   cd packages/cli && oapi-codegen -generate types,client -package client ../api/openapi.yaml > internal/client/client.gen.go
-   ```
-5. **Regenerate TypeScript types**
-   ```bash
-   ./tc exec pnpm --filter @travel-calendar/shared generate
-   ```
-6. **Implement changes** in each component
-7. **Test** at each step
+4. **Implement changes** in each component
+5. **Test** at each step

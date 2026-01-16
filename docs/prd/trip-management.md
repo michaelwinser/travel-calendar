@@ -721,8 +721,9 @@ travel NYC next Wed
 
 - Trip templates (recurring trips)
 - Trip sharing/collaboration
-- Trip merging
 - GPS coordinates or precise geographic data
+
+**Note**: Trip organization features (merging, converting trips to items, moving items) are covered in [trip-organization.md](./trip-organization.md).
 - Automatic location inference from flight/hotel items (future enhancement)
 - Time-of-day location changes (morning vs evening on travel days)
 - Location history/tracking beyond trip dates

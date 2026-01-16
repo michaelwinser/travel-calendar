@@ -159,6 +159,9 @@ RUN apk add --no-cache \
 
 RUN npm install -g pnpm
 
+# Install oapi-codegen for OpenAPI code generation
+RUN go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
+
 # Set Playwright to use system Chromium
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser

@@ -30,9 +30,9 @@ model: opus
 
 ## Checklist After Changes
 
-- [ ] Run Go tests: `./tc exec sh -c "cd packages/backend && go test ./..."`
+- [ ] Run Go tests: `./tc test backend`
 - [ ] Verify health check: `./tc curl backend:3000/health`
-- [ ] If API changed, regenerate types in shared package
+- [ ] If API changed, regenerate types: `./tc generate`
 
 ## Forbidden
 
@@ -45,10 +45,13 @@ model: opus
 
 ```bash
 # Run tests
-./tc exec sh -c "cd packages/backend && go test ./..."
+./tc test backend
 
-# Regenerate OpenAPI types
-./tc exec sh -c "cd packages/backend && oapi-codegen -generate types,chi-server -package api ../api/openapi.yaml > internal/api/openapi.gen.go"
+# Regenerate OpenAPI types (backend + shared)
+./tc generate
+
+# Regenerate backend Go types only
+./tc generate backend
 
 # Check API endpoint
 ./tc curl backend:3000/api/trips

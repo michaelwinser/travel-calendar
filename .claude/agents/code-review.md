@@ -77,7 +77,7 @@ For each affected component, run appropriate tests:
 | backend | `./tc test backend` |
 | frontend | `./tc test frontend` |
 | frontend (browser) | `./tc test browser` (see Step 3a) |
-| shared | `./tc exec pnpm build:shared` |
+| shared | `./tc generate shared` (regenerate types) |
 | infra | `./tc build && ./tc start && ./tc health` |
 
 ### Step 3a: Evaluate Playwright Browser Tests (Frontend Changes)
@@ -166,7 +166,7 @@ Collect findings from each agent.
 
 ### Test Results
 - [ ] backend: `./tc test backend` - PASSED/FAILED
-- [ ] shared: `./tc exec pnpm build:shared` - PASSED/FAILED
+- [ ] shared: `./tc generate shared` - PASSED/FAILED
 
 ### Browser Test Results (if applicable)
 - [ ] Playwright tests: PASSED/FAILED/SKIPPED
