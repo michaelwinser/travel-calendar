@@ -21,6 +21,17 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "matcher": "TodoWrite",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/check-todos-complete.sh"
+          }
+        ]
+      }
+    ],
     "PreCompact": [
       {
         "matcher": "auto",

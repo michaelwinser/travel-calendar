@@ -31,6 +31,7 @@ Maintain a microblog of development progress by:
 4. **Topic shift** - Work is moving to a substantially different area
 5. **On request** - User explicitly asks for a summary
 6. **Before compaction** - If conversation is getting long and may be compacted
+7. **All todos complete** - PostToolUse hook on TodoWrite reminds you when all tasks are done
 
 **The goal is to capture progress continuously**, not just when explicitly asked. If in doubt, invoke the agent - it's better to have too much history than too little.
 
