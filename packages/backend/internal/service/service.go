@@ -15,11 +15,11 @@ import (
 
 // Service provides business logic operations.
 type Service struct {
-	store *store.Store
+	store store.StoreInterface
 }
 
 // New creates a new Service with the given store.
-func New(s *store.Store) *Service {
+func New(s store.StoreInterface) *Service {
 	return &Service{store: s}
 }
 

@@ -1,7 +1,6 @@
 package store
 
 import (
-	"database/sql"
 	"testing"
 	"time"
 
@@ -12,15 +11,15 @@ import (
 )
 
 // setupTestDB creates an in-memory SQLite store for testing.
-func setupTestDB(t *testing.T) *Store {
-	store, err := New(":memory:")
+func setupTestDB(t *testing.T) *SQLiteStore {
+	store, err := NewSQLite(":memory:")
 	require.NoError(t, err)
 	t.Cleanup(func() { store.Close() })
 	return store
 }
 
 // Helper to create a test trip
-func createTestTrip(t *testing.T, store *Store, name, purpose string, startDate, endDate *time.Time) entity.Trip {
+func createTestTrip(t *testing.T, store *SQLiteStore, name, purpose string, startDate, endDate *time.Time) entity.Trip {
 	trip := entity.Trip{
 		ID:        uuid.New(),
 		Name:      name,
@@ -273,7 +272,7 @@ func TestUpdateTrip_NotFound(t *testing.T) {
 	}
 
 	err := store.UpdateTrip(&trip)
-	assert.ErrorIs(t, err, sql.ErrNoRows)
+	assert.ErrorIs(t, err, ErrNotFound)
 }
 
 func TestDeleteTrip_Success(t *testing.T) {
@@ -294,7 +293,7 @@ func TestDeleteTrip_NotFound(t *testing.T) {
 	store := setupTestDB(t)
 
 	err := store.DeleteTrip(uuid.New())
-	assert.ErrorIs(t, err, sql.ErrNoRows)
+	assert.ErrorIs(t, err, ErrNotFound)
 }
 
 func TestDeleteTrip_CascadesItems(t *testing.T) {
@@ -563,7 +562,7 @@ func TestDeleteItem_NotFound(t *testing.T) {
 	store := setupTestDB(t)
 
 	err := store.DeleteItem(uuid.New())
-	assert.ErrorIs(t, err, sql.ErrNoRows)
+	assert.ErrorIs(t, err, ErrNotFound)
 }
 
 // =============================================================================
@@ -607,7 +606,7 @@ func TestListDocuments_Unassociated(t *testing.T) {
 }
 
 // Helper to create test document
-func createTestDocument(t *testing.T, store *Store, name, docType string, tripID *uuid.UUID) entity.Document {
+func createTestDocument(t *testing.T, store *SQLiteStore, name, docType string, tripID *uuid.UUID) entity.Document {
 	doc := entity.Document{
 		ID:        uuid.New(),
 		TripID:    tripID,

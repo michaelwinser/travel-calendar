@@ -24,7 +24,7 @@ import (
 
 // CalendarService handles Google Calendar OAuth and operations.
 type CalendarService struct {
-	store        *store.Store
+	store        store.StoreInterface
 	clientID     string
 	clientSecret string
 	redirectURL  string
@@ -39,7 +39,7 @@ type CalendarConfig struct {
 }
 
 // NewCalendarService creates a new CalendarService.
-func NewCalendarService(s *store.Store, config CalendarConfig) *CalendarService {
+func NewCalendarService(s store.StoreInterface, config CalendarConfig) *CalendarService {
 	return &CalendarService{
 		store:        s,
 		clientID:     config.ClientID,

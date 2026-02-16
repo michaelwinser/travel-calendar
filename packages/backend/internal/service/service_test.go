@@ -14,7 +14,7 @@ import (
 
 // setupTestService creates a service with an in-memory database for testing.
 func setupTestService(t *testing.T) *Service {
-	s, err := store.New(":memory:")
+	s, err := store.NewSQLite(":memory:")
 	require.NoError(t, err)
 	t.Cleanup(func() { s.Close() })
 	return New(s)

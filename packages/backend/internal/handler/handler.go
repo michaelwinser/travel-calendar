@@ -2,8 +2,8 @@
 package handler
 
 import (
-	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -12,6 +12,7 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/user/travel-calendar/backend/internal/api"
 	"github.com/user/travel-calendar/backend/internal/service"
+	"github.com/user/travel-calendar/backend/internal/store"
 )
 
 // Handler implements api.ServerInterface.
@@ -114,7 +115,7 @@ func (h *Handler) UpdateTrip(w http.ResponseWriter, r *http.Request, tripId api.
 // DeleteTrip deletes a trip by ID.
 func (h *Handler) DeleteTrip(w http.ResponseWriter, r *http.Request, tripId api.TripId) {
 	err := h.svc.DeleteTrip(uuid.UUID(tripId))
-	if err == sql.ErrNoRows {
+	if errors.Is(err, store.ErrNotFound) {
 		respondError(w, http.StatusNotFound, "trip not found")
 		return
 	}
@@ -226,7 +227,7 @@ func (h *Handler) CreateTripItem(w http.ResponseWriter, r *http.Request, tripId 
 // DeleteItem deletes an item by ID.
 func (h *Handler) DeleteItem(w http.ResponseWriter, r *http.Request, itemId api.ItemId) {
 	err := h.svc.DeleteItem(uuid.UUID(itemId))
-	if err == sql.ErrNoRows {
+	if errors.Is(err, store.ErrNotFound) {
 		respondError(w, http.StatusNotFound, "item not found")
 		return
 	}

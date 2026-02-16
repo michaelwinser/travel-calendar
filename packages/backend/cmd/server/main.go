@@ -35,7 +35,7 @@ func main() {
 	}
 
 	// Initialize store
-	db, err := store.New(dbPath)
+	db, err := store.NewSQLite(dbPath)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}

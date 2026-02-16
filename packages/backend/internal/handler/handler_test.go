@@ -18,7 +18,7 @@ import (
 
 // setupTestHandler creates a handler with an in-memory database for testing.
 func setupTestHandler(t *testing.T) *Handler {
-	s, err := store.New(":memory:")
+	s, err := store.NewSQLite(":memory:")
 	require.NoError(t, err)
 	t.Cleanup(func() { s.Close() })
 	svc := service.New(s)

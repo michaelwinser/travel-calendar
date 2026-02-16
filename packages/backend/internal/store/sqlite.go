@@ -1,4 +1,4 @@
-// Package store provides database access layer using SQLite.
+// Package store provides database access layer implementations.
 package store
 
 import (
@@ -12,19 +12,22 @@ import (
 	"github.com/user/travel-calendar/backend/internal/entity"
 )
 
-// Store provides database access methods.
-type Store struct {
+// Compile-time check that SQLiteStore implements StoreInterface.
+var _ StoreInterface = (*SQLiteStore)(nil)
+
+// SQLiteStore provides database access methods using SQLite.
+type SQLiteStore struct {
 	db *sql.DB
 }
 
-// New creates a new Store with the given database path.
-func New(dbPath string) (*Store, error) {
+// NewSQLite creates a new SQLiteStore with the given database path.
+func NewSQLite(dbPath string) (*SQLiteStore, error) {
 	db, err := sql.Open("sqlite3", dbPath+"?_foreign_keys=on")
 	if err != nil {
 		return nil, fmt.Errorf("opening database: %w", err)
 	}
 
-	store := &Store{db: db}
+	store := &SQLiteStore{db: db}
 	if err := store.migrate(); err != nil {
 		return nil, fmt.Errorf("running migrations: %w", err)
 	}
@@ -33,12 +36,12 @@ func New(dbPath string) (*Store, error) {
 }
 
 // Close closes the database connection.
-func (s *Store) Close() error {
+func (s *SQLiteStore) Close() error {
 	return s.db.Close()
 }
 
 // migrate creates the database schema.
-func (s *Store) migrate() error {
+func (s *SQLiteStore) migrate() error {
 	schema := `
 	CREATE TABLE IF NOT EXISTS trips (
 		id TEXT PRIMARY KEY,
@@ -168,7 +171,7 @@ func (s *Store) migrate() error {
 // Trip methods
 
 // ListTrips returns all trips, optionally filtered.
-func (s *Store) ListTrips(upcoming, past *bool, purpose *string) ([]entity.Trip, error) {
+func (s *SQLiteStore) ListTrips(upcoming, past *bool, purpose *string) ([]entity.Trip, error) {
 	query := "SELECT id, name, purpose, start_date, end_date, status, notes, created_at, updated_at FROM trips WHERE 1=1"
 	args := []interface{}{}
 
@@ -206,7 +209,7 @@ func (s *Store) ListTrips(upcoming, past *bool, purpose *string) ([]entity.Trip,
 }
 
 // GetTrip returns a single trip by ID.
-func (s *Store) GetTrip(id uuid.UUID) (*entity.Trip, error) {
+func (s *SQLiteStore) GetTrip(id uuid.UUID) (*entity.Trip, error) {
 	query := "SELECT id, name, purpose, start_date, end_date, status, notes, created_at, updated_at FROM trips WHERE id = ?"
 	row := s.db.QueryRow(query, id.String())
 	trip, err := scanTripRow(row)
@@ -220,7 +223,7 @@ func (s *Store) GetTrip(id uuid.UUID) (*entity.Trip, error) {
 }
 
 // CreateTrip inserts a new trip.
-func (s *Store) CreateTrip(trip *entity.Trip) error {
+func (s *SQLiteStore) CreateTrip(trip *entity.Trip) error {
 	query := `INSERT INTO trips (id, name, purpose, start_date, end_date, status, notes, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := s.db.Exec(query,
@@ -238,7 +241,7 @@ func (s *Store) CreateTrip(trip *entity.Trip) error {
 }
 
 // UpdateTrip updates an existing trip.
-func (s *Store) UpdateTrip(trip *entity.Trip) error {
+func (s *SQLiteStore) UpdateTrip(trip *entity.Trip) error {
 	query := `UPDATE trips SET name = ?, purpose = ?, start_date = ?, end_date = ?, status = ?, notes = ?, updated_at = ? WHERE id = ?`
 	result, err := s.db.Exec(query,
 		trip.Name,
@@ -258,13 +261,13 @@ func (s *Store) UpdateTrip(trip *entity.Trip) error {
 		return err
 	}
 	if rows == 0 {
-		return sql.ErrNoRows
+		return ErrNotFound
 	}
 	return nil
 }
 
 // DeleteTrip deletes a trip by ID.
-func (s *Store) DeleteTrip(id uuid.UUID) error {
+func (s *SQLiteStore) DeleteTrip(id uuid.UUID) error {
 	result, err := s.db.Exec("DELETE FROM trips WHERE id = ?", id.String())
 	if err != nil {
 		return err
@@ -274,13 +277,13 @@ func (s *Store) DeleteTrip(id uuid.UUID) error {
 		return err
 	}
 	if rows == 0 {
-		return sql.ErrNoRows
+		return ErrNotFound
 	}
 	return nil
 }
 
 // SearchTrips searches trips by query string.
-func (s *Store) SearchTrips(q string) ([]entity.Trip, error) {
+func (s *SQLiteStore) SearchTrips(q string) ([]entity.Trip, error) {
 	pattern := "%" + q + "%"
 	query := `SELECT id, name, purpose, start_date, end_date, status, notes, created_at, updated_at FROM trips
 		WHERE name LIKE ? OR notes LIKE ?
@@ -306,7 +309,7 @@ func (s *Store) SearchTrips(q string) ([]entity.Trip, error) {
 // Item methods
 
 // ListItems returns all items for a trip.
-func (s *Store) ListItems(tripID uuid.UUID) ([]entity.Item, error) {
+func (s *SQLiteStore) ListItems(tripID uuid.UUID) ([]entity.Item, error) {
 	query := `SELECT id, trip_id, type, date, time, confirmation, notes, from_location, to_location, carrier, flight_number, name, location, check_in, check_out, created_at, updated_at
 		FROM items WHERE trip_id = ? ORDER BY COALESCE(date, '9999-12-31') ASC, time ASC`
 
@@ -328,7 +331,7 @@ func (s *Store) ListItems(tripID uuid.UUID) ([]entity.Item, error) {
 }
 
 // GetItem returns a single item by ID.
-func (s *Store) GetItem(id uuid.UUID) (*entity.Item, error) {
+func (s *SQLiteStore) GetItem(id uuid.UUID) (*entity.Item, error) {
 	query := `SELECT id, trip_id, type, date, time, confirmation, notes, from_location, to_location, carrier, flight_number, name, location, check_in, check_out, created_at, updated_at
 		FROM items WHERE id = ?`
 	row := s.db.QueryRow(query, id.String())
@@ -343,7 +346,7 @@ func (s *Store) GetItem(id uuid.UUID) (*entity.Item, error) {
 }
 
 // CreateItem inserts a new item.
-func (s *Store) CreateItem(item *entity.Item) error {
+func (s *SQLiteStore) CreateItem(item *entity.Item) error {
 	query := `INSERT INTO items (id, trip_id, type, date, time, confirmation, notes, from_location, to_location, carrier, flight_number, name, location, check_in, check_out, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := s.db.Exec(query,
@@ -369,7 +372,7 @@ func (s *Store) CreateItem(item *entity.Item) error {
 }
 
 // DeleteItem deletes an item by ID.
-func (s *Store) DeleteItem(id uuid.UUID) error {
+func (s *SQLiteStore) DeleteItem(id uuid.UUID) error {
 	result, err := s.db.Exec("DELETE FROM items WHERE id = ?", id.String())
 	if err != nil {
 		return err
@@ -379,13 +382,13 @@ func (s *Store) DeleteItem(id uuid.UUID) error {
 		return err
 	}
 	if rows == 0 {
-		return sql.ErrNoRows
+		return ErrNotFound
 	}
 	return nil
 }
 
 // UpdateItemTrip updates an item's trip assignment.
-func (s *Store) UpdateItemTrip(itemID, newTripID uuid.UUID) error {
+func (s *SQLiteStore) UpdateItemTrip(itemID, newTripID uuid.UUID) error {
 	query := `UPDATE items SET trip_id = ?, updated_at = ? WHERE id = ?`
 	result, err := s.db.Exec(query, newTripID.String(), time.Now().Format(time.RFC3339), itemID.String())
 	if err != nil {
@@ -396,14 +399,14 @@ func (s *Store) UpdateItemTrip(itemID, newTripID uuid.UUID) error {
 		return err
 	}
 	if rows == 0 {
-		return sql.ErrNoRows
+		return ErrNotFound
 	}
 	return nil
 }
 
 // MergeTripsTransaction executes a complete trip merge within a transaction.
 // Moves all items from source to target, merges locations, and deletes source.
-func (s *Store) MergeTripsTransaction(sourceID, targetID uuid.UUID) error {
+func (s *SQLiteStore) MergeTripsTransaction(sourceID, targetID uuid.UUID) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -492,7 +495,7 @@ func (s *Store) MergeTripsTransaction(sourceID, targetID uuid.UUID) error {
 // Document methods
 
 // ListDocuments returns documents, optionally filtered by trip or unassociated.
-func (s *Store) ListDocuments(tripID *uuid.UUID, unassociated *bool) ([]entity.Document, error) {
+func (s *SQLiteStore) ListDocuments(tripID *uuid.UUID, unassociated *bool) ([]entity.Document, error) {
 	query := "SELECT id, trip_id, name, type, url, created_at, updated_at FROM documents WHERE 1=1"
 	args := []interface{}{}
 
@@ -690,7 +693,7 @@ func nullToPtr(ns sql.NullString) *string {
 // Config methods
 
 // GetConfig retrieves a config value by key.
-func (s *Store) GetConfig(key string) (*string, error) {
+func (s *SQLiteStore) GetConfig(key string) (*string, error) {
 	var value string
 	err := s.db.QueryRow("SELECT value FROM config WHERE key = ?", key).Scan(&value)
 	if err == sql.ErrNoRows {
@@ -703,7 +706,7 @@ func (s *Store) GetConfig(key string) (*string, error) {
 }
 
 // SetConfig sets a config value.
-func (s *Store) SetConfig(key, value string) error {
+func (s *SQLiteStore) SetConfig(key, value string) error {
 	query := `INSERT INTO config (key, value, updated_at) VALUES (?, ?, ?)
 		ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
 	_, err := s.db.Exec(query, key, value, time.Now().Format(time.RFC3339))
@@ -711,7 +714,7 @@ func (s *Store) SetConfig(key, value string) error {
 }
 
 // DeleteConfig removes a config value.
-func (s *Store) DeleteConfig(key string) error {
+func (s *SQLiteStore) DeleteConfig(key string) error {
 	_, err := s.db.Exec("DELETE FROM config WHERE key = ?", key)
 	return err
 }
@@ -719,7 +722,7 @@ func (s *Store) DeleteConfig(key string) error {
 // Trip Location methods
 
 // GetTripLocations returns all locations for a trip.
-func (s *Store) GetTripLocations(tripID uuid.UUID) ([]entity.TripLocation, error) {
+func (s *SQLiteStore) GetTripLocations(tripID uuid.UUID) ([]entity.TripLocation, error) {
 	query := `SELECT id, trip_id, date, location, created_at FROM trip_locations
 		WHERE trip_id = ? ORDER BY date ASC, location ASC`
 	rows, err := s.db.Query(query, tripID.String())
@@ -745,7 +748,7 @@ func (s *Store) GetTripLocations(tripID uuid.UUID) ([]entity.TripLocation, error
 }
 
 // SetTripLocations replaces all locations for a trip.
-func (s *Store) SetTripLocations(tripID uuid.UUID, locations []entity.TripLocation) error {
+func (s *SQLiteStore) SetTripLocations(tripID uuid.UUID, locations []entity.TripLocation) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -781,7 +784,7 @@ func (s *Store) SetTripLocations(tripID uuid.UUID, locations []entity.TripLocati
 }
 
 // GetTripsForDateRange returns trips that overlap with the given date range.
-func (s *Store) GetTripsForDateRange(from, to time.Time) ([]entity.Trip, error) {
+func (s *SQLiteStore) GetTripsForDateRange(from, to time.Time) ([]entity.Trip, error) {
 	query := `SELECT id, name, purpose, start_date, end_date, status, notes, created_at, updated_at FROM trips
 		WHERE start_date IS NOT NULL AND end_date IS NOT NULL
 		AND start_date <= ? AND end_date >= ?
@@ -805,7 +808,7 @@ func (s *Store) GetTripsForDateRange(from, to time.Time) ([]entity.Trip, error) 
 }
 
 // GetTripLocationsForDateRange returns locations for a trip within a date range.
-func (s *Store) GetTripLocationsForDateRange(tripID uuid.UUID, from, to time.Time) ([]entity.TripLocation, error) {
+func (s *SQLiteStore) GetTripLocationsForDateRange(tripID uuid.UUID, from, to time.Time) ([]entity.TripLocation, error) {
 	query := `SELECT id, trip_id, date, location, created_at FROM trip_locations
 		WHERE trip_id = ? AND date >= ? AND date <= ?
 		ORDER BY date ASC, location ASC`
@@ -835,7 +838,7 @@ func (s *Store) GetTripLocationsForDateRange(tripID uuid.UUID, from, to time.Tim
 // Google Credentials methods
 
 // GetGoogleCredentials retrieves OAuth credentials for a user.
-func (s *Store) GetGoogleCredentials(userID string) (*entity.GoogleCredentials, error) {
+func (s *SQLiteStore) GetGoogleCredentials(userID string) (*entity.GoogleCredentials, error) {
 	query := `SELECT user_id, access_token, refresh_token, token_type, expires_at, scopes, email, created_at, updated_at
 		FROM google_credentials WHERE user_id = ?`
 	row := s.db.QueryRow(query, userID)
@@ -864,7 +867,7 @@ func (s *Store) GetGoogleCredentials(userID string) (*entity.GoogleCredentials, 
 }
 
 // SaveGoogleCredentials inserts or updates OAuth credentials.
-func (s *Store) SaveGoogleCredentials(creds *entity.GoogleCredentials) error {
+func (s *SQLiteStore) SaveGoogleCredentials(creds *entity.GoogleCredentials) error {
 	query := `INSERT INTO google_credentials (user_id, access_token, refresh_token, token_type, expires_at, scopes, email, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(user_id) DO UPDATE SET
@@ -891,7 +894,7 @@ func (s *Store) SaveGoogleCredentials(creds *entity.GoogleCredentials) error {
 }
 
 // DeleteGoogleCredentials removes OAuth credentials for a user.
-func (s *Store) DeleteGoogleCredentials(userID string) error {
+func (s *SQLiteStore) DeleteGoogleCredentials(userID string) error {
 	result, err := s.db.Exec("DELETE FROM google_credentials WHERE user_id = ?", userID)
 	if err != nil {
 		return err
@@ -901,7 +904,7 @@ func (s *Store) DeleteGoogleCredentials(userID string) error {
 		return err
 	}
 	if rows == 0 {
-		return sql.ErrNoRows
+		return ErrNotFound
 	}
 	return nil
 }
@@ -909,7 +912,7 @@ func (s *Store) DeleteGoogleCredentials(userID string) error {
 // User Calendar methods
 
 // ListUserCalendars returns all selected calendars for a user.
-func (s *Store) ListUserCalendars(userID string) ([]entity.UserCalendar, error) {
+func (s *SQLiteStore) ListUserCalendars(userID string) ([]entity.UserCalendar, error) {
 	query := `SELECT id, user_id, calendar_id, name, enabled, created_at, updated_at
 		FROM user_calendars WHERE user_id = ? ORDER BY name ASC`
 
@@ -931,7 +934,7 @@ func (s *Store) ListUserCalendars(userID string) ([]entity.UserCalendar, error) 
 }
 
 // GetUserCalendar retrieves a specific user calendar by ID.
-func (s *Store) GetUserCalendar(id uuid.UUID) (*entity.UserCalendar, error) {
+func (s *SQLiteStore) GetUserCalendar(id uuid.UUID) (*entity.UserCalendar, error) {
 	query := `SELECT id, user_id, calendar_id, name, enabled, created_at, updated_at
 		FROM user_calendars WHERE id = ?`
 	row := s.db.QueryRow(query, id.String())
@@ -947,7 +950,7 @@ func (s *Store) GetUserCalendar(id uuid.UUID) (*entity.UserCalendar, error) {
 }
 
 // GetUserCalendarByCalendarID retrieves a user calendar by Google Calendar ID.
-func (s *Store) GetUserCalendarByCalendarID(userID, calendarID string) (*entity.UserCalendar, error) {
+func (s *SQLiteStore) GetUserCalendarByCalendarID(userID, calendarID string) (*entity.UserCalendar, error) {
 	query := `SELECT id, user_id, calendar_id, name, enabled, created_at, updated_at
 		FROM user_calendars WHERE user_id = ? AND calendar_id = ?`
 	row := s.db.QueryRow(query, userID, calendarID)
@@ -963,7 +966,7 @@ func (s *Store) GetUserCalendarByCalendarID(userID, calendarID string) (*entity.
 }
 
 // SaveUserCalendar inserts or updates a user calendar.
-func (s *Store) SaveUserCalendar(cal *entity.UserCalendar) error {
+func (s *SQLiteStore) SaveUserCalendar(cal *entity.UserCalendar) error {
 	query := `INSERT INTO user_calendars (id, user_id, calendar_id, name, enabled, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(user_id, calendar_id) DO UPDATE SET
@@ -984,7 +987,7 @@ func (s *Store) SaveUserCalendar(cal *entity.UserCalendar) error {
 }
 
 // DeleteUserCalendar removes a user calendar.
-func (s *Store) DeleteUserCalendar(id uuid.UUID) error {
+func (s *SQLiteStore) DeleteUserCalendar(id uuid.UUID) error {
 	result, err := s.db.Exec("DELETE FROM user_calendars WHERE id = ?", id.String())
 	if err != nil {
 		return err
@@ -994,19 +997,19 @@ func (s *Store) DeleteUserCalendar(id uuid.UUID) error {
 		return err
 	}
 	if rows == 0 {
-		return sql.ErrNoRows
+		return ErrNotFound
 	}
 	return nil
 }
 
 // DeleteUserCalendarsByUser removes all calendars for a user.
-func (s *Store) DeleteUserCalendarsByUser(userID string) error {
+func (s *SQLiteStore) DeleteUserCalendarsByUser(userID string) error {
 	_, err := s.db.Exec("DELETE FROM user_calendars WHERE user_id = ?", userID)
 	return err
 }
 
 // SetUserCalendars replaces all calendars for a user.
-func (s *Store) SetUserCalendars(userID string, calendars []entity.UserCalendar) error {
+func (s *SQLiteStore) SetUserCalendars(userID string, calendars []entity.UserCalendar) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -1073,7 +1076,7 @@ func scanUserCalendarRow(row *sql.Row) (entity.UserCalendar, error) {
 // Calendar Link methods
 
 // ListCalendarLinks returns all calendar links for a trip.
-func (s *Store) ListCalendarLinks(tripID uuid.UUID) ([]entity.CalendarLink, error) {
+func (s *SQLiteStore) ListCalendarLinks(tripID uuid.UUID) ([]entity.CalendarLink, error) {
 	query := `SELECT id, trip_id, item_id, calendar_id, event_id, synced_at
 		FROM calendar_links WHERE trip_id = ? ORDER BY synced_at DESC`
 
@@ -1095,7 +1098,7 @@ func (s *Store) ListCalendarLinks(tripID uuid.UUID) ([]entity.CalendarLink, erro
 }
 
 // GetCalendarLink retrieves a specific calendar link.
-func (s *Store) GetCalendarLink(id uuid.UUID) (*entity.CalendarLink, error) {
+func (s *SQLiteStore) GetCalendarLink(id uuid.UUID) (*entity.CalendarLink, error) {
 	query := `SELECT id, trip_id, item_id, calendar_id, event_id, synced_at
 		FROM calendar_links WHERE id = ?`
 	row := s.db.QueryRow(query, id.String())
@@ -1111,7 +1114,7 @@ func (s *Store) GetCalendarLink(id uuid.UUID) (*entity.CalendarLink, error) {
 }
 
 // GetCalendarLinkByEvent retrieves a calendar link by trip and event ID.
-func (s *Store) GetCalendarLinkByEvent(tripID uuid.UUID, calendarID, eventID string) (*entity.CalendarLink, error) {
+func (s *SQLiteStore) GetCalendarLinkByEvent(tripID uuid.UUID, calendarID, eventID string) (*entity.CalendarLink, error) {
 	query := `SELECT id, trip_id, item_id, calendar_id, event_id, synced_at
 		FROM calendar_links WHERE trip_id = ? AND calendar_id = ? AND event_id = ?`
 	row := s.db.QueryRow(query, tripID.String(), calendarID, eventID)
@@ -1127,7 +1130,7 @@ func (s *Store) GetCalendarLinkByEvent(tripID uuid.UUID, calendarID, eventID str
 }
 
 // CreateCalendarLink inserts a new calendar link.
-func (s *Store) CreateCalendarLink(link *entity.CalendarLink) error {
+func (s *SQLiteStore) CreateCalendarLink(link *entity.CalendarLink) error {
 	query := `INSERT INTO calendar_links (id, trip_id, item_id, calendar_id, event_id, synced_at)
 		VALUES (?, ?, ?, ?, ?, ?)`
 
@@ -1148,7 +1151,7 @@ func (s *Store) CreateCalendarLink(link *entity.CalendarLink) error {
 }
 
 // DeleteCalendarLink removes a calendar link.
-func (s *Store) DeleteCalendarLink(id uuid.UUID) error {
+func (s *SQLiteStore) DeleteCalendarLink(id uuid.UUID) error {
 	result, err := s.db.Exec("DELETE FROM calendar_links WHERE id = ?", id.String())
 	if err != nil {
 		return err
@@ -1158,13 +1161,13 @@ func (s *Store) DeleteCalendarLink(id uuid.UUID) error {
 		return err
 	}
 	if rows == 0 {
-		return sql.ErrNoRows
+		return ErrNotFound
 	}
 	return nil
 }
 
 // DeleteCalendarLinksByTrip removes all calendar links for a trip.
-func (s *Store) DeleteCalendarLinksByTrip(tripID uuid.UUID) error {
+func (s *SQLiteStore) DeleteCalendarLinksByTrip(tripID uuid.UUID) error {
 	_, err := s.db.Exec("DELETE FROM calendar_links WHERE trip_id = ?", tripID.String())
 	return err
 }
@@ -1216,7 +1219,7 @@ func scanCalendarLinkRow(row *sql.Row) (entity.CalendarLink, error) {
 // Processed Calendar Events methods
 
 // CreateProcessedEvent saves a record of a processed calendar event.
-func (s *Store) CreateProcessedEvent(event *entity.ProcessedCalendarEvent) error {
+func (s *SQLiteStore) CreateProcessedEvent(event *entity.ProcessedCalendarEvent) error {
 	query := `INSERT INTO processed_calendar_events
 		(id, calendar_event_id, calendar_id, action, trip_id, item_id, processed_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`
@@ -1242,7 +1245,7 @@ func (s *Store) CreateProcessedEvent(event *entity.ProcessedCalendarEvent) error
 }
 
 // GetProcessedEventByCalendarEvent retrieves a processed event by its calendar event ID.
-func (s *Store) GetProcessedEventByCalendarEvent(calendarID, eventID string) (*entity.ProcessedCalendarEvent, error) {
+func (s *SQLiteStore) GetProcessedEventByCalendarEvent(calendarID, eventID string) (*entity.ProcessedCalendarEvent, error) {
 	query := `SELECT id, calendar_event_id, calendar_id, action, trip_id, item_id, processed_at
 		FROM processed_calendar_events WHERE calendar_id = ? AND calendar_event_id = ?`
 
@@ -1258,7 +1261,7 @@ func (s *Store) GetProcessedEventByCalendarEvent(calendarID, eventID string) (*e
 }
 
 // IsEventProcessed checks if a calendar event has already been processed.
-func (s *Store) IsEventProcessed(calendarID, eventID string) (bool, error) {
+func (s *SQLiteStore) IsEventProcessed(calendarID, eventID string) (bool, error) {
 	query := `SELECT 1 FROM processed_calendar_events WHERE calendar_id = ? AND calendar_event_id = ? LIMIT 1`
 	var exists int
 	err := s.db.QueryRow(query, calendarID, eventID).Scan(&exists)
@@ -1272,7 +1275,7 @@ func (s *Store) IsEventProcessed(calendarID, eventID string) (bool, error) {
 }
 
 // ListProcessedEvents returns all processed events for a calendar.
-func (s *Store) ListProcessedEvents(calendarID string) ([]entity.ProcessedCalendarEvent, error) {
+func (s *SQLiteStore) ListProcessedEvents(calendarID string) ([]entity.ProcessedCalendarEvent, error) {
 	query := `SELECT id, calendar_event_id, calendar_id, action, trip_id, item_id, processed_at
 		FROM processed_calendar_events WHERE calendar_id = ? ORDER BY processed_at DESC`
 
@@ -1294,7 +1297,7 @@ func (s *Store) ListProcessedEvents(calendarID string) ([]entity.ProcessedCalend
 }
 
 // DeleteAllProcessedEvents removes all processed event records (for reset functionality).
-func (s *Store) DeleteAllProcessedEvents() error {
+func (s *SQLiteStore) DeleteAllProcessedEvents() error {
 	_, err := s.db.Exec("DELETE FROM processed_calendar_events")
 	return err
 }
