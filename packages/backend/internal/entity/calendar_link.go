@@ -11,12 +11,12 @@ import (
 
 // CalendarLink tracks the sync state between trip items and Google Calendar events.
 type CalendarLink struct {
-	ID         uuid.UUID  `db:"id"`
-	TripID     uuid.UUID  `db:"trip_id"`
-	ItemID     *uuid.UUID `db:"item_id"` // nil if linked to whole trip
-	CalendarID string     `db:"calendar_id"`
-	EventID    string     `db:"event_id"`
-	SyncedAt   time.Time  `db:"synced_at"`
+	ID         uuid.UUID  `db:"id" firestore:"id"`
+	TripID     uuid.UUID  `db:"trip_id" firestore:"tripId"`
+	ItemID     *uuid.UUID `db:"item_id" firestore:"itemId"` // nil if linked to whole trip
+	CalendarID string     `db:"calendar_id" firestore:"calendarId"`
+	EventID    string     `db:"event_id" firestore:"eventId"`
+	SyncedAt   time.Time  `db:"synced_at" firestore:"syncedAt"`
 }
 
 // ToAPI converts a CalendarLink entity to an API CalendarLink response.

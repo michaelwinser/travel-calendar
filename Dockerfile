@@ -33,7 +33,7 @@ WORKDIR /app
 # ===========================================
 # Stage: base-go - Go with CGO dependencies
 # ===========================================
-FROM golang:1.23-alpine AS base-go
+FROM golang:1.24-alpine AS base-go
 
 # CGO is required for mattn/go-sqlite3
 RUN apk add --no-cache \

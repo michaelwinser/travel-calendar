@@ -10,26 +10,26 @@ import (
 
 // Item represents a trip item (flight, hotel, etc.) in the database.
 type Item struct {
-	ID           uuid.UUID  `db:"id"`
-	TripID       uuid.UUID  `db:"trip_id"`
-	Type         string     `db:"type"`
-	Date         *time.Time `db:"date"`
-	Time         *string    `db:"time"`
-	Confirmation *string    `db:"confirmation"`
-	Notes        *string    `db:"notes"`
+	ID           uuid.UUID  `db:"id" firestore:"-"`
+	TripID       uuid.UUID  `db:"trip_id" firestore:"tripId"`
+	Type         string     `db:"type" firestore:"type"`
+	Date         *time.Time `db:"date" firestore:"date"`
+	Time         *string    `db:"time" firestore:"time"`
+	Confirmation *string    `db:"confirmation" firestore:"confirmation"`
+	Notes        *string    `db:"notes" firestore:"notes"`
 	// Transport fields
-	From         *string `db:"from_location"`
-	To           *string `db:"to_location"`
-	Carrier      *string `db:"carrier"`
-	FlightNumber *string `db:"flight_number"`
+	From         *string `db:"from_location" firestore:"from"`
+	To           *string `db:"to_location" firestore:"to"`
+	Carrier      *string `db:"carrier" firestore:"carrier"`
+	FlightNumber *string `db:"flight_number" firestore:"flightNumber"`
 	// Hotel/Event fields
-	Name     *string    `db:"name"`
-	Location *string    `db:"location"`
-	CheckIn  *time.Time `db:"check_in"`
-	CheckOut *time.Time `db:"check_out"`
+	Name     *string    `db:"name" firestore:"name"`
+	Location *string    `db:"location" firestore:"location"`
+	CheckIn  *time.Time `db:"check_in" firestore:"checkIn"`
+	CheckOut *time.Time `db:"check_out" firestore:"checkOut"`
 	// Timestamps
-	CreatedAt time.Time `db:"created_at"`
-	UpdatedAt time.Time `db:"updated_at"`
+	CreatedAt time.Time `db:"created_at" firestore:"createdAt"`
+	UpdatedAt time.Time `db:"updated_at" firestore:"updatedAt"`
 }
 
 // ToAPI converts an Item entity to an API Item response.

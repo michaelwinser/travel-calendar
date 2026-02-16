@@ -55,6 +55,18 @@ DATA_DIR="$SCRIPT_DIR/data"
 DB_FILE="$DATA_DIR/travel.db"
 BACKUP_DIR="$DATA_DIR/backups"
 
+# Store type (from .env or environment)
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    STORE_TYPE="${STORE_TYPE:-$(grep '^STORE_TYPE=' "$SCRIPT_DIR/.env" 2>/dev/null | cut -d= -f2)}"
+    FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID:-$(grep '^FIREBASE_PROJECT_ID=' "$SCRIPT_DIR/.env" 2>/dev/null | cut -d= -f2)}"
+    EMULATOR_UI_PORT="${PORT_2:-$(grep '^PORT_2=' "$SCRIPT_DIR/.env" 2>/dev/null | cut -d= -f2)}"
+    FIRESTORE_PORT="${PORT_3:-$(grep '^PORT_3=' "$SCRIPT_DIR/.env" 2>/dev/null | cut -d= -f2)}"
+fi
+STORE_TYPE="${STORE_TYPE:-firestore}"
+FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID:-travel-calendar-dev}"
+EMULATOR_UI_PORT="${EMULATOR_UI_PORT:-4001}"
+FIRESTORE_PORT="${FIRESTORE_PORT:-4002}"
+
 # ===========================================
 # Helpers
 # ===========================================
@@ -118,7 +130,10 @@ cmd_start() {
     if [ -n "$detach" ]; then
         success "Services started"
         echo ""
-        echo "  Backend + MCP:  http://localhost:3000"
+        echo "  Backend + MCP:       http://localhost:${PORT_1:-4000}"
+        if [ "$STORE_TYPE" = "firestore" ]; then
+            echo "  Firestore Emulator:  http://localhost:${EMULATOR_UI_PORT}"
+        fi
         echo ""
         echo "  View logs: ./tc logs"
         echo "  Stop:      ./tc stop"
@@ -311,25 +326,39 @@ cmd_test_precommit() {
 # ===========================================
 
 cmd_db_reset() {
-    if [ -f "$DB_FILE" ]; then
-        if confirm "This will delete all data. Are you sure?"; then
-            info "Backing up current database..."
-            cmd_db_backup "pre-reset"
-
-            info "Stopping services..."
-            cmd_stop 2>/dev/null || true
-
-            info "Removing database..."
-            rm -f "$DB_FILE"
-            rm -f "$DB_FILE-wal" "$DB_FILE-shm" 2>/dev/null || true
-
-            success "Database reset complete"
-            echo "  Start services to create new database: ./tc start"
+    if [ "$STORE_TYPE" = "firestore" ]; then
+        if confirm "This will clear all Firestore emulator data. Are you sure?"; then
+            info "Clearing Firestore emulator data..."
+            curl -s -X DELETE "http://localhost:${FIRESTORE_PORT}/emulator/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents" >/dev/null 2>&1
+            if [ $? -eq 0 ]; then
+                success "Firestore emulator data cleared"
+            else
+                error "Failed to clear Firestore emulator. Is the emulator running?"
+            fi
         else
             info "Cancelled"
         fi
     else
-        info "No database exists yet"
+        if [ -f "$DB_FILE" ]; then
+            if confirm "This will delete all data. Are you sure?"; then
+                info "Backing up current database..."
+                cmd_db_backup "pre-reset"
+
+                info "Stopping services..."
+                cmd_stop 2>/dev/null || true
+
+                info "Removing database..."
+                rm -f "$DB_FILE"
+                rm -f "$DB_FILE-wal" "$DB_FILE-shm" 2>/dev/null || true
+
+                success "Database reset complete"
+                echo "  Start services to create new database: ./tc start"
+            else
+                info "Cancelled"
+            fi
+        else
+            info "No database exists yet"
+        fi
     fi
 }
 
@@ -401,19 +430,31 @@ cmd_db_restore() {
 }
 
 cmd_db_shell() {
-    if [ ! -f "$DB_FILE" ]; then
-        error "No database exists. Start services first: ./tc start"
-    fi
-
-    if command -v sqlite3 >/dev/null 2>&1; then
-        info "Opening SQLite shell..."
-        sqlite3 "$DB_FILE"
+    if [ "$STORE_TYPE" = "firestore" ]; then
+        info "Firestore Emulator UI: http://localhost:${EMULATOR_UI_PORT}"
+        info "Open the URL above in your browser to browse Firestore data."
     else
-        # Try using Docker
-        require_docker
-        info "Opening SQLite shell via Docker..."
-        docker compose exec backend sh -c "sqlite3 /app/data/travel.db"
+        if [ ! -f "$DB_FILE" ]; then
+            error "No database exists. Start services first: ./tc start"
+        fi
+
+        if command -v sqlite3 >/dev/null 2>&1; then
+            info "Opening SQLite shell..."
+            sqlite3 "$DB_FILE"
+        else
+            # Try using Docker
+            require_docker
+            info "Opening SQLite shell via Docker..."
+            docker compose exec backend sh -c "sqlite3 /app/data/travel.db"
+        fi
     fi
+}
+
+cmd_emulator_ui() {
+    if [ "$STORE_TYPE" != "firestore" ]; then
+        error "Emulator UI is only available with STORE_TYPE=firestore"
+    fi
+    info "Firestore Emulator UI: http://localhost:${EMULATOR_UI_PORT}"
 }
 
 # ===========================================
@@ -594,10 +635,11 @@ Health & Diagnostics:
   curl <url> [opts]      Run curl inside backend container
 
 Database:
-  db:reset               Delete database (with backup)
-  db:backup [label]      Backup database to data/backups/
-  db:restore [file]      Restore database from backup
-  db:shell               Open SQLite shell
+  db:reset               Reset database (SQLite: delete with backup; Firestore: clear emulator)
+  db:backup [label]      Backup database to data/backups/ (SQLite only)
+  db:restore [file]      Restore database from backup (SQLite only)
+  db:shell               Open database shell (SQLite) or Emulator UI URL (Firestore)
+  emulator:ui            Show Firestore Emulator UI URL
 
 Cleanup:
   clean [level]          Cleanup (containers, volumes, all)
@@ -644,6 +686,7 @@ case "$command" in
     db:backup)  cmd_db_backup "$@" ;;
     db:restore) cmd_db_restore "$@" ;;
     db:shell)   cmd_db_shell "$@" ;;
+    emulator:ui) cmd_emulator_ui "$@" ;;
 
     clean)      cmd_clean "$@" ;;
 

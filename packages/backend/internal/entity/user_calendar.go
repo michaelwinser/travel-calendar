@@ -10,13 +10,13 @@ import (
 
 // UserCalendar represents a user's selected calendar for monitoring.
 type UserCalendar struct {
-	ID         uuid.UUID `db:"id"`
-	UserID     string    `db:"user_id"`
-	CalendarID string    `db:"calendar_id"` // Google Calendar ID
-	Name       string    `db:"name"`
-	Enabled    bool      `db:"enabled"`
-	CreatedAt  time.Time `db:"created_at"`
-	UpdatedAt  time.Time `db:"updated_at"`
+	ID         uuid.UUID `db:"id" firestore:"id"`
+	UserID     string    `db:"user_id" firestore:"userId"`
+	CalendarID string    `db:"calendar_id" firestore:"calendarId"` // Google Calendar ID
+	Name       string    `db:"name" firestore:"name"`
+	Enabled    bool      `db:"enabled" firestore:"enabled"`
+	CreatedAt  time.Time `db:"created_at" firestore:"createdAt"`
+	UpdatedAt  time.Time `db:"updated_at" firestore:"updatedAt"`
 }
 
 // ToAPI converts a UserCalendar entity to an API UserCalendar response.

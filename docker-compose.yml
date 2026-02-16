@@ -12,9 +12,28 @@
 #   ./tc test frontend                # Run frontend tests
 #
 # Services:
-#   backend - REST API + Static Frontend + MCP on http://localhost:3000
+#   backend - REST API + Static Frontend + MCP on http://localhost:${PORT_1}
+#   firebase-emulator - Firestore emulator + UI
 
 services:
+  # ===========================================
+  # Firebase Emulator - Firestore for development
+  # ===========================================
+  firebase-emulator:
+    image: ghcr.io/nicholasgasior/firebase-emulators:latest
+    container_name: travel-firebase-emulator
+    ports:
+      - "${PORT_2:-4001}:4000"   # Emulator UI
+      - "${PORT_3:-4002}:8080"   # Firestore
+    environment:
+      - FIREBASE_PROJECT_ID=travel-calendar-dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
   # ===========================================
   # Backend - REST API + Static Frontend + MCP
   # ===========================================
@@ -24,7 +43,7 @@ services:
       target: runtime
     container_name: travel-backend
     ports:
-      - "3000:3000"
+      - "${PORT_1:-4000}:3000"
     volumes:
       # Data persistence only
       - ./data:/app/data
@@ -33,6 +52,12 @@ services:
     environment:
       - DATABASE_PATH=/app/data/travel.db
       - PORT=3000
+      - STORE_TYPE=${STORE_TYPE:-firestore}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-travel-calendar-dev}
+      - FIRESTORE_EMULATOR_HOST=firebase-emulator:8080
+    depends_on:
+      firebase-emulator:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 10s

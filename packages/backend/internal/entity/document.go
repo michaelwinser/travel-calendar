@@ -10,13 +10,13 @@ import (
 
 // Document represents a travel document in the database.
 type Document struct {
-	ID        uuid.UUID  `db:"id"`
-	TripID    *uuid.UUID `db:"trip_id"`
-	Name      string     `db:"name"`
-	Type      string     `db:"type"`
-	URL       *string    `db:"url"`
-	CreatedAt time.Time  `db:"created_at"`
-	UpdatedAt time.Time  `db:"updated_at"`
+	ID        uuid.UUID  `db:"id" firestore:"-"`
+	TripID    *uuid.UUID `db:"trip_id" firestore:"tripId"`
+	Name      string     `db:"name" firestore:"name"`
+	Type      string     `db:"type" firestore:"type"`
+	URL       *string    `db:"url" firestore:"url"`
+	CreatedAt time.Time  `db:"created_at" firestore:"createdAt"`
+	UpdatedAt time.Time  `db:"updated_at" firestore:"updatedAt"`
 }
 
 // ToAPI converts a Document entity to an API Document response.
