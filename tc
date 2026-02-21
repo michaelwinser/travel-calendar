@@ -18,10 +18,8 @@
 #   test-precommit  Fast pre-commit checks
 #   generate        Generate code from OpenAPI spec
 #
-#   db:reset    Reset database (delete and recreate)
-#   db:backup   Backup database to file
-#   db:restore  Restore database from backup
-#   db:shell    Open SQLite shell
+#   db:reset    Clear Firestore emulator data
+#   db:shell    Show Firestore emulator URL
 #
 #   clean       Remove containers, volumes, and build cache
 #   help        Show this help message
@@ -50,22 +48,13 @@ else
     NC=''
 fi
 
-# Database location
-DATA_DIR="$SCRIPT_DIR/data"
-DB_FILE="$DATA_DIR/travel.db"
-BACKUP_DIR="$DATA_DIR/backups"
-
-# Store type (from .env or environment)
+# Firestore configuration (from .env or environment)
 if [ -f "$SCRIPT_DIR/.env" ]; then
-    STORE_TYPE="${STORE_TYPE:-$(grep '^STORE_TYPE=' "$SCRIPT_DIR/.env" 2>/dev/null | cut -d= -f2)}"
     FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID:-$(grep '^FIREBASE_PROJECT_ID=' "$SCRIPT_DIR/.env" 2>/dev/null | cut -d= -f2)}"
-    EMULATOR_UI_PORT="${PORT_2:-$(grep '^PORT_2=' "$SCRIPT_DIR/.env" 2>/dev/null | cut -d= -f2)}"
-    FIRESTORE_PORT="${PORT_3:-$(grep '^PORT_3=' "$SCRIPT_DIR/.env" 2>/dev/null | cut -d= -f2)}"
+    EMULATOR_PORT="${PORT_2:-$(grep '^PORT_2=' "$SCRIPT_DIR/.env" 2>/dev/null | cut -d= -f2)}"
 fi
-STORE_TYPE="${STORE_TYPE:-firestore}"
 FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID:-travel-calendar-dev}"
-EMULATOR_UI_PORT="${EMULATOR_UI_PORT:-4001}"
-FIRESTORE_PORT="${FIRESTORE_PORT:-4002}"
+EMULATOR_PORT="${EMULATOR_PORT:-4001}"
 
 # ===========================================
 # Helpers
@@ -131,9 +120,7 @@ cmd_start() {
         success "Services started"
         echo ""
         echo "  Backend + MCP:       http://localhost:${PORT_1:-4000}"
-        if [ "$STORE_TYPE" = "firestore" ]; then
-            echo "  Firestore Emulator:  http://localhost:${EMULATOR_UI_PORT}"
-        fi
+        echo "  Firestore Emulator:  http://localhost:${EMULATOR_PORT}"
         echo ""
         echo "  View logs: ./tc logs"
         echo "  Stop:      ./tc stop"
@@ -235,7 +222,24 @@ cmd_test() {
 cmd_test_backend() {
     require_docker
     info "Running backend tests (Go)..."
-    docker compose run --rm --no-deps -T dev sh -c "cd /app/packages/backend && go test ./..."
+
+    # Ensure firebase emulator is running for Firestore tests
+    if ! docker compose ps firebase-emulator 2>/dev/null | grep -q "running"; then
+        info "Starting Firestore emulator for tests..."
+        docker compose up -d firebase-emulator
+        # Wait for emulator to be healthy
+        for i in $(seq 1 30); do
+            if docker compose exec -T firebase-emulator curl -sf http://localhost:8080/ >/dev/null 2>&1; then
+                break
+            fi
+            sleep 1
+        done
+    fi
+
+    docker compose run --rm -T \
+        -e FIRESTORE_EMULATOR_HOST=firebase-emulator:8080 \
+        -e FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID}" \
+        dev sh -c "cd /app/packages/backend && go test -p 1 ./..."
     success "Backend tests passed"
 }
 
@@ -294,9 +298,24 @@ cmd_test_precommit() {
 
     failed=0
 
+    # Ensure firebase emulator is running for Firestore tests
+    if ! docker compose ps firebase-emulator 2>/dev/null | grep -q "running"; then
+        info "Starting Firestore emulator for tests..."
+        docker compose up -d firebase-emulator
+        for i in $(seq 1 30); do
+            if docker compose exec -T firebase-emulator curl -sf http://localhost:8080/ >/dev/null 2>&1; then
+                break
+            fi
+            sleep 1
+        done
+    fi
+
     # Backend Go tests (includes MCP server)
     info "Running backend tests (Go)..."
-    if ! docker compose run --rm --no-deps -T dev sh -c "cd /app/packages/backend && go test ./..."; then
+    if ! docker compose run --rm -T \
+        -e FIRESTORE_EMULATOR_HOST=firebase-emulator:8080 \
+        -e FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID}" \
+        dev sh -c "cd /app/packages/backend && go test -p 1 ./..."; then
         warn "Backend tests failed"
         failed=1
     fi
@@ -326,135 +345,21 @@ cmd_test_precommit() {
 # ===========================================
 
 cmd_db_reset() {
-    if [ "$STORE_TYPE" = "firestore" ]; then
-        if confirm "This will clear all Firestore emulator data. Are you sure?"; then
-            info "Clearing Firestore emulator data..."
-            curl -s -X DELETE "http://localhost:${FIRESTORE_PORT}/emulator/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents" >/dev/null 2>&1
-            if [ $? -eq 0 ]; then
-                success "Firestore emulator data cleared"
-            else
-                error "Failed to clear Firestore emulator. Is the emulator running?"
-            fi
+    if confirm "This will clear all Firestore emulator data. Are you sure?"; then
+        info "Clearing Firestore emulator data..."
+        if curl -s -X DELETE "http://localhost:${EMULATOR_PORT}/emulator/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents" >/dev/null 2>&1; then
+            success "Firestore emulator data cleared"
         else
-            info "Cancelled"
+            error "Failed to clear Firestore emulator. Is the emulator running?"
         fi
-    else
-        if [ -f "$DB_FILE" ]; then
-            if confirm "This will delete all data. Are you sure?"; then
-                info "Backing up current database..."
-                cmd_db_backup "pre-reset"
-
-                info "Stopping services..."
-                cmd_stop 2>/dev/null || true
-
-                info "Removing database..."
-                rm -f "$DB_FILE"
-                rm -f "$DB_FILE-wal" "$DB_FILE-shm" 2>/dev/null || true
-
-                success "Database reset complete"
-                echo "  Start services to create new database: ./tc start"
-            else
-                info "Cancelled"
-            fi
-        else
-            info "No database exists yet"
-        fi
-    fi
-}
-
-cmd_db_backup() {
-    label="${1:-$(date +%Y%m%d-%H%M%S)}"
-
-    if [ ! -f "$DB_FILE" ]; then
-        error "No database to backup"
-    fi
-
-    mkdir -p "$BACKUP_DIR"
-    backup_file="$BACKUP_DIR/travel-$label.db"
-
-    info "Backing up database to $backup_file..."
-
-    # Use SQLite backup command for consistency
-    if command -v sqlite3 >/dev/null 2>&1; then
-        sqlite3 "$DB_FILE" ".backup '$backup_file'"
-    else
-        # Fallback to copy (stop services first for consistency)
-        cp "$DB_FILE" "$backup_file"
-    fi
-
-    success "Backup complete: $backup_file"
-}
-
-cmd_db_restore() {
-    backup_file="$1"
-
-    if [ -z "$backup_file" ]; then
-        # List available backups
-        info "Available backups:"
-        if [ -d "$BACKUP_DIR" ]; then
-            ls -la "$BACKUP_DIR"/*.db 2>/dev/null || echo "  (none)"
-        else
-            echo "  (none)"
-        fi
-        echo ""
-        echo "Usage: ./tc db:restore <backup-file>"
-        return 0
-    fi
-
-    if [ ! -f "$backup_file" ]; then
-        # Try in backup directory
-        if [ -f "$BACKUP_DIR/$backup_file" ]; then
-            backup_file="$BACKUP_DIR/$backup_file"
-        else
-            error "Backup file not found: $backup_file"
-        fi
-    fi
-
-    if confirm "This will replace the current database. Are you sure?"; then
-        info "Stopping services..."
-        cmd_stop 2>/dev/null || true
-
-        if [ -f "$DB_FILE" ]; then
-            info "Backing up current database..."
-            cmd_db_backup "pre-restore"
-        fi
-
-        info "Restoring from $backup_file..."
-        cp "$backup_file" "$DB_FILE"
-
-        success "Database restored"
-        echo "  Start services: ./tc start"
     else
         info "Cancelled"
     fi
 }
 
 cmd_db_shell() {
-    if [ "$STORE_TYPE" = "firestore" ]; then
-        info "Firestore Emulator UI: http://localhost:${EMULATOR_UI_PORT}"
-        info "Open the URL above in your browser to browse Firestore data."
-    else
-        if [ ! -f "$DB_FILE" ]; then
-            error "No database exists. Start services first: ./tc start"
-        fi
-
-        if command -v sqlite3 >/dev/null 2>&1; then
-            info "Opening SQLite shell..."
-            sqlite3 "$DB_FILE"
-        else
-            # Try using Docker
-            require_docker
-            info "Opening SQLite shell via Docker..."
-            docker compose exec backend sh -c "sqlite3 /app/data/travel.db"
-        fi
-    fi
-}
-
-cmd_emulator_ui() {
-    if [ "$STORE_TYPE" != "firestore" ]; then
-        error "Emulator UI is only available with STORE_TYPE=firestore"
-    fi
-    info "Firestore Emulator UI: http://localhost:${EMULATOR_UI_PORT}"
+    info "Firestore Emulator: http://localhost:${EMULATOR_PORT}"
+    info "Open the URL above in your browser to browse Firestore data."
 }
 
 # ===========================================
@@ -635,11 +540,8 @@ Health & Diagnostics:
   curl <url> [opts]      Run curl inside backend container
 
 Database:
-  db:reset               Reset database (SQLite: delete with backup; Firestore: clear emulator)
-  db:backup [label]      Backup database to data/backups/ (SQLite only)
-  db:restore [file]      Restore database from backup (SQLite only)
-  db:shell               Open database shell (SQLite) or Emulator UI URL (Firestore)
-  emulator:ui            Show Firestore Emulator UI URL
+  db:reset               Clear Firestore emulator data
+  db:shell               Show Firestore emulator URL
 
 Cleanup:
   clean [level]          Cleanup (containers, volumes, all)
@@ -656,7 +558,6 @@ Examples:
   ./tc test-precommit           # Run pre-commit checks
   ./tc generate                 # Regenerate all code from OpenAPI
   ./tc generate backend         # Regenerate backend Go types only
-  ./tc db:backup before-refactor  # Create named backup
   ./tc shell backend            # Shell into backend container
   ./tc clean volumes            # Remove containers and Go cache
 EOF
@@ -683,10 +584,7 @@ case "$command" in
     generate)   cmd_generate "$@" ;;
 
     db:reset)   cmd_db_reset "$@" ;;
-    db:backup)  cmd_db_backup "$@" ;;
-    db:restore) cmd_db_restore "$@" ;;
     db:shell)   cmd_db_shell "$@" ;;
-    emulator:ui) cmd_emulator_ui "$@" ;;
 
     clean)      cmd_clean "$@" ;;
 

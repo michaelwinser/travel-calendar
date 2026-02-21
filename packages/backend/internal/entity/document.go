@@ -8,15 +8,15 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-// Document represents a travel document in the database.
+// Document represents a travel document.
 type Document struct {
-	ID        uuid.UUID  `db:"id" firestore:"-"`
-	TripID    *uuid.UUID `db:"trip_id" firestore:"tripId"`
-	Name      string     `db:"name" firestore:"name"`
-	Type      string     `db:"type" firestore:"type"`
-	URL       *string    `db:"url" firestore:"url"`
-	CreatedAt time.Time  `db:"created_at" firestore:"createdAt"`
-	UpdatedAt time.Time  `db:"updated_at" firestore:"updatedAt"`
+	ID        uuid.UUID  `firestore:"-"`
+	TripID    *uuid.UUID `firestore:"tripId"`
+	Name      string     `firestore:"name"`
+	Type      string     `firestore:"type"`
+	URL       *string    `firestore:"url"`
+	CreatedAt time.Time  `firestore:"createdAt"`
+	UpdatedAt time.Time  `firestore:"updatedAt"`
 }
 
 // ToAPI converts a Document entity to an API Document response.

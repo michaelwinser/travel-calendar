@@ -44,15 +44,10 @@ services:
     container_name: travel-backend
     ports:
       - "${PORT_1:-4000}:3000"
-    volumes:
-      # Data persistence only
-      - ./data:/app/data
     env_file:
       - .env
     environment:
-      - DATABASE_PATH=/app/data/travel.db
       - PORT=3000
-      - STORE_TYPE=${STORE_TYPE:-firestore}
       - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-travel-calendar-dev}
       - FIRESTORE_EMULATOR_HOST=firebase-emulator:8080
     depends_on:
@@ -83,8 +78,7 @@ services:
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
     environment:
-      - CGO_ENABLED=1
-      - DATABASE_PATH=/app/data/travel.db
+      - CGO_ENABLED=0
     profiles:
       - dev
 

@@ -7,7 +7,7 @@
 The backend is a REST API built with Go:
 - **Chi** - lightweight HTTP router
 - **oapi-codegen** - OpenAPI code generation for types and router
-- **go-sqlite3** - SQLite database driver (CGO)
+- **Cloud Firestore** - document database (Firebase Emulator for development)
 - **google/uuid** - UUID generation
 
 ## Source of Truth
@@ -37,17 +37,17 @@ packages/backend/
 │   ├── api/
 │   │   └── openapi.gen.go    # Generated types (DO NOT EDIT)
 │   ├── entity/
-│   │   ├── trip.go           # Trip struct with DB tags
+│   │   ├── trip.go           # Trip struct with Firestore tags
 │   │   ├── item.go           # Item struct
 │   │   └── document.go       # Document struct
 │   ├── store/
-│   │   └── sqlite.go         # Database access layer
+│   │   ├── interface.go      # StoreInterface definition
+│   │   └── firestore.go      # Firestore implementation
 │   ├── service/
 │   │   └── service.go        # Business logic
 │   └── handler/
 │       └── handler.go        # HTTP handlers
-└── data/
-    └── travel.db             # SQLite database (gitignored)
+└── data/                         # Data directory (gitignored)
 ```
 
 ## Core Principles
@@ -93,20 +93,20 @@ Every endpoint maps to a resource. No RPC-style endpoints.
 
 ### 3. Entity Design
 
-Entities are internal structs with database tags. They convert to/from API types:
+Entities are internal structs with Firestore tags. They convert to/from API types:
 
 ```go
 // internal/entity/trip.go
 type Trip struct {
-    ID        uuid.UUID  `db:"id"`
-    Name      string     `db:"name"`
-    Purpose   string     `db:"purpose"`
-    StartDate *time.Time `db:"start_date"`
-    EndDate   *time.Time `db:"end_date"`
-    Status    string     `db:"status"`
-    Notes     *string    `db:"notes"`
-    CreatedAt time.Time  `db:"created_at"`
-    UpdatedAt time.Time  `db:"updated_at"`
+    ID        uuid.UUID  `firestore:"-"`
+    Name      string     `firestore:"name"`
+    Purpose   string     `firestore:"purpose"`
+    StartDate *time.Time `firestore:"startDate"`
+    EndDate   *time.Time `firestore:"endDate"`
+    Status    string     `firestore:"status"`
+    Notes     *string    `firestore:"notes"`
+    CreatedAt time.Time  `firestore:"createdAt"`
+    UpdatedAt time.Time  `firestore:"updatedAt"`
 }
 
 func (t *Trip) ToAPI() api.Trip {
@@ -135,12 +135,12 @@ HTTP Request
     │
     ▼
 ┌─────────────┐
-│    Store    │  Database access, SQL queries
+│    Store    │  Database access (Firestore)
 └─────────────┘
     │
     ▼
 ┌─────────────┐
-│   Entity    │  Data structures with DB tags
+│   Entity    │  Data structures with Firestore tags
 └─────────────┘
 ```
 
@@ -214,7 +214,7 @@ When the OpenAPI spec changes:
 1. **Update OpenAPI spec** in `packages/api/openapi.yaml`
 2. **Regenerate types** with oapi-codegen
 3. **Create entity** in `internal/entity/`
-4. **Add store methods** in `internal/store/sqlite.go`
+4. **Add store methods** in `internal/store/firestore.go`
 5. **Add service methods** in `internal/service/service.go`
 6. **Implement handlers** (satisfy new interface methods)
 7. **Regenerate TypeScript types** in `packages/shared/`

@@ -12,15 +12,15 @@ import (
 // GoogleCredentials stores OAuth tokens for a user's Google account.
 // This entity is not directly exposed via API - it stores sensitive credentials.
 type GoogleCredentials struct {
-	UserID       string    `db:"user_id" firestore:"-"`
-	AccessToken  string    `db:"access_token" firestore:"accessToken"`
-	RefreshToken string    `db:"refresh_token" firestore:"refreshToken"`
-	TokenType    string    `db:"token_type" firestore:"tokenType"`
-	ExpiresAt    time.Time `db:"expires_at" firestore:"expiresAt"`
-	Scopes       string    `db:"scopes" firestore:"scopes"` // comma-separated scopes
-	Email        *string   `db:"email" firestore:"email"`
-	CreatedAt    time.Time `db:"created_at" firestore:"createdAt"`
-	UpdatedAt    time.Time `db:"updated_at" firestore:"updatedAt"`
+	UserID       string    `firestore:"-"`
+	AccessToken  string    `firestore:"accessToken"`
+	RefreshToken string    `firestore:"refreshToken"`
+	TokenType    string    `firestore:"tokenType"`
+	ExpiresAt    time.Time `firestore:"expiresAt"`
+	Scopes       string    `firestore:"scopes"` // comma-separated scopes
+	Email        *string   `firestore:"email"`
+	CreatedAt    time.Time `firestore:"createdAt"`
+	UpdatedAt    time.Time `firestore:"updatedAt"`
 }
 
 // IsExpired returns true if the access token has expired.

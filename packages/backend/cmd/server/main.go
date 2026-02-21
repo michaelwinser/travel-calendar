@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -25,37 +24,16 @@ func main() {
 		port = "3000"
 	}
 
-	// Initialize store based on STORE_TYPE
-	storeType := os.Getenv("STORE_TYPE")
-	var db store.StoreInterface
-	switch storeType {
-	case "sqlite":
-		dbPath := os.Getenv("DB_PATH")
-		if dbPath == "" {
-			dbPath = filepath.Join("data", "travel.db")
-		}
-		if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
-			log.Fatalf("Failed to create data directory: %v", err)
-		}
-		s, err := store.NewSQLite(dbPath)
-		if err != nil {
-			log.Fatalf("Failed to initialize SQLite store: %v", err)
-		}
-		db = s
-		log.Printf("Using SQLite store: %s", dbPath)
-	default:
-		// Default to Firestore
-		projectID := os.Getenv("FIREBASE_PROJECT_ID")
-		if projectID == "" {
-			projectID = "travel-calendar-dev"
-		}
-		s, err := store.NewFirestore(context.Background(), projectID)
-		if err != nil {
-			log.Fatalf("Failed to initialize Firestore store: %v", err)
-		}
-		db = s
-		log.Printf("Using Firestore store (project: %s)", projectID)
+	// Initialize Firestore store
+	projectID := os.Getenv("FIREBASE_PROJECT_ID")
+	if projectID == "" {
+		projectID = "travel-calendar-dev"
 	}
+	db, err := store.NewFirestore(context.Background(), projectID)
+	if err != nil {
+		log.Fatalf("Failed to initialize Firestore store: %v", err)
+	}
+	log.Printf("Using Firestore store (project: %s)", projectID)
 	defer db.Close()
 
 	// Initialize service and handlers

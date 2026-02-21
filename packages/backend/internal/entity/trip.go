@@ -9,17 +9,17 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-// Trip represents a travel trip in the database.
+// Trip represents a travel trip.
 type Trip struct {
-	ID        uuid.UUID  `db:"id" firestore:"-"`
-	Name      string     `db:"name" firestore:"name"`
-	Purpose   string     `db:"purpose" firestore:"purpose"`
-	StartDate *time.Time `db:"start_date" firestore:"startDate"`
-	EndDate   *time.Time `db:"end_date" firestore:"endDate"`
-	Status    string     `db:"status" firestore:"status"`
-	Notes     *string    `db:"notes" firestore:"notes"`
-	CreatedAt time.Time  `db:"created_at" firestore:"createdAt"`
-	UpdatedAt time.Time  `db:"updated_at" firestore:"updatedAt"`
+	ID        uuid.UUID  `firestore:"-"`
+	Name      string     `firestore:"name"`
+	Purpose   string     `firestore:"purpose"`
+	StartDate *time.Time `firestore:"startDate"`
+	EndDate   *time.Time `firestore:"endDate"`
+	Status    string     `firestore:"status"`
+	Notes     *string    `firestore:"notes"`
+	CreatedAt time.Time  `firestore:"createdAt"`
+	UpdatedAt time.Time  `firestore:"updatedAt"`
 }
 
 // ToAPI converts a Trip entity to an API Trip response.

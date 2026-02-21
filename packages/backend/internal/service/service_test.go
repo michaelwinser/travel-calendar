@@ -1,6 +1,10 @@
 package service
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -12,9 +16,26 @@ import (
 	"github.com/user/travel-calendar/backend/internal/store"
 )
 
-// setupTestService creates a service with an in-memory database for testing.
+// setupTestService creates a service backed by the Firestore emulator for testing.
 func setupTestService(t *testing.T) *Service {
-	s, err := store.NewSQLite(":memory:")
+	host := os.Getenv("FIRESTORE_EMULATOR_HOST")
+	if host == "" {
+		t.Skip("FIRESTORE_EMULATOR_HOST not set")
+	}
+	projectID := os.Getenv("FIREBASE_PROJECT_ID")
+	if projectID == "" {
+		projectID = "travel-calendar-test"
+	}
+
+	// Clear emulator data
+	clearURL := fmt.Sprintf("http://%s/emulator/v1/projects/%s/databases/(default)/documents", host, projectID)
+	req, err := http.NewRequest("DELETE", clearURL, nil)
+	require.NoError(t, err)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	s, err := store.NewFirestore(context.Background(), projectID)
 	require.NoError(t, err)
 	t.Cleanup(func() { s.Close() })
 	return New(s)

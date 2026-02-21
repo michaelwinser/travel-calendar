@@ -15,20 +15,13 @@ import (
 )
 
 // =============================================================================
-// Factory functions for each store implementation
+// Factory function for Firestore store (connects to emulator)
 // =============================================================================
 
-func newSQLiteStore(t *testing.T) StoreInterface {
-	s, err := NewSQLite(":memory:")
-	require.NoError(t, err)
-	t.Cleanup(func() { s.Close() })
-	return s
-}
-
-func newFirestoreStore(t *testing.T) StoreInterface {
+func newTestStore(t *testing.T) StoreInterface {
 	host := os.Getenv("FIRESTORE_EMULATOR_HOST")
 	if host == "" {
-		t.Skip("FIRESTORE_EMULATOR_HOST not set, skipping Firestore tests")
+		t.Skip("FIRESTORE_EMULATOR_HOST not set, skipping store tests")
 	}
 	projectID := os.Getenv("FIREBASE_PROJECT_ID")
 	if projectID == "" {
@@ -50,15 +43,11 @@ func newFirestoreStore(t *testing.T) StoreInterface {
 }
 
 // =============================================================================
-// Entry points: run shared tests against each implementation
+// Entry point: run tests against Firestore emulator
 // =============================================================================
 
-func TestSQLiteStoreShared(t *testing.T) {
-	runStoreTests(t, newSQLiteStore)
-}
-
-func TestFirestoreStoreShared(t *testing.T) {
-	runStoreTests(t, newFirestoreStore)
+func TestFirestoreStore(t *testing.T) {
+	runStoreTests(t, newTestStore)
 }
 
 // =============================================================================

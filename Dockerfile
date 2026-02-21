@@ -5,7 +5,7 @@
 #
 # Stages:
 #   base-node      - Node.js base with pnpm
-#   base-go        - Go base with CGO dependencies
+#   base-go        - Go base
 #   deps           - Install pnpm dependencies
 #   frontend-build - Build SvelteKit static site
 #   backend-build  - Build Go backend binary (includes MCP server)
@@ -31,19 +31,13 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
 
 # ===========================================
-# Stage: base-go - Go with CGO dependencies
+# Stage: base-go - Go base
 # ===========================================
 FROM golang:1.24-alpine AS base-go
 
-# CGO is required for mattn/go-sqlite3
-RUN apk add --no-cache \
-    gcc \
-    musl-dev \
-    sqlite \
-    sqlite-dev \
-    git
+RUN apk add --no-cache git
 
-ENV CGO_ENABLED=1
+ENV CGO_ENABLED=0
 
 WORKDIR /app
 
@@ -108,8 +102,6 @@ FROM alpine:3.19 AS runtime
 # Install runtime dependencies
 RUN apk add --no-cache \
     ca-certificates \
-    sqlite \
-    sqlite-libs \
     curl
 
 # Create non-root user
@@ -126,7 +118,6 @@ RUN mkdir -p /app/data && chown -R app:app /app
 USER app
 
 # Default environment
-ENV DATABASE_PATH=/app/data/travel.db
 ENV PORT=3000
 
 EXPOSE 3000
