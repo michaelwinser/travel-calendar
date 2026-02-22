@@ -138,6 +138,9 @@ RUN apk add --no-cache \
     npm \
     curl \
     bash \
+    # CGO dependencies for SQLite
+    gcc \
+    musl-dev \
     # Playwright Chromium dependencies
     chromium \
     nss \

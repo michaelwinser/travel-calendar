@@ -32,7 +32,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-      start_period: 10s
+      start_period: 15s
 
   # ===========================================
   # Backend - REST API + Static Frontend + MCP
@@ -48,6 +48,7 @@ services:
       - .env
     environment:
       - PORT=3000
+      - STORE_TYPE=firestore
       - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-travel-calendar-dev}
       - FIRESTORE_EMULATOR_HOST=firebase-emulator:8080
     depends_on:
@@ -78,7 +79,7 @@ services:
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
     environment:
-      - CGO_ENABLED=0
+      - CGO_ENABLED=1
     profiles:
       - dev
 

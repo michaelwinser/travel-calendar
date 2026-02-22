@@ -10,11 +10,11 @@ import (
 
 // TripLocation represents a location for a specific date within a trip.
 type TripLocation struct {
-	ID        uuid.UUID `firestore:"-"`
-	TripID    uuid.UUID `firestore:"tripId"`
-	Date      time.Time `firestore:"date"`
-	Location  string    `firestore:"location"`
-	CreatedAt time.Time `firestore:"createdAt"`
+	ID        uuid.UUID `db:"id" firestore:"-"`
+	TripID    uuid.UUID `db:"trip_id" firestore:"tripId"`
+	Date      time.Time `db:"date" firestore:"date"`
+	Location  string    `db:"location" firestore:"location"`
+	CreatedAt time.Time `db:"created_at" firestore:"createdAt"`
 }
 
 // GroupByDate groups trip locations by date, returning a map of date to locations.

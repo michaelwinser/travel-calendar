@@ -2,7 +2,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -24,16 +23,11 @@ func main() {
 		port = "3000"
 	}
 
-	// Initialize Firestore store
-	projectID := os.Getenv("FIREBASE_PROJECT_ID")
-	if projectID == "" {
-		projectID = "travel-calendar-dev"
-	}
-	db, err := store.NewFirestore(context.Background(), projectID)
+	// Initialize store (SQLite or Firestore based on STORE_TYPE env var)
+	db, err := store.New()
 	if err != nil {
-		log.Fatalf("Failed to initialize Firestore store: %v", err)
+		log.Fatalf("Failed to initialize store: %v", err)
 	}
-	log.Printf("Using Firestore store (project: %s)", projectID)
 	defer db.Close()
 
 	// Initialize service and handlers

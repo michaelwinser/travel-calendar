@@ -8,28 +8,28 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-// Item represents a trip item (flight, hotel, etc.).
+// Item represents a trip item (flight, hotel, etc.) in the database.
 type Item struct {
-	ID           uuid.UUID  `firestore:"-"`
-	TripID       uuid.UUID  `firestore:"tripId"`
-	Type         string     `firestore:"type"`
-	Date         *time.Time `firestore:"date"`
-	Time         *string    `firestore:"time"`
-	Confirmation *string    `firestore:"confirmation"`
-	Notes        *string    `firestore:"notes"`
+	ID           uuid.UUID  `db:"id" firestore:"-"`
+	TripID       uuid.UUID  `db:"trip_id" firestore:"tripId"`
+	Type         string     `db:"type" firestore:"type"`
+	Date         *time.Time `db:"date" firestore:"date"`
+	Time         *string    `db:"time" firestore:"time"`
+	Confirmation *string    `db:"confirmation" firestore:"confirmation"`
+	Notes        *string    `db:"notes" firestore:"notes"`
 	// Transport fields
-	From         *string `firestore:"from"`
-	To           *string `firestore:"to"`
-	Carrier      *string `firestore:"carrier"`
-	FlightNumber *string `firestore:"flightNumber"`
+	From         *string `db:"from_location" firestore:"from"`
+	To           *string `db:"to_location" firestore:"to"`
+	Carrier      *string `db:"carrier" firestore:"carrier"`
+	FlightNumber *string `db:"flight_number" firestore:"flightNumber"`
 	// Hotel/Event fields
-	Name     *string    `firestore:"name"`
-	Location *string    `firestore:"location"`
-	CheckIn  *time.Time `firestore:"checkIn"`
-	CheckOut *time.Time `firestore:"checkOut"`
+	Name     *string    `db:"name" firestore:"name"`
+	Location *string    `db:"location" firestore:"location"`
+	CheckIn  *time.Time `db:"check_in" firestore:"checkIn"`
+	CheckOut *time.Time `db:"check_out" firestore:"checkOut"`
 	// Timestamps
-	CreatedAt time.Time `firestore:"createdAt"`
-	UpdatedAt time.Time `firestore:"updatedAt"`
+	CreatedAt time.Time `db:"created_at" firestore:"createdAt"`
+	UpdatedAt time.Time `db:"updated_at" firestore:"updatedAt"`
 }
 
 // ToAPI converts an Item entity to an API Item response.
