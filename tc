@@ -121,7 +121,7 @@ cmd_start() {
 cmd_stop() {
     require_docker
     info "Stopping services..."
-    docker compose down "$@"
+    docker compose down --remove-orphans "$@"
     success "Services stopped"
 }
 
