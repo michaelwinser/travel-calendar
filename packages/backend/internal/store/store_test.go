@@ -1,10 +1,7 @@
 package store
 
 import (
-	"context"
 	"fmt"
-	"net/http"
-	"os"
 	"testing"
 	"time"
 
@@ -15,7 +12,7 @@ import (
 )
 
 // =============================================================================
-// Factory functions for each store implementation
+// Factory function for test store
 // =============================================================================
 
 func newSQLiteStore(t *testing.T) StoreInterface {
@@ -25,40 +22,12 @@ func newSQLiteStore(t *testing.T) StoreInterface {
 	return s
 }
 
-func newFirestoreStore(t *testing.T) StoreInterface {
-	host := os.Getenv("FIRESTORE_EMULATOR_HOST")
-	if host == "" {
-		t.Skip("FIRESTORE_EMULATOR_HOST not set, skipping Firestore tests")
-	}
-	projectID := os.Getenv("FIREBASE_PROJECT_ID")
-	if projectID == "" {
-		projectID = "travel-calendar-test"
-	}
-
-	// Clear emulator data before each test
-	clearURL := fmt.Sprintf("http://%s/emulator/v1/projects/%s/databases/(default)/documents", host, projectID)
-	req, err := http.NewRequest("DELETE", clearURL, nil)
-	require.NoError(t, err)
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	resp.Body.Close()
-
-	s, err := NewFirestore(context.Background(), projectID)
-	require.NoError(t, err)
-	t.Cleanup(func() { s.Close() })
-	return s
-}
-
 // =============================================================================
-// Entry points: run shared tests against each implementation
+// Entry point: run shared tests against SQLite
 // =============================================================================
 
 func TestSQLiteStoreShared(t *testing.T) {
 	runStoreTests(t, newSQLiteStore)
-}
-
-func TestFirestoreStoreShared(t *testing.T) {
-	runStoreTests(t, newFirestoreStore)
 }
 
 // =============================================================================

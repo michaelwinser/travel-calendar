@@ -35,9 +35,9 @@ WORKDIR /app
 # ===========================================
 FROM golang:1.24-alpine AS base-go
 
-RUN apk add --no-cache git
+RUN apk add --no-cache git gcc musl-dev
 
-ENV CGO_ENABLED=0
+ENV CGO_ENABLED=1
 
 WORKDIR /app
 

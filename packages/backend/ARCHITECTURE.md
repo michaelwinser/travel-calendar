@@ -100,14 +100,14 @@ The backend supports two store backends via the `STORE_TYPE` environment variabl
 
 | Store | `STORE_TYPE` | When | CGO |
 |-------|-------------|------|-----|
-| SQLite | `sqlite` (default) | Local dev, `go test` | Required (`CGO_ENABLED=1`) |
-| Firestore | `firestore` | Docker, production | Not needed |
+| SQLite | `sqlite` (default) | Local dev, Docker, TrueNAS, tests | Required (`CGO_ENABLED=1`) |
+| Firestore | `firestore` | Cloud Run (production) | Not needed |
 
 The `store.New()` factory reads `STORE_TYPE` and returns the appropriate `StoreInterface`:
 - **SQLite**: Reads `SQLITE_DB_PATH` (default `data/travel.db`). Use `:memory:` for tests.
-- **Firestore**: Reads `FIREBASE_PROJECT_ID` (default `travel-calendar-dev`).
+- **Firestore**: Reads `FIREBASE_PROJECT_ID`. Used only on Cloud Run with the Cloud Firestore API (no emulator).
 
-Tests default to in-memory SQLite for speed and zero-infrastructure testing. Firestore tests run only when `FIRESTORE_EMULATOR_HOST` is set (i.e., in Docker via `./tc test backend`).
+All tests use in-memory SQLite — no external infrastructure required.
 
 ### 4. Entity Design
 

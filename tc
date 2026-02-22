@@ -18,8 +18,8 @@
 #   test-precommit  Fast pre-commit checks
 #   generate        Generate code from OpenAPI spec
 #
-#   db:reset    Clear Firestore emulator data
-#   db:shell    Show Firestore emulator URL
+#   db:reset    Delete SQLite database
+#   db:shell    Open SQLite shell
 #
 #   clean       Remove containers, volumes, and build cache
 #   help        Show this help message
@@ -47,14 +47,6 @@ else
     BLUE=''
     NC=''
 fi
-
-# Firestore configuration (from .env or environment)
-if [ -f "$SCRIPT_DIR/.env" ]; then
-    FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID:-$(grep '^FIREBASE_PROJECT_ID=' "$SCRIPT_DIR/.env" 2>/dev/null | cut -d= -f2)}"
-    EMULATOR_PORT="${PORT_2:-$(grep '^PORT_2=' "$SCRIPT_DIR/.env" 2>/dev/null | cut -d= -f2)}"
-fi
-FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID:-travel-calendar-dev}"
-EMULATOR_PORT="${EMULATOR_PORT:-4001}"
 
 # ===========================================
 # Helpers
@@ -120,7 +112,6 @@ cmd_start() {
         success "Services started"
         echo ""
         echo "  Backend + MCP:       http://localhost:${PORT_1:-4000}"
-        echo "  Firestore Emulator:  http://localhost:${EMULATOR_PORT}"
         echo ""
         echo "  View logs: ./tc logs"
         echo "  Stop:      ./tc stop"
@@ -223,23 +214,8 @@ cmd_test_backend() {
     require_docker
     info "Running backend tests (Go)..."
 
-    # Ensure firebase emulator is running for Firestore tests
-    if ! docker compose ps firebase-emulator 2>/dev/null | grep -q "running"; then
-        info "Starting Firestore emulator for tests..."
-        docker compose up -d firebase-emulator
-        # Wait for emulator to be healthy
-        for i in $(seq 1 30); do
-            if docker compose exec -T firebase-emulator curl -sf http://localhost:8080/ >/dev/null 2>&1; then
-                break
-            fi
-            sleep 1
-        done
-    fi
-
-    docker compose run --rm -T \
-        -e FIRESTORE_EMULATOR_HOST=firebase-emulator:8080 \
-        -e FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID}" \
-        dev sh -c "cd /app/packages/backend && go test -p 1 ./..."
+    docker compose run --rm --no-deps -T \
+        dev sh -c "cd /app/packages/backend && go test ./..."
     success "Backend tests passed"
 }
 
@@ -298,24 +274,10 @@ cmd_test_precommit() {
 
     failed=0
 
-    # Ensure firebase emulator is running for Firestore tests
-    if ! docker compose ps firebase-emulator 2>/dev/null | grep -q "running"; then
-        info "Starting Firestore emulator for tests..."
-        docker compose up -d firebase-emulator
-        for i in $(seq 1 30); do
-            if docker compose exec -T firebase-emulator curl -sf http://localhost:8080/ >/dev/null 2>&1; then
-                break
-            fi
-            sleep 1
-        done
-    fi
-
     # Backend Go tests (includes MCP server)
     info "Running backend tests (Go)..."
-    if ! docker compose run --rm -T \
-        -e FIRESTORE_EMULATOR_HOST=firebase-emulator:8080 \
-        -e FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID}" \
-        dev sh -c "cd /app/packages/backend && go test -p 1 ./..."; then
+    if ! docker compose run --rm --no-deps -T \
+        dev sh -c "cd /app/packages/backend && go test ./..."; then
         warn "Backend tests failed"
         failed=1
     fi
@@ -345,21 +307,19 @@ cmd_test_precommit() {
 # ===========================================
 
 cmd_db_reset() {
-    if confirm "This will clear all Firestore emulator data. Are you sure?"; then
-        info "Clearing Firestore emulator data..."
-        if curl -s -X DELETE "http://localhost:${EMULATOR_PORT}/emulator/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents" >/dev/null 2>&1; then
-            success "Firestore emulator data cleared"
-        else
-            error "Failed to clear Firestore emulator. Is the emulator running?"
-        fi
+    if confirm "This will delete the SQLite database. Are you sure?"; then
+        info "Removing SQLite database..."
+        docker compose exec backend rm -f /app/data/travel.db 2>/dev/null || rm -f data/travel.db
+        success "Database cleared"
     else
         info "Cancelled"
     fi
 }
 
 cmd_db_shell() {
-    info "Firestore Emulator: http://localhost:${EMULATOR_PORT}"
-    info "Open the URL above in your browser to browse Firestore data."
+    require_docker
+    info "Opening SQLite shell..."
+    docker compose exec backend sqlite3 /app/data/travel.db 2>/dev/null || sqlite3 data/travel.db
 }
 
 # ===========================================
@@ -540,8 +500,8 @@ Health & Diagnostics:
   curl <url> [opts]      Run curl inside backend container
 
 Database:
-  db:reset               Clear Firestore emulator data
-  db:shell               Show Firestore emulator URL
+  db:reset               Delete SQLite database
+  db:shell               Open SQLite shell
 
 Cleanup:
   clean [level]          Cleanup (containers, volumes, all)
