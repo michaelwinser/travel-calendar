@@ -1,0 +1,35 @@
+packages/backend/internal/store/factory.go
+  e93c4510c8646995 28
+.gitignore
+  e93c4510c8646995 22-24
+packages/backend/ARCHITECTURE.md
+  e93c4510c8646995 108
+Dockerfile
+  e93c4510c8646995 153-158,163-183
+tc
+  e93c4510c8646995 24-26,39-46,441-757,831-841,862-864,888-890
+docs/plans/sqlite-to-firestore.md
+  e93c4510c8646995 128,133
+docs/plans/google-auth-multitenancy.md
+  e93c4510c8646995 1-260
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.12",
+  "base_commit_sha": "fb40309fddba2c5764d92a4de30ed6b3813dd3b9",
+  "prompts": {
+    "e93c4510c8646995": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "92809005-0e6c-41e7-a931-f9dd58bb8c15",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 727,
+      "total_deletions": 118,
+      "accepted_lines": 640,
+      "overriden_lines": 0
+    }
+  }
+}
