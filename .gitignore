@@ -19,6 +19,9 @@ packages/backend/data/
 .env.local
 .env.*.local
 
+# Access control (contains email addresses)
+.allowed-users
+
 # IDE
 .idea/
 .vscode/

@@ -105,7 +105,7 @@ The backend supports two store backends via the `STORE_TYPE` environment variabl
 
 The `store.New()` factory reads `STORE_TYPE` and returns the appropriate `StoreInterface`:
 - **SQLite**: Reads `SQLITE_DB_PATH` (default `data/travel.db`). Use `:memory:` for tests.
-- **Firestore**: Reads `FIREBASE_PROJECT_ID`. Used only on Cloud Run with the Cloud Firestore API (no emulator).
+- **Firestore**: Reads `GOOGLE_CLOUD_PROJECT` (auto-set on Cloud Run). Used with the Cloud Firestore API (no emulator).
 
 All tests use in-memory SQLite — no external infrastructure required.
 

@@ -21,6 +21,9 @@
 #   db:reset    Delete SQLite database
 #   db:shell    Open SQLite shell
 #
+#   provision   Enable GCP APIs and create required resources
+#   deploy      Deploy to Google Cloud Run
+#   access      Manage allowed users for Cloud Run
 #   clean       Remove containers, volumes, and build cache
 #   help        Show this help message
 
@@ -32,6 +35,14 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
+
+# Load .env file if present (docker compose does this automatically, but
+# shell commands like 'deploy' need these variables too)
+if [ -f .env ]; then
+    set -a
+    . ./.env
+    set +a
+fi
 
 # Colors (disabled if NO_COLOR set or not a terminal)
 if [ -z "$NO_COLOR" ] && [ -t 1 ]; then
@@ -427,6 +438,324 @@ cmd_generate_shared() {
 }
 
 # ===========================================
+# Commands: Provision & Deploy
+# ===========================================
+
+DEPLOY_SERVICE="travel-calendar"
+DEPLOY_REPO="travel-calendar"
+
+require_gcloud() {
+    if ! command -v gcloud >/dev/null 2>&1; then
+        error "gcloud CLI is not installed. See https://cloud.google.com/sdk/docs/install"
+    fi
+}
+
+require_project_id() {
+    if [ -z "$GOOGLE_CLOUD_PROJECT" ]; then
+        error "GOOGLE_CLOUD_PROJECT is not set in .env"
+    fi
+}
+
+deploy_region() {
+    echo "${CLOUD_RUN_REGION:-us-central1}"
+}
+
+cmd_provision() {
+    require_gcloud
+    require_project_id
+
+    REGION="$(deploy_region)"
+
+    info "Provisioning GCP resources for project: ${GOOGLE_CLOUD_PROJECT} (${REGION})"
+
+    # Enable required APIs
+    info "Enabling GCP APIs..."
+    gcloud services enable \
+        cloudbuild.googleapis.com \
+        artifactregistry.googleapis.com \
+        run.googleapis.com \
+        firestore.googleapis.com \
+        --project "$GOOGLE_CLOUD_PROJECT"
+    success "APIs enabled"
+
+    # Create Artifact Registry repository (if it doesn't exist)
+    info "Ensuring Artifact Registry repository exists..."
+    if gcloud artifacts repositories describe "$DEPLOY_REPO" \
+        --location "$REGION" \
+        --project "$GOOGLE_CLOUD_PROJECT" >/dev/null 2>&1; then
+        success "Artifact Registry repository already exists"
+    else
+        gcloud artifacts repositories create "$DEPLOY_REPO" \
+            --repository-format docker \
+            --location "$REGION" \
+            --project "$GOOGLE_CLOUD_PROJECT" \
+            --description "Travel Calendar container images"
+        success "Artifact Registry repository created"
+    fi
+
+    # Configure Docker authentication for Artifact Registry
+    info "Configuring Docker authentication..."
+    gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+    success "Docker authentication configured"
+
+    # Create Firestore database (if it doesn't exist)
+    info "Ensuring Firestore database exists..."
+    if gcloud firestore databases describe \
+        --project "$GOOGLE_CLOUD_PROJECT" >/dev/null 2>&1; then
+        success "Firestore database already exists"
+    else
+        gcloud firestore databases create \
+            --location "$REGION" \
+            --project "$GOOGLE_CLOUD_PROJECT"
+        success "Firestore database created"
+    fi
+
+    echo ""
+    success "Provisioning complete. You can now run: ./tc deploy"
+}
+
+cmd_deploy() {
+    require_gcloud
+    require_project_id
+
+    REGION="$(deploy_region)"
+
+    action="${1:-}"
+
+    case "$action" in
+        status)
+            cmd_deploy_status
+            ;;
+        "")
+            cmd_deploy_source
+            ;;
+        *)
+            echo "Usage: ./tc deploy [status]"
+            echo ""
+            echo "  (no args)  - Build and deploy to Cloud Run via Cloud Build"
+            echo "  status     - Show current Cloud Run service status"
+            echo ""
+            echo "Environment variables (set in .env):"
+            echo "  GOOGLE_CLOUD_PROJECT  - GCP project ID (required)"
+            echo "  CLOUD_RUN_REGION      - Deploy region (default: us-central1)"
+            ;;
+    esac
+}
+
+cmd_deploy_source() {
+    REGION="$(deploy_region)"
+    info "Deploying to Cloud Run via Cloud Build (${REGION})..."
+
+    # Build env-vars flag from known config
+    ENV_VARS="STORE_TYPE=firestore,GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}"
+
+    # Append Google OAuth vars if set
+    if [ -n "${GOOGLE_CLIENT_ID:-}" ]; then
+        ENV_VARS="${ENV_VARS},GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}"
+    fi
+    if [ -n "${GOOGLE_CLIENT_SECRET:-}" ]; then
+        ENV_VARS="${ENV_VARS},GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}"
+    fi
+    if [ -n "${GOOGLE_REDIRECT_URL:-}" ]; then
+        ENV_VARS="${ENV_VARS},GOOGLE_REDIRECT_URL=${GOOGLE_REDIRECT_URL}"
+    fi
+
+    gcloud run deploy "$DEPLOY_SERVICE" \
+        --source . \
+        --region "$REGION" \
+        --project "$GOOGLE_CLOUD_PROJECT" \
+        --allow-unauthenticated \
+        --port 3000 \
+        --set-env-vars "$ENV_VARS" \
+        --quiet
+
+    success "Deployed to Cloud Run"
+    gcloud run services describe "$DEPLOY_SERVICE" \
+        --region "$REGION" \
+        --project "$GOOGLE_CLOUD_PROJECT" \
+        --format='value(status.url)'
+}
+
+cmd_deploy_status() {
+    REGION="$(deploy_region)"
+    info "Cloud Run service status..."
+    gcloud run services describe "$DEPLOY_SERVICE" \
+        --region "$REGION" \
+        --project "$GOOGLE_CLOUD_PROJECT" \
+        --platform managed
+}
+
+# ===========================================
+# Commands: Access Control
+# ===========================================
+
+ALLOWED_USERS_FILE="${SCRIPT_DIR}/.allowed-users"
+
+# Read emails from .allowed-users, skipping comments and blank lines
+read_allowed_users() {
+    if [ ! -f "$ALLOWED_USERS_FILE" ]; then
+        return
+    fi
+    grep -v '^\s*#' "$ALLOWED_USERS_FILE" | grep -v '^\s*$' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+# Get current invoker members from Cloud Run IAM
+get_current_invokers() {
+    REGION="$(deploy_region)"
+    gcloud run services get-iam-policy "$DEPLOY_SERVICE" \
+        --region "$REGION" \
+        --project "$GOOGLE_CLOUD_PROJECT" \
+        --flatten='bindings[].members' \
+        --filter='bindings.role=roles/run.invoker' \
+        --format='value(bindings.members)' 2>/dev/null
+}
+
+cmd_access() {
+    require_gcloud
+    require_project_id
+
+    action="${1:-list}"
+
+    case "$action" in
+        list)
+            cmd_access_list
+            ;;
+        sync)
+            cmd_access_sync
+            ;;
+        add)
+            shift
+            cmd_access_add "$@"
+            ;;
+        remove)
+            shift
+            cmd_access_remove "$@"
+            ;;
+        *)
+            echo "Usage: ./tc access [list|sync|add|remove]"
+            echo ""
+            echo "  list             - Show current allowed users (default)"
+            echo "  sync             - Sync .allowed-users to Cloud Run IAM"
+            echo "  add <email>      - Add user to .allowed-users and sync"
+            echo "  remove <email>   - Remove user from .allowed-users and sync"
+            echo ""
+            echo "Users are managed in .allowed-users (one email per line)."
+            ;;
+    esac
+}
+
+cmd_access_list() {
+    REGION="$(deploy_region)"
+    info "Allowed users (.allowed-users):"
+    if [ -f "$ALLOWED_USERS_FILE" ]; then
+        read_allowed_users | while read -r email; do
+            echo "  $email"
+        done
+    else
+        warn "No .allowed-users file found"
+    fi
+
+    echo ""
+    info "Current Cloud Run invokers:"
+    current=$(get_current_invokers)
+    if [ -n "$current" ]; then
+        echo "$current" | while read -r member; do
+            echo "  $member"
+        done
+    else
+        echo "  (none)"
+    fi
+}
+
+cmd_access_sync() {
+    REGION="$(deploy_region)"
+
+    if [ ! -f "$ALLOWED_USERS_FILE" ]; then
+        error "No .allowed-users file found. Create one with: ./tc access add <email>"
+    fi
+
+    info "Syncing .allowed-users to Cloud Run IAM..."
+
+    # Collect desired users from file
+    desired=$(read_allowed_users)
+    if [ -z "$desired" ]; then
+        warn "No users in .allowed-users"
+        return
+    fi
+
+    # Add each user from file (idempotent)
+    echo "$desired" | while read -r email; do
+        info "Granting access: ${email}"
+        gcloud run services add-iam-policy-binding "$DEPLOY_SERVICE" \
+            --region "$REGION" \
+            --project "$GOOGLE_CLOUD_PROJECT" \
+            --member="user:${email}" \
+            --role="roles/run.invoker" \
+            --quiet >/dev/null
+    done
+
+    # Remove invokers not in the file
+    current=$(get_current_invokers)
+    if [ -n "$current" ]; then
+        echo "$current" | while read -r member; do
+            # Extract email from "user:email@example.com"
+            email=$(echo "$member" | sed 's/^user://')
+            if ! echo "$desired" | grep -qFx "$email"; then
+                info "Revoking access: ${email}"
+                gcloud run services remove-iam-policy-binding "$DEPLOY_SERVICE" \
+                    --region "$REGION" \
+                    --project "$GOOGLE_CLOUD_PROJECT" \
+                    --member="$member" \
+                    --role="roles/run.invoker" \
+                    --quiet >/dev/null
+            fi
+        done
+    fi
+
+    success "Access synced"
+}
+
+cmd_access_add() {
+    email="${1:-}"
+    if [ -z "$email" ]; then
+        error "Usage: ./tc access add <email>"
+    fi
+
+    # Create file if it doesn't exist
+    if [ ! -f "$ALLOWED_USERS_FILE" ]; then
+        echo "# Allowed users for Cloud Run (one email per line)" > "$ALLOWED_USERS_FILE"
+    fi
+
+    # Check for duplicate
+    if grep -qFx "$email" "$ALLOWED_USERS_FILE" 2>/dev/null; then
+        warn "${email} is already in .allowed-users"
+    else
+        echo "$email" >> "$ALLOWED_USERS_FILE"
+        success "Added ${email} to .allowed-users"
+    fi
+
+    cmd_access_sync
+}
+
+cmd_access_remove() {
+    email="${1:-}"
+    if [ -z "$email" ]; then
+        error "Usage: ./tc access remove <email>"
+    fi
+
+    if [ ! -f "$ALLOWED_USERS_FILE" ]; then
+        error "No .allowed-users file found"
+    fi
+
+    # Remove from file (portable sed in-place)
+    tmp="${ALLOWED_USERS_FILE}.tmp"
+    grep -vFx "$email" "$ALLOWED_USERS_FILE" > "$tmp" && mv "$tmp" "$ALLOWED_USERS_FILE"
+    success "Removed ${email} from .allowed-users"
+
+    cmd_access_sync
+}
+
+# ===========================================
 # Commands: Cleanup
 # ===========================================
 
@@ -499,6 +828,17 @@ Health & Diagnostics:
   health [service]       Check service health (all, backend)
   curl <url> [opts]      Run curl inside backend container
 
+Cloud:
+  provision              Enable GCP APIs and create required resources (one-time)
+  deploy                 Build and deploy to Cloud Run via Cloud Build
+  deploy status          Show Cloud Run service status
+
+Access Control:
+  access                 Show allowed users (file and Cloud Run IAM)
+  access sync            Sync .allowed-users to Cloud Run IAM
+  access add <email>     Add user and sync
+  access remove <email>  Remove user and sync
+
 Database:
   db:reset               Delete SQLite database
   db:shell               Open SQLite shell
@@ -519,6 +859,9 @@ Examples:
   ./tc generate                 # Regenerate all code from OpenAPI
   ./tc generate backend         # Regenerate backend Go types only
   ./tc shell backend            # Shell into backend container
+  ./tc provision                 # One-time GCP setup (APIs, Artifact Registry, Firestore)
+  ./tc deploy                   # Build, push, and deploy to Cloud Run
+  ./tc deploy status            # Check Cloud Run service status
   ./tc clean volumes            # Remove containers and Go cache
 EOF
 }
@@ -542,6 +885,9 @@ case "$command" in
     test)       cmd_test "$@" ;;
     test-precommit)  cmd_test_precommit "$@" ;;
     generate)   cmd_generate "$@" ;;
+    provision)  cmd_provision "$@" ;;
+    deploy)     cmd_deploy "$@" ;;
+    access)     cmd_access "$@" ;;
 
     db:reset)   cmd_db_reset "$@" ;;
     db:shell)   cmd_db_shell "$@" ;;

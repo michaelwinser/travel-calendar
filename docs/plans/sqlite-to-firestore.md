@@ -125,12 +125,12 @@ firebase-emulator:
     - "${PORT_2}:4000"   # Emulator UI
     - "${PORT_3}:8080"   # Firestore
   environment:
-    - FIREBASE_PROJECT_ID=travel-calendar-dev
+    - GOOGLE_CLOUD_PROJECT=travel-calendar-dev
 
 backend:
   environment:
     - FIRESTORE_EMULATOR_HOST=firebase-emulator:8080
-    - FIREBASE_PROJECT_ID=travel-calendar-dev
+    - GOOGLE_CLOUD_PROJECT=travel-calendar-dev
     - STORE_TYPE=firestore
   depends_on:
     firebase-emulator:

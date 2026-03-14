@@ -95,37 +95,6 @@ COPY --from=frontend-build /app/packages/frontend/build ./cmd/server/dist/
 RUN go build -o /app/bin/server ./cmd/server
 
 # ===========================================
-# Stage: runtime - Final minimal image
-# ===========================================
-FROM alpine:3.19 AS runtime
-
-# Install runtime dependencies
-RUN apk add --no-cache \
-    ca-certificates \
-    curl
-
-# Create non-root user
-RUN addgroup -g 1000 app && adduser -u 1000 -G app -s /bin/sh -D app
-
-WORKDIR /app
-
-# Copy binary from build stage
-COPY --from=backend-build /app/bin/server /app/bin/server
-
-# Create data directory
-RUN mkdir -p /app/data && chown -R app:app /app
-
-USER app
-
-# Default environment
-ENV PORT=3000
-
-EXPOSE 3000
-
-# Default to running the backend server
-CMD ["/app/bin/server"]
-
-# ===========================================
 # Stage: dev - Development image with all tools
 # ===========================================
 FROM base-go AS dev
@@ -181,3 +150,34 @@ WORKDIR /app
 
 # Default command for dev
 CMD ["sh", "-c", "cd packages/backend && go run ./cmd/server"]
+
+# ===========================================
+# Stage: runtime - Final minimal image (default for Cloud Run)
+# ===========================================
+FROM alpine:3.19 AS runtime
+
+# Install runtime dependencies
+RUN apk add --no-cache \
+    ca-certificates \
+    curl
+
+# Create non-root user
+RUN addgroup -g 1000 app && adduser -u 1000 -G app -s /bin/sh -D app
+
+WORKDIR /app
+
+# Copy binary from build stage
+COPY --from=backend-build /app/bin/server /app/bin/server
+
+# Create data directory
+RUN mkdir -p /app/data && chown -R app:app /app
+
+USER app
+
+# Default environment
+ENV PORT=3000
+
+EXPOSE 3000
+
+# Default to running the backend server
+CMD ["/app/bin/server"]

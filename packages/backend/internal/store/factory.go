@@ -25,7 +25,7 @@ func New() (StoreInterface, error) {
 		return NewSQLite(dbPath)
 
 	case "firestore":
-		projectID := os.Getenv("FIREBASE_PROJECT_ID")
+		projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
 		if projectID == "" {
 			projectID = "travel-calendar-dev"
 		}
