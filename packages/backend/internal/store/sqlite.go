@@ -45,6 +45,7 @@ func (s *SQLiteStore) migrate() error {
 	schema := `
 	CREATE TABLE IF NOT EXISTS trips (
 		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL DEFAULT '',
 		name TEXT NOT NULL,
 		purpose TEXT NOT NULL,
 		start_date TEXT,
@@ -89,6 +90,7 @@ func (s *SQLiteStore) migrate() error {
 	CREATE INDEX IF NOT EXISTS idx_documents_trip_id ON documents(trip_id);
 	CREATE INDEX IF NOT EXISTS idx_trips_start_date ON trips(start_date);
 	CREATE INDEX IF NOT EXISTS idx_trips_purpose ON trips(purpose);
+	CREATE INDEX IF NOT EXISTS idx_trips_user_id ON trips(user_id);
 
 	CREATE TABLE IF NOT EXISTS config (
 		key TEXT PRIMARY KEY,
@@ -152,6 +154,7 @@ func (s *SQLiteStore) migrate() error {
 	-- Processed calendar events tracking (for suggestion deduplication)
 	CREATE TABLE IF NOT EXISTS processed_calendar_events (
 		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL DEFAULT '',
 		calendar_event_id TEXT NOT NULL,
 		calendar_id TEXT NOT NULL,
 		action TEXT NOT NULL,
@@ -162,6 +165,7 @@ func (s *SQLiteStore) migrate() error {
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_processed_events_calendar ON processed_calendar_events(calendar_id);
+	CREATE INDEX IF NOT EXISTS idx_processed_events_user ON processed_calendar_events(user_id);
 
 	-- User sessions for authentication
 	CREATE TABLE IF NOT EXISTS sessions (
@@ -183,9 +187,9 @@ func (s *SQLiteStore) migrate() error {
 // Trip methods
 
 // ListTrips returns all trips, optionally filtered.
-func (s *SQLiteStore) ListTrips(upcoming, past *bool, purpose *string) ([]entity.Trip, error) {
-	query := "SELECT id, name, purpose, start_date, end_date, status, notes, created_at, updated_at FROM trips WHERE 1=1"
-	args := []interface{}{}
+func (s *SQLiteStore) ListTrips(userID string, upcoming, past *bool, purpose *string) ([]entity.Trip, error) {
+	query := "SELECT id, user_id, name, purpose, start_date, end_date, status, notes, created_at, updated_at FROM trips WHERE user_id = ?"
+	args := []interface{}{userID}
 
 	now := time.Now().Format("2006-01-02")
 	if upcoming != nil && *upcoming {
@@ -221,9 +225,9 @@ func (s *SQLiteStore) ListTrips(upcoming, past *bool, purpose *string) ([]entity
 }
 
 // GetTrip returns a single trip by ID.
-func (s *SQLiteStore) GetTrip(id uuid.UUID) (*entity.Trip, error) {
-	query := "SELECT id, name, purpose, start_date, end_date, status, notes, created_at, updated_at FROM trips WHERE id = ?"
-	row := s.db.QueryRow(query, id.String())
+func (s *SQLiteStore) GetTrip(userID string, id uuid.UUID) (*entity.Trip, error) {
+	query := "SELECT id, user_id, name, purpose, start_date, end_date, status, notes, created_at, updated_at FROM trips WHERE user_id = ? AND id = ?"
+	row := s.db.QueryRow(query, userID, id.String())
 	trip, err := scanTripRow(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -236,10 +240,11 @@ func (s *SQLiteStore) GetTrip(id uuid.UUID) (*entity.Trip, error) {
 
 // CreateTrip inserts a new trip.
 func (s *SQLiteStore) CreateTrip(trip *entity.Trip) error {
-	query := `INSERT INTO trips (id, name, purpose, start_date, end_date, status, notes, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	query := `INSERT INTO trips (id, user_id, name, purpose, start_date, end_date, status, notes, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := s.db.Exec(query,
 		trip.ID.String(),
+		trip.UserID,
 		trip.Name,
 		trip.Purpose,
 		formatDatePtr(trip.StartDate),
@@ -253,8 +258,8 @@ func (s *SQLiteStore) CreateTrip(trip *entity.Trip) error {
 }
 
 // UpdateTrip updates an existing trip.
-func (s *SQLiteStore) UpdateTrip(trip *entity.Trip) error {
-	query := `UPDATE trips SET name = ?, purpose = ?, start_date = ?, end_date = ?, status = ?, notes = ?, updated_at = ? WHERE id = ?`
+func (s *SQLiteStore) UpdateTrip(userID string, trip *entity.Trip) error {
+	query := `UPDATE trips SET name = ?, purpose = ?, start_date = ?, end_date = ?, status = ?, notes = ?, updated_at = ? WHERE user_id = ? AND id = ?`
 	result, err := s.db.Exec(query,
 		trip.Name,
 		trip.Purpose,
@@ -263,6 +268,7 @@ func (s *SQLiteStore) UpdateTrip(trip *entity.Trip) error {
 		trip.Status,
 		trip.Notes,
 		trip.UpdatedAt.Format(time.RFC3339),
+		userID,
 		trip.ID.String(),
 	)
 	if err != nil {
@@ -279,8 +285,8 @@ func (s *SQLiteStore) UpdateTrip(trip *entity.Trip) error {
 }
 
 // DeleteTrip deletes a trip by ID.
-func (s *SQLiteStore) DeleteTrip(id uuid.UUID) error {
-	result, err := s.db.Exec("DELETE FROM trips WHERE id = ?", id.String())
+func (s *SQLiteStore) DeleteTrip(userID string, id uuid.UUID) error {
+	result, err := s.db.Exec("DELETE FROM trips WHERE user_id = ? AND id = ?", userID, id.String())
 	if err != nil {
 		return err
 	}
@@ -295,13 +301,13 @@ func (s *SQLiteStore) DeleteTrip(id uuid.UUID) error {
 }
 
 // SearchTrips searches trips by query string.
-func (s *SQLiteStore) SearchTrips(q string) ([]entity.Trip, error) {
+func (s *SQLiteStore) SearchTrips(userID string, q string) ([]entity.Trip, error) {
 	pattern := "%" + q + "%"
-	query := `SELECT id, name, purpose, start_date, end_date, status, notes, created_at, updated_at FROM trips
-		WHERE name LIKE ? OR notes LIKE ?
+	query := `SELECT id, user_id, name, purpose, start_date, end_date, status, notes, created_at, updated_at FROM trips
+		WHERE user_id = ? AND (name LIKE ? OR notes LIKE ?)
 		ORDER BY COALESCE(start_date, '9999-12-31') ASC`
 
-	rows, err := s.db.Query(query, pattern, pattern)
+	rows, err := s.db.Query(query, userID, pattern, pattern)
 	if err != nil {
 		return nil, err
 	}
@@ -576,7 +582,7 @@ type scanner interface {
 func scanTrip(rows *sql.Rows) (entity.Trip, error) {
 	var trip entity.Trip
 	var id, startDate, endDate, notes, createdAt, updatedAt sql.NullString
-	err := rows.Scan(&id, &trip.Name, &trip.Purpose, &startDate, &endDate, &trip.Status, &notes, &createdAt, &updatedAt)
+	err := rows.Scan(&id, &trip.UserID, &trip.Name, &trip.Purpose, &startDate, &endDate, &trip.Status, &notes, &createdAt, &updatedAt)
 	if err != nil {
 		return trip, err
 	}
@@ -596,7 +602,7 @@ func scanTrip(rows *sql.Rows) (entity.Trip, error) {
 func scanTripRow(row *sql.Row) (entity.Trip, error) {
 	var trip entity.Trip
 	var id, startDate, endDate, notes, createdAt, updatedAt sql.NullString
-	err := row.Scan(&id, &trip.Name, &trip.Purpose, &startDate, &endDate, &trip.Status, &notes, &createdAt, &updatedAt)
+	err := row.Scan(&id, &trip.UserID, &trip.Name, &trip.Purpose, &startDate, &endDate, &trip.Status, &notes, &createdAt, &updatedAt)
 	if err != nil {
 		return trip, err
 	}
@@ -796,13 +802,13 @@ func (s *SQLiteStore) SetTripLocations(tripID uuid.UUID, locations []entity.Trip
 }
 
 // GetTripsForDateRange returns trips that overlap with the given date range.
-func (s *SQLiteStore) GetTripsForDateRange(from, to time.Time) ([]entity.Trip, error) {
-	query := `SELECT id, name, purpose, start_date, end_date, status, notes, created_at, updated_at FROM trips
-		WHERE start_date IS NOT NULL AND end_date IS NOT NULL
+func (s *SQLiteStore) GetTripsForDateRange(userID string, from, to time.Time) ([]entity.Trip, error) {
+	query := `SELECT id, user_id, name, purpose, start_date, end_date, status, notes, created_at, updated_at FROM trips
+		WHERE user_id = ? AND start_date IS NOT NULL AND end_date IS NOT NULL
 		AND start_date <= ? AND end_date >= ?
 		ORDER BY start_date ASC`
 
-	rows, err := s.db.Query(query, to.Format("2006-01-02"), from.Format("2006-01-02"))
+	rows, err := s.db.Query(query, userID, to.Format("2006-01-02"), from.Format("2006-01-02"))
 	if err != nil {
 		return nil, err
 	}
@@ -1233,8 +1239,8 @@ func scanCalendarLinkRow(row *sql.Row) (entity.CalendarLink, error) {
 // CreateProcessedEvent saves a record of a processed calendar event.
 func (s *SQLiteStore) CreateProcessedEvent(event *entity.ProcessedCalendarEvent) error {
 	query := `INSERT INTO processed_calendar_events
-		(id, calendar_event_id, calendar_id, action, trip_id, item_id, processed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`
+		(id, user_id, calendar_event_id, calendar_id, action, trip_id, item_id, processed_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
 	var tripID, itemID sql.NullString
 	if event.TripID != nil {
@@ -1246,6 +1252,7 @@ func (s *SQLiteStore) CreateProcessedEvent(event *entity.ProcessedCalendarEvent)
 
 	_, err := s.db.Exec(query,
 		event.ID.String(),
+		event.UserID,
 		event.CalendarEventID,
 		event.CalendarID,
 		event.Action,
@@ -1257,11 +1264,11 @@ func (s *SQLiteStore) CreateProcessedEvent(event *entity.ProcessedCalendarEvent)
 }
 
 // GetProcessedEventByCalendarEvent retrieves a processed event by its calendar event ID.
-func (s *SQLiteStore) GetProcessedEventByCalendarEvent(calendarID, eventID string) (*entity.ProcessedCalendarEvent, error) {
-	query := `SELECT id, calendar_event_id, calendar_id, action, trip_id, item_id, processed_at
-		FROM processed_calendar_events WHERE calendar_id = ? AND calendar_event_id = ?`
+func (s *SQLiteStore) GetProcessedEventByCalendarEvent(userID string, calendarID, eventID string) (*entity.ProcessedCalendarEvent, error) {
+	query := `SELECT id, user_id, calendar_event_id, calendar_id, action, trip_id, item_id, processed_at
+		FROM processed_calendar_events WHERE user_id = ? AND calendar_id = ? AND calendar_event_id = ?`
 
-	row := s.db.QueryRow(query, calendarID, eventID)
+	row := s.db.QueryRow(query, userID, calendarID, eventID)
 	event, err := scanProcessedEventRow(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -1273,10 +1280,10 @@ func (s *SQLiteStore) GetProcessedEventByCalendarEvent(calendarID, eventID strin
 }
 
 // IsEventProcessed checks if a calendar event has already been processed.
-func (s *SQLiteStore) IsEventProcessed(calendarID, eventID string) (bool, error) {
-	query := `SELECT 1 FROM processed_calendar_events WHERE calendar_id = ? AND calendar_event_id = ? LIMIT 1`
+func (s *SQLiteStore) IsEventProcessed(userID string, calendarID, eventID string) (bool, error) {
+	query := `SELECT 1 FROM processed_calendar_events WHERE user_id = ? AND calendar_id = ? AND calendar_event_id = ? LIMIT 1`
 	var exists int
-	err := s.db.QueryRow(query, calendarID, eventID).Scan(&exists)
+	err := s.db.QueryRow(query, userID, calendarID, eventID).Scan(&exists)
 	if err == sql.ErrNoRows {
 		return false, nil
 	}
@@ -1287,11 +1294,11 @@ func (s *SQLiteStore) IsEventProcessed(calendarID, eventID string) (bool, error)
 }
 
 // ListProcessedEvents returns all processed events for a calendar.
-func (s *SQLiteStore) ListProcessedEvents(calendarID string) ([]entity.ProcessedCalendarEvent, error) {
-	query := `SELECT id, calendar_event_id, calendar_id, action, trip_id, item_id, processed_at
-		FROM processed_calendar_events WHERE calendar_id = ? ORDER BY processed_at DESC`
+func (s *SQLiteStore) ListProcessedEvents(userID string, calendarID string) ([]entity.ProcessedCalendarEvent, error) {
+	query := `SELECT id, user_id, calendar_event_id, calendar_id, action, trip_id, item_id, processed_at
+		FROM processed_calendar_events WHERE user_id = ? AND calendar_id = ? ORDER BY processed_at DESC`
 
-	rows, err := s.db.Query(query, calendarID)
+	rows, err := s.db.Query(query, userID, calendarID)
 	if err != nil {
 		return nil, err
 	}
@@ -1308,9 +1315,9 @@ func (s *SQLiteStore) ListProcessedEvents(calendarID string) ([]entity.Processed
 	return events, rows.Err()
 }
 
-// DeleteAllProcessedEvents removes all processed event records (for reset functionality).
-func (s *SQLiteStore) DeleteAllProcessedEvents() error {
-	_, err := s.db.Exec("DELETE FROM processed_calendar_events")
+// DeleteAllProcessedEvents removes all processed event records for a user.
+func (s *SQLiteStore) DeleteAllProcessedEvents(userID string) error {
+	_, err := s.db.Exec("DELETE FROM processed_calendar_events WHERE user_id = ?", userID)
 	return err
 }
 
@@ -1319,7 +1326,7 @@ func scanProcessedEvent(rows *sql.Rows) (entity.ProcessedCalendarEvent, error) {
 	var id, processedAt string
 	var tripID, itemID sql.NullString
 
-	err := rows.Scan(&id, &event.CalendarEventID, &event.CalendarID, &event.Action, &tripID, &itemID, &processedAt)
+	err := rows.Scan(&id, &event.UserID, &event.CalendarEventID, &event.CalendarID, &event.Action, &tripID, &itemID, &processedAt)
 	if err != nil {
 		return event, err
 	}
@@ -1344,7 +1351,7 @@ func scanProcessedEventRow(row *sql.Row) (entity.ProcessedCalendarEvent, error) 
 	var id, processedAt string
 	var tripID, itemID sql.NullString
 
-	err := row.Scan(&id, &event.CalendarEventID, &event.CalendarID, &event.Action, &tripID, &itemID, &processedAt)
+	err := row.Scan(&id, &event.UserID, &event.CalendarEventID, &event.CalendarID, &event.Action, &tripID, &itemID, &processedAt)
 	if err != nil {
 		return event, err
 	}

@@ -754,7 +754,7 @@ func (c *CalendarService) SuggestTripsFromCalendar(ctx context.Context, userID s
 	}
 
 	// Filter out already-processed events
-	travelEvents = c.filterProcessedEvents(travelEvents)
+	travelEvents = c.filterProcessedEvents(userID, travelEvents)
 
 	if len(travelEvents) == 0 {
 		return []api.TripSuggestion{}, nil
@@ -769,7 +769,7 @@ func (c *CalendarService) SuggestTripsFromCalendar(ctx context.Context, userID s
 	suggestions := groupEventsIntoSuggestions(travelEvents)
 
 	// Detect merge candidates for each suggestion
-	existingTrips, err := c.store.GetTripsForDateRange(from, to)
+	existingTrips, err := c.store.GetTripsForDateRange(userID, from, to)
 	if err == nil && len(existingTrips) > 0 {
 		for i := range suggestions {
 			candidates := c.detectMergeCandidates(&suggestions[i], existingTrips)
@@ -1010,7 +1010,7 @@ func (c *CalendarService) ImportTripSuggestion(ctx context.Context, svc *Service
 		Location:  &suggestion.Location,
 	}
 
-	trip, err := svc.CreateTrip(&createReq)
+	trip, err := svc.CreateTrip(userID, &createReq)
 	if err != nil {
 		return nil, fmt.Errorf("creating trip: %w", err)
 	}
@@ -1021,7 +1021,7 @@ func (c *CalendarService) ImportTripSuggestion(ctx context.Context, svc *Service
 	if suggestion.SuggestedItems != nil {
 		for _, suggestedItem := range *suggestion.SuggestedItems {
 			itemReq := suggestedItemToCreateRequest(suggestedItem)
-			_, err := svc.CreateTripItem(tripID, &itemReq)
+			_, err := svc.CreateTripItem(userID, tripID, &itemReq)
 			if err != nil {
 				// Log but continue - partial import is better than none
 				continue
@@ -1030,10 +1030,10 @@ func (c *CalendarService) ImportTripSuggestion(ctx context.Context, svc *Service
 	}
 
 	// Mark all source events as processed
-	c.markEventsAsProcessed(suggestion.SourceEvents, entity.ProcessedActionImported, &tripID)
+	c.markEventsAsProcessed(userID, suggestion.SourceEvents, entity.ProcessedActionImported, &tripID)
 
 	// Return trip with items
-	return svc.GetTrip(tripID)
+	return svc.GetTrip(userID, tripID)
 }
 
 // findSuggestionByID looks up a suggestion by ID, including processed events.
@@ -1075,9 +1075,10 @@ func (c *CalendarService) findSuggestionByID(ctx context.Context, userID string,
 }
 
 // markEventsAsProcessed records that calendar events have been processed.
-func (c *CalendarService) markEventsAsProcessed(events []api.CalendarEvent, action string, tripID *uuid.UUID) {
+func (c *CalendarService) markEventsAsProcessed(userID string, events []api.CalendarEvent, action string, tripID *uuid.UUID) {
 	for _, event := range events {
 		processedEvent := entity.NewProcessedCalendarEvent(event.Id, event.CalendarId, action)
+		processedEvent.UserID = userID
 		processedEvent.TripID = tripID
 		_ = c.store.CreateProcessedEvent(processedEvent) // Best effort, don't fail import
 	}
@@ -1093,7 +1094,7 @@ func (c *CalendarService) DismissTripSuggestion(ctx context.Context, userID stri
 		return fmt.Errorf("suggestion not found: %s", suggestionID)
 	}
 
-	c.markEventsAsProcessed(suggestion.SourceEvents, entity.ProcessedActionDismissed, nil)
+	c.markEventsAsProcessed(userID, suggestion.SourceEvents, entity.ProcessedActionDismissed, nil)
 	return nil
 }
 
@@ -1109,7 +1110,7 @@ func (c *CalendarService) MergeTripSuggestion(ctx context.Context, svc *Service,
 	}
 
 	// Get existing trip
-	trip, err := svc.GetTrip(tripID)
+	trip, err := svc.GetTrip(userID, tripID)
 	if err != nil {
 		return nil, fmt.Errorf("trip not found: %w", err)
 	}
@@ -1118,7 +1119,7 @@ func (c *CalendarService) MergeTripSuggestion(ctx context.Context, svc *Service,
 	if suggestion.SuggestedItems != nil {
 		for _, suggestedItem := range *suggestion.SuggestedItems {
 			itemReq := suggestedItemToCreateRequest(suggestedItem)
-			_, err := svc.CreateTripItem(tripID, &itemReq)
+			_, err := svc.CreateTripItem(userID, tripID, &itemReq)
 			if err != nil {
 				// Log but continue - partial merge is better than none
 				continue
@@ -1147,22 +1148,22 @@ func (c *CalendarService) MergeTripSuggestion(ctx context.Context, svc *Service,
 	}
 
 	if needsUpdate {
-		_, err := svc.UpdateTrip(tripID, &updateReq)
+		_, err := svc.UpdateTrip(userID, tripID, &updateReq)
 		if err != nil {
 			// Log but don't fail - items were added successfully
 		}
 	}
 
 	// Mark events as processed (merged)
-	c.markEventsAsProcessed(suggestion.SourceEvents, entity.ProcessedActionMerged, &tripID)
+	c.markEventsAsProcessed(userID, suggestion.SourceEvents, entity.ProcessedActionMerged, &tripID)
 
 	// Return updated trip
-	return svc.GetTrip(tripID)
+	return svc.GetTrip(userID, tripID)
 }
 
-// ResetProcessedEvents clears all processed event records.
-func (c *CalendarService) ResetProcessedEvents() error {
-	return c.store.DeleteAllProcessedEvents()
+// ResetProcessedEvents clears all processed event records for a user.
+func (c *CalendarService) ResetProcessedEvents(userID string) error {
+	return c.store.DeleteAllProcessedEvents(userID)
 }
 
 // suggestedItemToCreateRequest converts a SuggestedItem to a CreateItemRequest.
@@ -1311,10 +1312,10 @@ func locationsMatch(loc1, loc2 string) bool {
 }
 
 // filterProcessedEvents removes events that have already been processed (imported, dismissed, or merged).
-func (c *CalendarService) filterProcessedEvents(events []api.CalendarEvent) []api.CalendarEvent {
+func (c *CalendarService) filterProcessedEvents(userID string, events []api.CalendarEvent) []api.CalendarEvent {
 	var filtered []api.CalendarEvent
 	for _, event := range events {
-		processed, err := c.store.IsEventProcessed(event.CalendarId, event.Id)
+		processed, err := c.store.IsEventProcessed(userID, event.CalendarId, event.Id)
 		if err != nil {
 			// On error, include the event (fail open)
 			filtered = append(filtered, event)

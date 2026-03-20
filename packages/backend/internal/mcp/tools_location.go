@@ -50,7 +50,7 @@ func (h *Handler) handleGetTripLocations(args map[string]interface{}) (interface
 		return errorResult(fmt.Errorf("invalid trip_id: %v", err)), nil
 	}
 
-	locs, err := h.svc.GetTripLocations(tripID)
+	locs, err := h.svc.GetTripLocations("", tripID)
 	if err != nil {
 		return errorResult(fmt.Errorf("failed to get trip locations: %w", err)), nil
 	}
@@ -117,7 +117,7 @@ func (h *Handler) handleSetTripLocations(args map[string]interface{}) (interface
 		}
 	}
 
-	result, err := h.svc.SetTripLocations(tripID, req)
+	result, err := h.svc.SetTripLocations("", tripID, req)
 	if err != nil {
 		return errorResult(fmt.Errorf("failed to set trip locations: %w", err)), nil
 	}
@@ -136,7 +136,7 @@ func (h *Handler) handleGetLocationOnDate(args map[string]interface{}) (interfac
 		return errorResult(fmt.Errorf("invalid date format (use YYYY-MM-DD): %v", err)), nil
 	}
 
-	loc, err := h.svc.GetLocationOnDate(date)
+	loc, err := h.svc.GetLocationOnDate("", date)
 	if err != nil {
 		return errorResult(fmt.Errorf("failed to get location: %w", err)), nil
 	}
@@ -164,7 +164,7 @@ func (h *Handler) handleGetLocationRange(args map[string]interface{}) (interface
 		return errorResult(fmt.Errorf("invalid to date (use YYYY-MM-DD): %v", err)), nil
 	}
 
-	segments, err := h.svc.GetLocationRange(from, to)
+	segments, err := h.svc.GetLocationRange("", from, to)
 	if err != nil {
 		return errorResult(fmt.Errorf("failed to get location range: %w", err)), nil
 	}

@@ -31,7 +31,7 @@ func createTestTrip(t *testing.T, svc *Service, name string, purpose api.TripPur
 		Name:    name,
 		Purpose: purpose,
 	}
-	trip, err := svc.CreateTrip(req)
+	trip, err := svc.CreateTrip("", req)
 	require.NoError(t, err)
 	require.NotNil(t, trip)
 	return trip
@@ -44,7 +44,7 @@ func createTestTrip(t *testing.T, svc *Service, name string, purpose api.TripPur
 func TestListTrips_Empty(t *testing.T) {
 	svc := setupTestService(t)
 
-	trips, err := svc.ListTrips(nil, nil, nil)
+	trips, err := svc.ListTrips("",nil, nil, nil)
 	require.NoError(t, err)
 	assert.Empty(t, trips)
 }
@@ -55,7 +55,7 @@ func TestListTrips_ReturnsAll(t *testing.T) {
 	createTestTrip(t, svc, "Trip 1", api.TripPurposeVacation)
 	createTestTrip(t, svc, "Trip 2", api.TripPurposeBusiness)
 
-	trips, err := svc.ListTrips(nil, nil, nil)
+	trips, err := svc.ListTrips("",nil, nil, nil)
 	require.NoError(t, err)
 	assert.Len(t, trips, 2)
 }
@@ -69,10 +69,10 @@ func TestListTrips_ConvertsToAPI(t *testing.T) {
 		StartDate: apiDate(2025, 6, 1),
 		EndDate:   apiDate(2025, 6, 10),
 	}
-	_, err := svc.CreateTrip(req)
+	_, err := svc.CreateTrip("",req)
 	require.NoError(t, err)
 
-	trips, err := svc.ListTrips(nil, nil, nil)
+	trips, err := svc.ListTrips("",nil, nil, nil)
 	require.NoError(t, err)
 	require.Len(t, trips, 1)
 
@@ -93,7 +93,7 @@ func TestListTrips_FiltersByPurpose(t *testing.T) {
 	createTestTrip(t, svc, "Business Trip", api.TripPurposeBusiness)
 
 	purpose := api.TripPurposeVacation
-	trips, err := svc.ListTrips(nil, nil, &purpose)
+	trips, err := svc.ListTrips("",nil, nil, &purpose)
 	require.NoError(t, err)
 	assert.Len(t, trips, 1)
 	assert.Equal(t, "Vacation Trip", trips[0].Name)
@@ -104,7 +104,7 @@ func TestGetTrip_Found(t *testing.T) {
 
 	created := createTestTrip(t, svc, "Test Trip", api.TripPurposeVacation)
 
-	trip, err := svc.GetTrip(uuid.UUID(created.Id))
+	trip, err := svc.GetTrip("",uuid.UUID(created.Id))
 	require.NoError(t, err)
 	require.NotNil(t, trip)
 	assert.Equal(t, "Test Trip", trip.Name)
@@ -113,7 +113,7 @@ func TestGetTrip_Found(t *testing.T) {
 func TestGetTrip_NotFound(t *testing.T) {
 	svc := setupTestService(t)
 
-	trip, err := svc.GetTrip(uuid.New())
+	trip, err := svc.GetTrip("",uuid.New())
 	require.NoError(t, err)
 	assert.Nil(t, trip)
 }
@@ -129,11 +129,11 @@ func TestGetTrip_IncludesItems(t *testing.T) {
 	itemReq := &api.CreateItemRequest{
 		Type: api.Flight,
 	}
-	_, err := svc.CreateTripItem(tripID, itemReq)
+	_, err := svc.CreateTripItem("",tripID, itemReq)
 	require.NoError(t, err)
 
 	// Get trip should include items
-	trip, err := svc.GetTrip(tripID)
+	trip, err := svc.GetTrip("",tripID)
 	require.NoError(t, err)
 	require.NotNil(t, trip)
 	require.NotNil(t, trip.Items)
@@ -152,7 +152,7 @@ func TestCreateTrip_Success(t *testing.T) {
 		Notes:     &notes,
 	}
 
-	trip, err := svc.CreateTrip(req)
+	trip, err := svc.CreateTrip("",req)
 	require.NoError(t, err)
 	require.NotNil(t, trip)
 
@@ -173,7 +173,7 @@ func TestCreateTrip_DefaultStatus(t *testing.T) {
 		Purpose: api.TripPurposeVacation,
 	}
 
-	trip, err := svc.CreateTrip(req)
+	trip, err := svc.CreateTrip("",req)
 	require.NoError(t, err)
 	assert.Equal(t, api.Planning, trip.Status)
 }
@@ -188,7 +188,7 @@ func TestCreateTrip_CustomStatus(t *testing.T) {
 		Status:  &status,
 	}
 
-	trip, err := svc.CreateTrip(req)
+	trip, err := svc.CreateTrip("",req)
 	require.NoError(t, err)
 	assert.Equal(t, api.Confirmed, trip.Status)
 }
@@ -206,7 +206,7 @@ func TestUpdateTrip_Success(t *testing.T) {
 		Purpose: &newPurpose,
 	}
 
-	updated, err := svc.UpdateTrip(tripID, req)
+	updated, err := svc.UpdateTrip("",tripID, req)
 	require.NoError(t, err)
 	require.NotNil(t, updated)
 	assert.Equal(t, "Updated Name", updated.Name)
@@ -225,7 +225,7 @@ func TestUpdateTrip_PartialUpdate(t *testing.T) {
 		Notes:   &notes,
 		Status:  &status,
 	}
-	created, err := svc.CreateTrip(req)
+	created, err := svc.CreateTrip("",req)
 	require.NoError(t, err)
 	tripID := uuid.UUID(created.Id)
 
@@ -235,7 +235,7 @@ func TestUpdateTrip_PartialUpdate(t *testing.T) {
 		Name: &newName,
 	}
 
-	updated, err := svc.UpdateTrip(tripID, updateReq)
+	updated, err := svc.UpdateTrip("",tripID, updateReq)
 	require.NoError(t, err)
 	require.NotNil(t, updated)
 
@@ -256,7 +256,7 @@ func TestUpdateTrip_NotFound(t *testing.T) {
 		Name: &newName,
 	}
 
-	updated, err := svc.UpdateTrip(uuid.New(), req)
+	updated, err := svc.UpdateTrip("",uuid.New(), req)
 	require.NoError(t, err)
 	assert.Nil(t, updated)
 }
@@ -267,11 +267,11 @@ func TestDeleteTrip_Success(t *testing.T) {
 	created := createTestTrip(t, svc, "To Delete", api.TripPurposeVacation)
 	tripID := uuid.UUID(created.Id)
 
-	err := svc.DeleteTrip(tripID)
+	err := svc.DeleteTrip("",tripID)
 	require.NoError(t, err)
 
 	// Verify deleted
-	trip, err := svc.GetTrip(tripID)
+	trip, err := svc.GetTrip("",tripID)
 	require.NoError(t, err)
 	assert.Nil(t, trip)
 }
@@ -282,7 +282,7 @@ func TestSearchTrips_FindsByName(t *testing.T) {
 	createTestTrip(t, svc, "FOSDEM Conference", api.TripPurposeConference)
 	createTestTrip(t, svc, "Beach Vacation", api.TripPurposeVacation)
 
-	trips, err := svc.SearchTrips("FOSDEM")
+	trips, err := svc.SearchTrips("","FOSDEM")
 	require.NoError(t, err)
 	assert.Len(t, trips, 1)
 	assert.Equal(t, "FOSDEM Conference", trips[0].Name)
@@ -293,7 +293,7 @@ func TestSearchTrips_CaseInsensitive(t *testing.T) {
 
 	createTestTrip(t, svc, "FOSDEM Conference", api.TripPurposeConference)
 
-	trips, err := svc.SearchTrips("fosdem")
+	trips, err := svc.SearchTrips("","fosdem")
 	require.NoError(t, err)
 	assert.Len(t, trips, 1)
 }
@@ -312,10 +312,10 @@ func TestListTripItems_ReturnsItems(t *testing.T) {
 	itemReq := &api.CreateItemRequest{
 		Type: api.Flight,
 	}
-	_, err := svc.CreateTripItem(tripID, itemReq)
+	_, err := svc.CreateTripItem("",tripID, itemReq)
 	require.NoError(t, err)
 
-	items, err := svc.ListTripItems(tripID)
+	items, err := svc.ListTripItems("",tripID)
 	require.NoError(t, err)
 	assert.Len(t, items, 1)
 	assert.Equal(t, api.Flight, items[0].Type)
@@ -324,7 +324,7 @@ func TestListTripItems_ReturnsItems(t *testing.T) {
 func TestListTripItems_TripNotFound(t *testing.T) {
 	svc := setupTestService(t)
 
-	items, err := svc.ListTripItems(uuid.New())
+	items, err := svc.ListTripItems("",uuid.New())
 	require.NoError(t, err)
 	assert.Nil(t, items) // Returns nil when trip not found
 }
@@ -345,7 +345,7 @@ func TestCreateTripItem_Success(t *testing.T) {
 		Carrier: &carrier,
 	}
 
-	item, err := svc.CreateTripItem(tripID, req)
+	item, err := svc.CreateTripItem("",tripID, req)
 	require.NoError(t, err)
 	require.NotNil(t, item)
 
@@ -363,7 +363,7 @@ func TestCreateTripItem_TripNotFound(t *testing.T) {
 		Type: api.Flight,
 	}
 
-	item, err := svc.CreateTripItem(uuid.New(), req)
+	item, err := svc.CreateTripItem("",uuid.New(), req)
 	require.NoError(t, err)
 	assert.Nil(t, item) // Returns nil when trip not found
 }
@@ -378,7 +378,7 @@ func TestDeleteItem_Success(t *testing.T) {
 	itemReq := &api.CreateItemRequest{
 		Type: api.Event,
 	}
-	item, err := svc.CreateTripItem(tripID, itemReq)
+	item, err := svc.CreateTripItem("",tripID, itemReq)
 	require.NoError(t, err)
 
 	// Delete item
@@ -386,7 +386,7 @@ func TestDeleteItem_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify deleted
-	items, err := svc.ListTripItems(tripID)
+	items, err := svc.ListTripItems("",tripID)
 	require.NoError(t, err)
 	assert.Empty(t, items)
 }
@@ -413,20 +413,20 @@ func TestMergeTrips_Success(t *testing.T) {
 	// Create source trip with items
 	source := createTestTrip(t, svc, "Source Trip", api.TripPurposeVacation)
 	sourceID := uuid.UUID(source.Id)
-	_, err := svc.CreateTripItem(sourceID, &api.CreateItemRequest{Type: api.Flight})
+	_, err := svc.CreateTripItem("",sourceID, &api.CreateItemRequest{Type: api.Flight})
 	require.NoError(t, err)
-	_, err = svc.CreateTripItem(sourceID, &api.CreateItemRequest{Type: api.Hotel})
+	_, err = svc.CreateTripItem("",sourceID, &api.CreateItemRequest{Type: api.Hotel})
 	require.NoError(t, err)
 
 	// Create target trip with an item
 	target := createTestTrip(t, svc, "Target Trip", api.TripPurposeBusiness)
 	targetID := uuid.UUID(target.Id)
-	_, err = svc.CreateTripItem(targetID, &api.CreateItemRequest{Type: api.Event})
+	_, err = svc.CreateTripItem("",targetID, &api.CreateItemRequest{Type: api.Event})
 	require.NoError(t, err)
 
 	// Merge source into target
 	req := &api.MergeTripsRequest{}
-	merged, err := svc.MergeTrips(sourceID, targetID, req)
+	merged, err := svc.MergeTrips("",sourceID, targetID, req)
 	require.NoError(t, err)
 	require.NotNil(t, merged)
 
@@ -434,7 +434,7 @@ func TestMergeTrips_Success(t *testing.T) {
 	assert.Len(t, *merged.Items, 3)
 
 	// Source trip should be deleted
-	deleted, err := svc.GetTrip(sourceID)
+	deleted, err := svc.GetTrip("",sourceID)
 	require.NoError(t, err)
 	assert.Nil(t, deleted)
 }
@@ -449,7 +449,7 @@ func TestMergeTrips_ExtendsDates(t *testing.T) {
 		StartDate: apiDate(2025, 1, 1),
 		EndDate:   apiDate(2025, 1, 20),
 	}
-	source, err := svc.CreateTrip(sourceReq)
+	source, err := svc.CreateTrip("",sourceReq)
 	require.NoError(t, err)
 	sourceID := uuid.UUID(source.Id)
 
@@ -460,12 +460,12 @@ func TestMergeTrips_ExtendsDates(t *testing.T) {
 		StartDate: apiDate(2025, 1, 5),
 		EndDate:   apiDate(2025, 1, 15),
 	}
-	target, err := svc.CreateTrip(targetReq)
+	target, err := svc.CreateTrip("",targetReq)
 	require.NoError(t, err)
 	targetID := uuid.UUID(target.Id)
 
 	// Merge - target dates should be extended
-	merged, err := svc.MergeTrips(sourceID, targetID, &api.MergeTripsRequest{})
+	merged, err := svc.MergeTrips("",sourceID, targetID, &api.MergeTripsRequest{})
 	require.NoError(t, err)
 	require.NotNil(t, merged)
 
@@ -486,7 +486,7 @@ func TestMergeTrips_ConcatenatesNotes(t *testing.T) {
 		Purpose: api.TripPurposeVacation,
 		Notes:   &sourceNotes,
 	}
-	source, err := svc.CreateTrip(sourceReq)
+	source, err := svc.CreateTrip("",sourceReq)
 	require.NoError(t, err)
 
 	targetNotes := "Target notes"
@@ -495,11 +495,11 @@ func TestMergeTrips_ConcatenatesNotes(t *testing.T) {
 		Purpose: api.TripPurposeBusiness,
 		Notes:   &targetNotes,
 	}
-	target, err := svc.CreateTrip(targetReq)
+	target, err := svc.CreateTrip("",targetReq)
 	require.NoError(t, err)
 
 	// Merge with mergeNotes=true (default)
-	merged, err := svc.MergeTrips(uuid.UUID(source.Id), uuid.UUID(target.Id), &api.MergeTripsRequest{})
+	merged, err := svc.MergeTrips("",uuid.UUID(source.Id), uuid.UUID(target.Id), &api.MergeTripsRequest{})
 	require.NoError(t, err)
 	require.NotNil(t, merged)
 	require.NotNil(t, merged.Notes)
@@ -516,7 +516,7 @@ func TestMergeTrips_SameTripError(t *testing.T) {
 	tripID := uuid.UUID(trip.Id)
 
 	// Try to merge trip into itself
-	_, err := svc.MergeTrips(tripID, tripID, &api.MergeTripsRequest{})
+	_, err := svc.MergeTrips("",tripID, tripID, &api.MergeTripsRequest{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot merge trip into itself")
 }
@@ -527,7 +527,7 @@ func TestMergeTrips_SourceNotFound(t *testing.T) {
 	target := createTestTrip(t, svc, "Target", api.TripPurposeBusiness)
 
 	// Try to merge non-existent source
-	merged, err := svc.MergeTrips(uuid.New(), uuid.UUID(target.Id), &api.MergeTripsRequest{})
+	merged, err := svc.MergeTrips("",uuid.New(), uuid.UUID(target.Id), &api.MergeTripsRequest{})
 	require.NoError(t, err)
 	assert.Nil(t, merged)
 }
@@ -538,7 +538,7 @@ func TestMergeTrips_TargetNotFound(t *testing.T) {
 	source := createTestTrip(t, svc, "Source", api.TripPurposeVacation)
 
 	// Try to merge into non-existent target
-	merged, err := svc.MergeTrips(uuid.UUID(source.Id), uuid.New(), &api.MergeTripsRequest{})
+	merged, err := svc.MergeTrips("",uuid.UUID(source.Id), uuid.New(), &api.MergeTripsRequest{})
 	require.NoError(t, err)
 	assert.Nil(t, merged)
 }
@@ -553,13 +553,13 @@ func TestMoveItem_ToExistingTrip(t *testing.T) {
 	trip2ID := uuid.UUID(trip2.Id)
 
 	// Create item on trip 1
-	item, err := svc.CreateTripItem(trip1ID, &api.CreateItemRequest{Type: api.Flight})
+	item, err := svc.CreateTripItem("",trip1ID, &api.CreateItemRequest{Type: api.Flight})
 	require.NoError(t, err)
 	itemID := uuid.UUID(item.Id)
 
 	// Move item to trip 2
 	targetID := types.UUID(trip2ID)
-	result, err := svc.MoveItem(itemID, &api.MoveItemRequest{
+	result, err := svc.MoveItem("",itemID, &api.MoveItemRequest{
 		TargetTripId: &targetID,
 	})
 	require.NoError(t, err)
@@ -569,12 +569,12 @@ func TestMoveItem_ToExistingTrip(t *testing.T) {
 	assert.Equal(t, trip2ID, uuid.UUID(result.Item.TripId))
 
 	// Trip 1 should have no items
-	items1, err := svc.ListTripItems(trip1ID)
+	items1, err := svc.ListTripItems("",trip1ID)
 	require.NoError(t, err)
 	assert.Empty(t, items1)
 
 	// Trip 2 should have the item
-	items2, err := svc.ListTripItems(trip2ID)
+	items2, err := svc.ListTripItems("",trip2ID)
 	require.NoError(t, err)
 	assert.Len(t, items2, 1)
 }
@@ -585,12 +585,12 @@ func TestMoveItem_CreateNewTrip(t *testing.T) {
 	// Create trip with item
 	trip := createTestTrip(t, svc, "Original Trip", api.TripPurposeVacation)
 	tripID := uuid.UUID(trip.Id)
-	item, err := svc.CreateTripItem(tripID, &api.CreateItemRequest{Type: api.Hotel})
+	item, err := svc.CreateTripItem("",tripID, &api.CreateItemRequest{Type: api.Hotel})
 	require.NoError(t, err)
 	itemID := uuid.UUID(item.Id)
 
 	// Move item to new trip
-	result, err := svc.MoveItem(itemID, &api.MoveItemRequest{
+	result, err := svc.MoveItem("",itemID, &api.MoveItemRequest{
 		NewTrip: &api.CreateTripRequest{
 			Name:    "New Trip",
 			Purpose: api.TripPurposeBusiness,
@@ -609,7 +609,7 @@ func TestMoveItem_CreateNewTrip(t *testing.T) {
 	assert.Equal(t, newTripID, uuid.UUID(result.Item.TripId))
 
 	// Original trip should have no items
-	items, err := svc.ListTripItems(tripID)
+	items, err := svc.ListTripItems("",tripID)
 	require.NoError(t, err)
 	assert.Empty(t, items)
 }
@@ -619,12 +619,12 @@ func TestMoveItem_SameTripError(t *testing.T) {
 
 	trip := createTestTrip(t, svc, "Trip", api.TripPurposeVacation)
 	tripID := uuid.UUID(trip.Id)
-	item, err := svc.CreateTripItem(tripID, &api.CreateItemRequest{Type: api.Flight})
+	item, err := svc.CreateTripItem("",tripID, &api.CreateItemRequest{Type: api.Flight})
 	require.NoError(t, err)
 
 	// Try to move item to same trip
 	targetID := types.UUID(tripID)
-	_, err = svc.MoveItem(uuid.UUID(item.Id), &api.MoveItemRequest{
+	_, err = svc.MoveItem("",uuid.UUID(item.Id), &api.MoveItemRequest{
 		TargetTripId: &targetID,
 	})
 	require.Error(t, err)
@@ -638,7 +638,7 @@ func TestMoveItem_ItemNotFound(t *testing.T) {
 	targetID := types.UUID(uuid.UUID(trip.Id))
 
 	// Try to move non-existent item
-	result, err := svc.MoveItem(uuid.New(), &api.MoveItemRequest{
+	result, err := svc.MoveItem("",uuid.New(), &api.MoveItemRequest{
 		TargetTripId: &targetID,
 	})
 	require.NoError(t, err)
@@ -650,12 +650,12 @@ func TestMoveItem_TargetTripNotFound(t *testing.T) {
 
 	// Create trip with item
 	trip := createTestTrip(t, svc, "Trip", api.TripPurposeVacation)
-	item, err := svc.CreateTripItem(uuid.UUID(trip.Id), &api.CreateItemRequest{Type: api.Flight})
+	item, err := svc.CreateTripItem("",uuid.UUID(trip.Id), &api.CreateItemRequest{Type: api.Flight})
 	require.NoError(t, err)
 
 	// Try to move to non-existent trip
 	nonExistentID := types.UUID(uuid.New())
-	_, err = svc.MoveItem(uuid.UUID(item.Id), &api.MoveItemRequest{
+	_, err = svc.MoveItem("",uuid.UUID(item.Id), &api.MoveItemRequest{
 		TargetTripId: &nonExistentID,
 	})
 	require.Error(t, err)
@@ -666,11 +666,11 @@ func TestMoveItem_MissingTarget(t *testing.T) {
 	svc := setupTestService(t)
 
 	trip := createTestTrip(t, svc, "Trip", api.TripPurposeVacation)
-	item, err := svc.CreateTripItem(uuid.UUID(trip.Id), &api.CreateItemRequest{Type: api.Flight})
+	item, err := svc.CreateTripItem("",uuid.UUID(trip.Id), &api.CreateItemRequest{Type: api.Flight})
 	require.NoError(t, err)
 
 	// Try to move without providing target
-	_, err = svc.MoveItem(uuid.UUID(item.Id), &api.MoveItemRequest{})
+	_, err = svc.MoveItem("",uuid.UUID(item.Id), &api.MoveItemRequest{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "must provide targetTripId or newTrip")
 }

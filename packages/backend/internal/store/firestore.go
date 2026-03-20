@@ -60,8 +60,8 @@ func (s *FirestoreStore) Close() error {
 // --- Trip methods ---
 
 // ListTrips returns all trips, optionally filtered by upcoming/past/purpose.
-func (s *FirestoreStore) ListTrips(upcoming, past *bool, purpose *string) ([]entity.Trip, error) {
-	iter := s.client.Collection(collTrips).Documents(s.ctx)
+func (s *FirestoreStore) ListTrips(userID string, upcoming, past *bool, purpose *string) ([]entity.Trip, error) {
+	iter := s.client.Collection(collTrips).Where("userId", "==", userID).Documents(s.ctx)
 	defer iter.Stop()
 
 	now := time.Now().Format("2006-01-02")
@@ -116,7 +116,7 @@ func (s *FirestoreStore) ListTrips(upcoming, past *bool, purpose *string) ([]ent
 }
 
 // GetTrip returns a single trip by ID, or (nil, nil) if not found.
-func (s *FirestoreStore) GetTrip(id uuid.UUID) (*entity.Trip, error) {
+func (s *FirestoreStore) GetTrip(userID string, id uuid.UUID) (*entity.Trip, error) {
 	doc, err := s.client.Collection(collTrips).Doc(id.String()).Get(s.ctx)
 	if status.Code(err) == codes.NotFound {
 		return nil, nil
@@ -128,6 +128,10 @@ func (s *FirestoreStore) GetTrip(id uuid.UUID) (*entity.Trip, error) {
 	trip, err := docToTrip(doc)
 	if err != nil {
 		return nil, err
+	}
+	// Verify ownership
+	if trip.UserID != userID {
+		return nil, nil
 	}
 	return &trip, nil
 }
@@ -141,17 +145,24 @@ func (s *FirestoreStore) CreateTrip(trip *entity.Trip) error {
 	return nil
 }
 
-// UpdateTrip updates an existing trip. Returns ErrNotFound if trip doesn't exist.
-func (s *FirestoreStore) UpdateTrip(trip *entity.Trip) error {
+// UpdateTrip updates an existing trip. Returns ErrNotFound if trip doesn't exist or doesn't belong to the user.
+func (s *FirestoreStore) UpdateTrip(userID string, trip *entity.Trip) error {
 	docRef := s.client.Collection(collTrips).Doc(trip.ID.String())
 
-	// Check existence first
-	_, err := docRef.Get(s.ctx)
+	// Check existence and ownership
+	doc, err := docRef.Get(s.ctx)
 	if status.Code(err) == codes.NotFound {
 		return ErrNotFound
 	}
 	if err != nil {
 		return fmt.Errorf("checking trip existence: %w", err)
+	}
+	existing, err := docToTrip(doc)
+	if err != nil {
+		return fmt.Errorf("parsing existing trip: %w", err)
+	}
+	if existing.UserID != userID {
+		return ErrNotFound
 	}
 
 	_, err = docRef.Set(s.ctx, tripToMap(trip))
@@ -163,16 +174,23 @@ func (s *FirestoreStore) UpdateTrip(trip *entity.Trip) error {
 
 // DeleteTrip deletes a trip and cascades to child items, locations, calendar links.
 // Also clears tripId on associated documents (SET NULL equivalent).
-func (s *FirestoreStore) DeleteTrip(id uuid.UUID) error {
+func (s *FirestoreStore) DeleteTrip(userID string, id uuid.UUID) error {
 	docRef := s.client.Collection(collTrips).Doc(id.String())
 
-	// Check existence
-	_, err := docRef.Get(s.ctx)
+	// Check existence and ownership
+	doc, err := docRef.Get(s.ctx)
 	if status.Code(err) == codes.NotFound {
 		return ErrNotFound
 	}
 	if err != nil {
 		return fmt.Errorf("checking trip existence: %w", err)
+	}
+	existing, err := docToTrip(doc)
+	if err != nil {
+		return fmt.Errorf("parsing existing trip: %w", err)
+	}
+	if existing.UserID != userID {
+		return ErrNotFound
 	}
 
 	batch := s.client.Batch()
@@ -250,9 +268,9 @@ func (s *FirestoreStore) DeleteTrip(id uuid.UUID) error {
 }
 
 // SearchTrips searches trips by name or notes containing the query string.
-func (s *FirestoreStore) SearchTrips(q string) ([]entity.Trip, error) {
+func (s *FirestoreStore) SearchTrips(userID string, q string) ([]entity.Trip, error) {
 	qLower := strings.ToLower(q)
-	iter := s.client.Collection(collTrips).Documents(s.ctx)
+	iter := s.client.Collection(collTrips).Where("userId", "==", userID).Documents(s.ctx)
 	defer iter.Stop()
 
 	var trips []entity.Trip
@@ -690,13 +708,13 @@ func (s *FirestoreStore) SetTripLocations(tripID uuid.UUID, locations []entity.T
 }
 
 // GetTripsForDateRange returns trips that overlap with the given date range.
-func (s *FirestoreStore) GetTripsForDateRange(from, to time.Time) ([]entity.Trip, error) {
+func (s *FirestoreStore) GetTripsForDateRange(userID string, from, to time.Time) ([]entity.Trip, error) {
 	// Firestore can only do inequality on one field, so we fetch trips with startDate <= to
 	// and filter endDate >= from in Go.
 	toStr := to.Format("2006-01-02")
 	fromStr := from.Format("2006-01-02")
 
-	iter := s.client.Collection(collTrips).Documents(s.ctx)
+	iter := s.client.Collection(collTrips).Where("userId", "==", userID).Documents(s.ctx)
 	defer iter.Stop()
 
 	var trips []entity.Trip
@@ -1149,6 +1167,7 @@ func (s *FirestoreStore) CreateProcessedEvent(event *entity.ProcessedCalendarEve
 	docID := event.CalendarID + "_" + event.CalendarEventID
 	data := map[string]interface{}{
 		"id":              event.ID.String(),
+		"userId":          event.UserID,
 		"calendarEventId": event.CalendarEventID,
 		"calendarId":      event.CalendarID,
 		"action":          event.Action,
@@ -1170,7 +1189,7 @@ func (s *FirestoreStore) CreateProcessedEvent(event *entity.ProcessedCalendarEve
 
 // GetProcessedEventByCalendarEvent retrieves a processed event by its calendar event ID.
 // Returns (nil, nil) if not found.
-func (s *FirestoreStore) GetProcessedEventByCalendarEvent(calendarID, eventID string) (*entity.ProcessedCalendarEvent, error) {
+func (s *FirestoreStore) GetProcessedEventByCalendarEvent(userID string, calendarID, eventID string) (*entity.ProcessedCalendarEvent, error) {
 	docID := calendarID + "_" + eventID
 	doc, err := s.client.Collection(collProcessedEvents).Doc(docID).Get(s.ctx)
 	if status.Code(err) == codes.NotFound {
@@ -1184,25 +1203,37 @@ func (s *FirestoreStore) GetProcessedEventByCalendarEvent(calendarID, eventID st
 	if err != nil {
 		return nil, err
 	}
+	// Verify ownership
+	if event.UserID != userID {
+		return nil, nil
+	}
 	return &event, nil
 }
 
 // IsEventProcessed checks if a calendar event has already been processed.
-func (s *FirestoreStore) IsEventProcessed(calendarID, eventID string) (bool, error) {
+func (s *FirestoreStore) IsEventProcessed(userID string, calendarID, eventID string) (bool, error) {
 	docID := calendarID + "_" + eventID
-	_, err := s.client.Collection(collProcessedEvents).Doc(docID).Get(s.ctx)
+	doc, err := s.client.Collection(collProcessedEvents).Doc(docID).Get(s.ctx)
 	if status.Code(err) == codes.NotFound {
 		return false, nil
 	}
 	if err != nil {
 		return false, fmt.Errorf("checking processed event: %w", err)
 	}
+	// Verify ownership
+	event, err := docToProcessedEvent(doc)
+	if err != nil {
+		return false, err
+	}
+	if event.UserID != userID {
+		return false, nil
+	}
 	return true, nil
 }
 
 // ListProcessedEvents returns all processed events for a calendar, sorted by processedAt DESC.
-func (s *FirestoreStore) ListProcessedEvents(calendarID string) ([]entity.ProcessedCalendarEvent, error) {
-	iter := s.client.Collection(collProcessedEvents).Where("calendarId", "==", calendarID).Documents(s.ctx)
+func (s *FirestoreStore) ListProcessedEvents(userID string, calendarID string) ([]entity.ProcessedCalendarEvent, error) {
+	iter := s.client.Collection(collProcessedEvents).Where("userId", "==", userID).Where("calendarId", "==", calendarID).Documents(s.ctx)
 	defer iter.Stop()
 
 	var events []entity.ProcessedCalendarEvent
@@ -1229,9 +1260,9 @@ func (s *FirestoreStore) ListProcessedEvents(calendarID string) ([]entity.Proces
 	return events, nil
 }
 
-// DeleteAllProcessedEvents removes all processed event records.
-func (s *FirestoreStore) DeleteAllProcessedEvents() error {
-	iter := s.client.Collection(collProcessedEvents).Documents(s.ctx)
+// DeleteAllProcessedEvents removes all processed event records for a user.
+func (s *FirestoreStore) DeleteAllProcessedEvents(userID string) error {
+	iter := s.client.Collection(collProcessedEvents).Where("userId", "==", userID).Documents(s.ctx)
 	defer iter.Stop()
 
 	batch := s.client.Batch()
@@ -1350,6 +1381,7 @@ func (s *FirestoreStore) DeleteExpiredSessions() error {
 
 func tripToMap(trip *entity.Trip) map[string]interface{} {
 	m := map[string]interface{}{
+		"userId":    trip.UserID,
 		"name":      trip.Name,
 		"purpose":   trip.Purpose,
 		"status":    trip.Status,
@@ -1379,6 +1411,7 @@ func docToTrip(doc *firestore.DocumentSnapshot) (entity.Trip, error) {
 	data := doc.Data()
 
 	trip.ID, _ = uuid.Parse(doc.Ref.ID)
+	trip.UserID, _ = data["userId"].(string)
 	trip.Name, _ = data["name"].(string)
 	trip.Purpose, _ = data["purpose"].(string)
 	trip.Status, _ = data["status"].(string)
@@ -1613,6 +1646,7 @@ func docToProcessedEvent(doc *firestore.DocumentSnapshot) (entity.ProcessedCalen
 	if idStr, ok := data["id"].(string); ok {
 		event.ID, _ = uuid.Parse(idStr)
 	}
+	event.UserID, _ = data["userId"].(string)
 	event.CalendarEventID, _ = data["calendarEventId"].(string)
 	event.CalendarID, _ = data["calendarId"].(string)
 	event.Action, _ = data["action"].(string)

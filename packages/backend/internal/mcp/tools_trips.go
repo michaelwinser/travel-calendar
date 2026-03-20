@@ -24,7 +24,7 @@ func (h *Handler) handleGetTrips(args map[string]interface{}) (interface{}, erro
 		purpose = &p
 	}
 
-	trips, err := h.svc.ListTrips(upcoming, past, purpose)
+	trips, err := h.svc.ListTrips("", upcoming, past, purpose)
 	if err != nil {
 		return errorResult(fmt.Errorf("failed to list trips: %w", err)), nil
 	}
@@ -47,7 +47,7 @@ func (h *Handler) handleGetTrip(args map[string]interface{}) (interface{}, error
 		return errorResult(fmt.Errorf("invalid trip_id: %v", err)), nil
 	}
 
-	trip, err := h.svc.GetTrip(id)
+	trip, err := h.svc.GetTrip("", id)
 	if err != nil {
 		return errorResult(fmt.Errorf("failed to get trip: %w", err)), nil
 	}
@@ -100,7 +100,7 @@ func (h *Handler) handleCreateTrip(args map[string]interface{}) (interface{}, er
 		req.Status = &s
 	}
 
-	trip, err := h.svc.CreateTrip(req)
+	trip, err := h.svc.CreateTrip("", req)
 	if err != nil {
 		return errorResult(fmt.Errorf("failed to create trip: %w", err)), nil
 	}
@@ -153,7 +153,7 @@ func (h *Handler) handleUpdateTrip(args map[string]interface{}) (interface{}, er
 		req.Notes = &v
 	}
 
-	trip, err := h.svc.UpdateTrip(id, req)
+	trip, err := h.svc.UpdateTrip("", id, req)
 	if err != nil {
 		return errorResult(fmt.Errorf("failed to update trip: %w", err)), nil
 	}
@@ -178,7 +178,7 @@ func (h *Handler) handleDeleteTrip(args map[string]interface{}) (interface{}, er
 		return errorResult(fmt.Errorf("invalid trip_id: %v", err)), nil
 	}
 
-	if err := h.svc.DeleteTrip(id); err != nil {
+	if err := h.svc.DeleteTrip("", id); err != nil {
 		return errorResult(fmt.Errorf("failed to delete trip: %w", err)), nil
 	}
 
@@ -194,7 +194,7 @@ func (h *Handler) handleSearchTrips(args map[string]interface{}) (interface{}, e
 		return errorResult(fmt.Errorf("missing required argument: q")), nil
 	}
 
-	trips, err := h.svc.SearchTrips(query)
+	trips, err := h.svc.SearchTrips("", query)
 	if err != nil {
 		return errorResult(fmt.Errorf("failed to search trips: %w", err)), nil
 	}
@@ -296,7 +296,7 @@ func (h *Handler) handleAddItem(args map[string]interface{}) (interface{}, error
 		req.Notes = &v
 	}
 
-	item, err := h.svc.CreateTripItem(tripID, req)
+	item, err := h.svc.CreateTripItem("", tripID, req)
 	if err != nil {
 		return errorResult(fmt.Errorf("failed to add item: %w", err)), nil
 	}
@@ -364,7 +364,7 @@ func (h *Handler) handleMergeTrips(args map[string]interface{}) (interface{}, er
 		req.MergeNotes = &v
 	}
 
-	trip, err := h.svc.MergeTrips(sourceID, targetID, req)
+	trip, err := h.svc.MergeTrips("", sourceID, targetID, req)
 	if err != nil {
 		return errorResult(fmt.Errorf("failed to merge trips: %w", err)), nil
 	}
@@ -418,7 +418,7 @@ func (h *Handler) handleMoveItem(args map[string]interface{}) (interface{}, erro
 		return errorResult(fmt.Errorf("must provide target_trip_id or new_trip_name")), nil
 	}
 
-	result, err := h.svc.MoveItem(itemID, req)
+	result, err := h.svc.MoveItem("", itemID, req)
 	if err != nil {
 		return errorResult(fmt.Errorf("failed to move item: %w", err)), nil
 	}

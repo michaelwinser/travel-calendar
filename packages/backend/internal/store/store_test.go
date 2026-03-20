@@ -100,7 +100,7 @@ func runStoreTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 func runTripTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 	t.Run("ListTrips_Empty", func(t *testing.T) {
 		s := newStore(t)
-		trips, err := s.ListTrips(nil, nil, nil)
+		trips, err := s.ListTrips("",nil, nil, nil)
 		require.NoError(t, err)
 		assert.Empty(t, trips)
 	})
@@ -110,7 +110,7 @@ func runTripTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 		createTestTripVia(t, s, "Trip 1", "vacation", nil, nil)
 		createTestTripVia(t, s, "Trip 2", "business", nil, nil)
 
-		trips, err := s.ListTrips(nil, nil, nil)
+		trips, err := s.ListTrips("",nil, nil, nil)
 		require.NoError(t, err)
 		assert.Len(t, trips, 2)
 	})
@@ -124,7 +124,7 @@ func runTripTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 		pastEndDate := time.Now().AddDate(0, 0, -15)
 		createTestTripVia(t, s, "Past Trip", "vacation", timePtr(pastDate), timePtr(pastEndDate))
 
-		trips, err := s.ListTrips(boolPtr(true), nil, nil)
+		trips, err := s.ListTrips("",boolPtr(true), nil, nil)
 		require.NoError(t, err)
 		assert.Len(t, trips, 1)
 		assert.Equal(t, "Future Trip", trips[0].Name)
@@ -140,7 +140,7 @@ func runTripTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 		pastEndDate := time.Now().AddDate(0, 0, -15)
 		createTestTripVia(t, s, "Past Trip", "vacation", timePtr(pastDate), timePtr(pastEndDate))
 
-		trips, err := s.ListTrips(nil, boolPtr(true), nil)
+		trips, err := s.ListTrips("",nil, boolPtr(true), nil)
 		require.NoError(t, err)
 		assert.Len(t, trips, 1)
 		assert.Equal(t, "Past Trip", trips[0].Name)
@@ -151,7 +151,7 @@ func runTripTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 		createTestTripVia(t, s, "Vacation Trip", "vacation", nil, nil)
 		createTestTripVia(t, s, "Business Trip", "business", nil, nil)
 
-		trips, err := s.ListTrips(nil, nil, strPtr("vacation"))
+		trips, err := s.ListTrips("",nil, nil, strPtr("vacation"))
 		require.NoError(t, err)
 		assert.Len(t, trips, 1)
 		assert.Equal(t, "Vacation Trip", trips[0].Name)
@@ -167,7 +167,7 @@ func runTripTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 		createTestTripVia(t, s, "January Trip", "vacation", timePtr(date1), nil)
 		createTestTripVia(t, s, "February Trip", "vacation", timePtr(date2), nil)
 
-		trips, err := s.ListTrips(nil, nil, nil)
+		trips, err := s.ListTrips("",nil, nil, nil)
 		require.NoError(t, err)
 		require.Len(t, trips, 3)
 		assert.Equal(t, "January Trip", trips[0].Name)
@@ -181,7 +181,7 @@ func runTripTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 		date := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 		createTestTripVia(t, s, "Scheduled Trip", "vacation", timePtr(date), nil)
 
-		trips, err := s.ListTrips(nil, nil, nil)
+		trips, err := s.ListTrips("",nil, nil, nil)
 		require.NoError(t, err)
 		require.Len(t, trips, 2)
 		assert.Equal(t, "Scheduled Trip", trips[0].Name)
@@ -192,7 +192,7 @@ func runTripTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 		s := newStore(t)
 		created := createTestTripVia(t, s, "Test Trip", "vacation", nil, nil)
 
-		trip, err := s.GetTrip(created.ID)
+		trip, err := s.GetTrip("",created.ID)
 		require.NoError(t, err)
 		require.NotNil(t, trip)
 		assert.Equal(t, "Test Trip", trip.Name)
@@ -201,7 +201,7 @@ func runTripTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 
 	t.Run("GetTrip_NotFound", func(t *testing.T) {
 		s := newStore(t)
-		trip, err := s.GetTrip(uuid.New())
+		trip, err := s.GetTrip("",uuid.New())
 		require.NoError(t, err)
 		assert.Nil(t, trip)
 	})
@@ -227,7 +227,7 @@ func runTripTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 		err := s.CreateTrip(&trip)
 		require.NoError(t, err)
 
-		retrieved, err := s.GetTrip(trip.ID)
+		retrieved, err := s.GetTrip("",trip.ID)
 		require.NoError(t, err)
 		require.NotNil(t, retrieved)
 		assert.Equal(t, "Summer Vacation", retrieved.Name)
@@ -253,7 +253,7 @@ func runTripTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 		err := s.CreateTrip(&trip)
 		require.NoError(t, err)
 
-		retrieved, err := s.GetTrip(trip.ID)
+		retrieved, err := s.GetTrip("",trip.ID)
 		require.NoError(t, err)
 		assert.False(t, retrieved.CreatedAt.IsZero())
 		assert.False(t, retrieved.UpdatedAt.IsZero())
@@ -267,10 +267,10 @@ func runTripTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 		trip.Purpose = "business"
 		trip.UpdatedAt = time.Now().UTC().Truncate(time.Second)
 
-		err := s.UpdateTrip(&trip)
+		err := s.UpdateTrip("",&trip)
 		require.NoError(t, err)
 
-		retrieved, err := s.GetTrip(trip.ID)
+		retrieved, err := s.GetTrip("",trip.ID)
 		require.NoError(t, err)
 		assert.Equal(t, "Updated Name", retrieved.Name)
 		assert.Equal(t, "business", retrieved.Purpose)
@@ -285,7 +285,7 @@ func runTripTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 			Status:    "planning",
 			UpdatedAt: time.Now(),
 		}
-		err := s.UpdateTrip(&trip)
+		err := s.UpdateTrip("",&trip)
 		assert.ErrorIs(t, err, ErrNotFound)
 	})
 
@@ -293,17 +293,17 @@ func runTripTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 		s := newStore(t)
 		trip := createTestTripVia(t, s, "To Delete", "vacation", nil, nil)
 
-		err := s.DeleteTrip(trip.ID)
+		err := s.DeleteTrip("",trip.ID)
 		require.NoError(t, err)
 
-		retrieved, err := s.GetTrip(trip.ID)
+		retrieved, err := s.GetTrip("",trip.ID)
 		require.NoError(t, err)
 		assert.Nil(t, retrieved)
 	})
 
 	t.Run("DeleteTrip_NotFound", func(t *testing.T) {
 		s := newStore(t)
-		err := s.DeleteTrip(uuid.New())
+		err := s.DeleteTrip("",uuid.New())
 		assert.ErrorIs(t, err, ErrNotFound)
 	})
 
@@ -325,7 +325,7 @@ func runTripTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 		require.NoError(t, err)
 		assert.Len(t, items, 1)
 
-		err = s.DeleteTrip(trip.ID)
+		err = s.DeleteTrip("",trip.ID)
 		require.NoError(t, err)
 
 		items, err = s.ListItems(trip.ID)
@@ -338,7 +338,7 @@ func runTripTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 		createTestTripVia(t, s, "FOSDEM Conference", "conference", nil, nil)
 		createTestTripVia(t, s, "Beach Vacation", "vacation", nil, nil)
 
-		trips, err := s.SearchTrips("FOSDEM")
+		trips, err := s.SearchTrips("","FOSDEM")
 		require.NoError(t, err)
 		assert.Len(t, trips, 1)
 		assert.Equal(t, "FOSDEM Conference", trips[0].Name)
@@ -361,7 +361,7 @@ func runTripTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 
 		createTestTripVia(t, s, "Other Trip", "vacation", nil, nil)
 
-		trips, err := s.SearchTrips("clients")
+		trips, err := s.SearchTrips("","clients")
 		require.NoError(t, err)
 		assert.Len(t, trips, 1)
 		assert.Equal(t, "Business Trip", trips[0].Name)
@@ -371,7 +371,7 @@ func runTripTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 		s := newStore(t)
 		createTestTripVia(t, s, "FOSDEM Conference", "conference", nil, nil)
 
-		trips, err := s.SearchTrips("fosdem")
+		trips, err := s.SearchTrips("","fosdem")
 		require.NoError(t, err)
 		assert.Len(t, trips, 1)
 		assert.Equal(t, "FOSDEM Conference", trips[0].Name)
@@ -381,7 +381,7 @@ func runTripTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 		s := newStore(t)
 		createTestTripVia(t, s, "Summer Vacation 2025", "vacation", nil, nil)
 
-		trips, err := s.SearchTrips("Vacat")
+		trips, err := s.SearchTrips("","Vacat")
 		require.NoError(t, err)
 		assert.Len(t, trips, 1)
 		assert.Equal(t, "Summer Vacation 2025", trips[0].Name)
@@ -735,7 +735,7 @@ func runTripLocationTests(t *testing.T, newStore func(t *testing.T) StoreInterfa
 
 		from := time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC)
 		to := time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC)
-		trips, err := s.GetTripsForDateRange(from, to)
+		trips, err := s.GetTripsForDateRange("",from, to)
 		require.NoError(t, err)
 		assert.Len(t, trips, 1)
 		assert.Equal(t, "June Trip", trips[0].Name)
@@ -1029,7 +1029,7 @@ func runCalendarLinkTests(t *testing.T, newStore func(t *testing.T) StoreInterfa
 func runProcessedEventTests(t *testing.T, newStore func(t *testing.T) StoreInterface) {
 	t.Run("IsEventProcessed_False", func(t *testing.T) {
 		s := newStore(t)
-		processed, err := s.IsEventProcessed("cal-1", "event-1")
+		processed, err := s.IsEventProcessed("","cal-1", "event-1")
 		require.NoError(t, err)
 		assert.False(t, processed)
 	})
@@ -1048,7 +1048,7 @@ func runProcessedEventTests(t *testing.T, newStore func(t *testing.T) StoreInter
 		err := s.CreateProcessedEvent(event)
 		require.NoError(t, err)
 
-		processed, err := s.IsEventProcessed("cal-1", "event-1")
+		processed, err := s.IsEventProcessed("","cal-1", "event-1")
 		require.NoError(t, err)
 		assert.True(t, processed)
 	})
@@ -1067,7 +1067,7 @@ func runProcessedEventTests(t *testing.T, newStore func(t *testing.T) StoreInter
 		err := s.CreateProcessedEvent(event)
 		require.NoError(t, err)
 
-		retrieved, err := s.GetProcessedEventByCalendarEvent("cal-2", "event-2")
+		retrieved, err := s.GetProcessedEventByCalendarEvent("","cal-2", "event-2")
 		require.NoError(t, err)
 		require.NotNil(t, retrieved)
 		assert.Equal(t, "imported", retrieved.Action)
@@ -1089,7 +1089,7 @@ func runProcessedEventTests(t *testing.T, newStore func(t *testing.T) StoreInter
 			require.NoError(t, err)
 		}
 
-		events, err := s.ListProcessedEvents("cal-list")
+		events, err := s.ListProcessedEvents("","cal-list")
 		require.NoError(t, err)
 		assert.Len(t, events, 3)
 	})
@@ -1108,10 +1108,10 @@ func runProcessedEventTests(t *testing.T, newStore func(t *testing.T) StoreInter
 		err := s.CreateProcessedEvent(event)
 		require.NoError(t, err)
 
-		err = s.DeleteAllProcessedEvents()
+		err = s.DeleteAllProcessedEvents("")
 		require.NoError(t, err)
 
-		processed, err := s.IsEventProcessed("cal-del", "event-del")
+		processed, err := s.IsEventProcessed("","cal-del", "event-del")
 		require.NoError(t, err)
 		assert.False(t, processed)
 	})

@@ -26,14 +26,14 @@ func New(s store.StoreInterface) *Service {
 // Trip operations
 
 // ListTrips returns all trips, optionally filtered.
-func (s *Service) ListTrips(upcoming, past *bool, purpose *api.TripPurpose) ([]api.Trip, error) {
+func (s *Service) ListTrips(userID string, upcoming, past *bool, purpose *api.TripPurpose) ([]api.Trip, error) {
 	var purposeStr *string
 	if purpose != nil {
 		p := string(*purpose)
 		purposeStr = &p
 	}
 
-	trips, err := s.store.ListTrips(upcoming, past, purposeStr)
+	trips, err := s.store.ListTrips(userID, upcoming, past, purposeStr)
 	if err != nil {
 		return nil, fmt.Errorf("listing trips: %w", err)
 	}
@@ -46,8 +46,8 @@ func (s *Service) ListTrips(upcoming, past *bool, purpose *api.TripPurpose) ([]a
 }
 
 // GetTrip returns a single trip by ID with its items.
-func (s *Service) GetTrip(id uuid.UUID) (*api.Trip, error) {
-	trip, err := s.store.GetTrip(id)
+func (s *Service) GetTrip(userID string, id uuid.UUID) (*api.Trip, error) {
+	trip, err := s.store.GetTrip(userID, id)
 	if err != nil {
 		return nil, fmt.Errorf("getting trip: %w", err)
 	}
@@ -65,8 +65,9 @@ func (s *Service) GetTrip(id uuid.UUID) (*api.Trip, error) {
 }
 
 // CreateTrip creates a new trip.
-func (s *Service) CreateTrip(req *api.CreateTripRequest) (*api.Trip, error) {
+func (s *Service) CreateTrip(userID string, req *api.CreateTripRequest) (*api.Trip, error) {
 	trip := entity.TripFromCreateRequest(req)
+	trip.UserID = userID
 	if err := s.store.CreateTrip(&trip); err != nil {
 		return nil, fmt.Errorf("creating trip: %w", err)
 	}
@@ -87,8 +88,8 @@ func (s *Service) CreateTrip(req *api.CreateTripRequest) (*api.Trip, error) {
 }
 
 // UpdateTrip updates an existing trip.
-func (s *Service) UpdateTrip(id uuid.UUID, req *api.UpdateTripRequest) (*api.Trip, error) {
-	trip, err := s.store.GetTrip(id)
+func (s *Service) UpdateTrip(userID string, id uuid.UUID, req *api.UpdateTripRequest) (*api.Trip, error) {
+	trip, err := s.store.GetTrip(userID, id)
 	if err != nil {
 		return nil, fmt.Errorf("getting trip: %w", err)
 	}
@@ -97,7 +98,7 @@ func (s *Service) UpdateTrip(id uuid.UUID, req *api.UpdateTripRequest) (*api.Tri
 	}
 
 	trip.ApplyUpdate(req)
-	if err := s.store.UpdateTrip(trip); err != nil {
+	if err := s.store.UpdateTrip(userID, trip); err != nil {
 		return nil, fmt.Errorf("updating trip: %w", err)
 	}
 
@@ -106,13 +107,13 @@ func (s *Service) UpdateTrip(id uuid.UUID, req *api.UpdateTripRequest) (*api.Tri
 }
 
 // DeleteTrip deletes a trip by ID.
-func (s *Service) DeleteTrip(id uuid.UUID) error {
-	return s.store.DeleteTrip(id)
+func (s *Service) DeleteTrip(userID string, id uuid.UUID) error {
+	return s.store.DeleteTrip(userID, id)
 }
 
 // SearchTrips searches trips by query string.
-func (s *Service) SearchTrips(q string) ([]api.Trip, error) {
-	trips, err := s.store.SearchTrips(q)
+func (s *Service) SearchTrips(userID string, q string) ([]api.Trip, error) {
+	trips, err := s.store.SearchTrips(userID, q)
 	if err != nil {
 		return nil, fmt.Errorf("searching trips: %w", err)
 	}
@@ -129,9 +130,9 @@ func (s *Service) SearchTrips(q string) ([]api.Trip, error) {
 // MergeTrips merges a source trip into a target trip.
 // All items are moved from source to target, dates are extended if needed,
 // notes are concatenated if mergeNotes is true, and source is deleted.
-func (s *Service) MergeTrips(sourceID, targetID uuid.UUID, req *api.MergeTripsRequest) (*api.Trip, error) {
+func (s *Service) MergeTrips(userID string, sourceID, targetID uuid.UUID, req *api.MergeTripsRequest) (*api.Trip, error) {
 	// Validate both trips exist
-	source, err := s.store.GetTrip(sourceID)
+	source, err := s.store.GetTrip(userID, sourceID)
 	if err != nil {
 		return nil, fmt.Errorf("getting source trip: %w", err)
 	}
@@ -139,7 +140,7 @@ func (s *Service) MergeTrips(sourceID, targetID uuid.UUID, req *api.MergeTripsRe
 		return nil, nil // Not found
 	}
 
-	target, err := s.store.GetTrip(targetID)
+	target, err := s.store.GetTrip(userID, targetID)
 	if err != nil {
 		return nil, fmt.Errorf("getting target trip: %w", err)
 	}
@@ -181,7 +182,7 @@ func (s *Service) MergeTrips(sourceID, targetID uuid.UUID, req *api.MergeTripsRe
 	// Update target trip with extended dates/notes if changed
 	if datesChanged || (mergeNotes && source.Notes != nil) {
 		target.UpdatedAt = time.Now()
-		if err := s.store.UpdateTrip(target); err != nil {
+		if err := s.store.UpdateTrip(userID, target); err != nil {
 			return nil, fmt.Errorf("updating target trip: %w", err)
 		}
 	}
@@ -195,13 +196,13 @@ func (s *Service) MergeTrips(sourceID, targetID uuid.UUID, req *api.MergeTripsRe
 	}
 
 	// Return updated target trip with items
-	return s.GetTrip(targetID)
+	return s.GetTrip(userID, targetID)
 }
 
 // MoveItem moves an item to a different trip.
 // If targetTripId is provided, moves to that trip.
 // If newTrip is provided, creates a new trip and moves item to it.
-func (s *Service) MoveItem(itemID uuid.UUID, req *api.MoveItemRequest) (*api.MoveItemResponse, error) {
+func (s *Service) MoveItem(userID string, itemID uuid.UUID, req *api.MoveItemRequest) (*api.MoveItemResponse, error) {
 	// Get the item to verify it exists
 	item, err := s.store.GetItem(itemID)
 	if err != nil {
@@ -220,7 +221,7 @@ func (s *Service) MoveItem(itemID uuid.UUID, req *api.MoveItemRequest) (*api.Mov
 		targetTripID = uuid.UUID(*req.TargetTripId)
 
 		// Verify target trip exists
-		targetTrip, err := s.store.GetTrip(targetTripID)
+		targetTrip, err := s.store.GetTrip(userID, targetTripID)
 		if err != nil {
 			return nil, fmt.Errorf("getting target trip: %w", err)
 		}
@@ -234,7 +235,7 @@ func (s *Service) MoveItem(itemID uuid.UUID, req *api.MoveItemRequest) (*api.Mov
 		}
 	} else if req.NewTrip != nil {
 		// Create new trip
-		trip, err := s.CreateTrip(req.NewTrip)
+		trip, err := s.CreateTrip(userID, req.NewTrip)
 		if err != nil {
 			return nil, fmt.Errorf("creating new trip: %w", err)
 		}
@@ -265,9 +266,9 @@ func (s *Service) MoveItem(itemID uuid.UUID, req *api.MoveItemRequest) (*api.Mov
 // Item operations
 
 // ListTripItems returns all items for a trip.
-func (s *Service) ListTripItems(tripID uuid.UUID) ([]api.Item, error) {
+func (s *Service) ListTripItems(userID string, tripID uuid.UUID) ([]api.Item, error) {
 	// Verify trip exists
-	trip, err := s.store.GetTrip(tripID)
+	trip, err := s.store.GetTrip(userID, tripID)
 	if err != nil {
 		return nil, fmt.Errorf("getting trip: %w", err)
 	}
@@ -288,9 +289,9 @@ func (s *Service) ListTripItems(tripID uuid.UUID) ([]api.Item, error) {
 }
 
 // CreateTripItem creates a new item for a trip.
-func (s *Service) CreateTripItem(tripID uuid.UUID, req *api.CreateItemRequest) (*api.Item, error) {
+func (s *Service) CreateTripItem(userID string, tripID uuid.UUID, req *api.CreateItemRequest) (*api.Item, error) {
 	// Verify trip exists
-	trip, err := s.store.GetTrip(tripID)
+	trip, err := s.store.GetTrip(userID, tripID)
 	if err != nil {
 		return nil, fmt.Errorf("getting trip: %w", err)
 	}
@@ -381,9 +382,9 @@ func (s *Service) SetBaseLocations(req *api.SetBaseLocationsRequest) (*api.BaseL
 // Trip Location operations
 
 // GetTripLocations returns locations for a trip.
-func (s *Service) GetTripLocations(tripID uuid.UUID) ([]api.TripDayLocation, error) {
+func (s *Service) GetTripLocations(userID string, tripID uuid.UUID) ([]api.TripDayLocation, error) {
 	// Verify trip exists
-	trip, err := s.store.GetTrip(tripID)
+	trip, err := s.store.GetTrip(userID, tripID)
 	if err != nil {
 		return nil, fmt.Errorf("getting trip: %w", err)
 	}
@@ -400,9 +401,9 @@ func (s *Service) GetTripLocations(tripID uuid.UUID) ([]api.TripDayLocation, err
 }
 
 // SetTripLocations sets locations for a trip.
-func (s *Service) SetTripLocations(tripID uuid.UUID, req *api.SetTripLocationsRequest) ([]api.TripDayLocation, error) {
+func (s *Service) SetTripLocations(userID string, tripID uuid.UUID, req *api.SetTripLocationsRequest) ([]api.TripDayLocation, error) {
 	// Verify trip exists and get dates
-	trip, err := s.store.GetTrip(tripID)
+	trip, err := s.store.GetTrip(userID, tripID)
 	if err != nil {
 		return nil, fmt.Errorf("getting trip: %w", err)
 	}
@@ -418,15 +419,15 @@ func (s *Service) SetTripLocations(tripID uuid.UUID, req *api.SetTripLocationsRe
 		return nil, fmt.Errorf("setting trip locations: %w", err)
 	}
 
-	return s.GetTripLocations(tripID)
+	return s.GetTripLocations(userID, tripID)
 }
 
 // Location Query operations
 
 // GetLocationOnDate returns the user's location on a specific date.
-func (s *Service) GetLocationOnDate(date time.Time) (*api.LocationOnDateResponse, error) {
+func (s *Service) GetLocationOnDate(userID string, date time.Time) (*api.LocationOnDateResponse, error) {
 	// Find trips that span this date
-	trips, err := s.store.GetTripsForDateRange(date, date)
+	trips, err := s.store.GetTripsForDateRange(userID, date, date)
 	if err != nil {
 		return nil, fmt.Errorf("getting trips for date: %w", err)
 	}
@@ -492,7 +493,7 @@ func (s *Service) GetLocationOnDate(date time.Time) (*api.LocationOnDateResponse
 }
 
 // GetLocationRange returns the user's locations for a date range.
-func (s *Service) GetLocationRange(from, to time.Time) ([]api.LocationRangeSegment, error) {
+func (s *Service) GetLocationRange(userID string, from, to time.Time) ([]api.LocationRangeSegment, error) {
 	// Build day-by-day location list
 	type dayLocation struct {
 		date      time.Time
@@ -503,7 +504,7 @@ func (s *Service) GetLocationRange(from, to time.Time) ([]api.LocationRangeSegme
 	var days []dayLocation
 
 	// Get all trips that overlap with the range
-	trips, err := s.store.GetTripsForDateRange(from, to)
+	trips, err := s.store.GetTripsForDateRange(userID, from, to)
 	if err != nil {
 		return nil, fmt.Errorf("getting trips for range: %w", err)
 	}

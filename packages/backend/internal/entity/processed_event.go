@@ -10,6 +10,7 @@ import (
 // This prevents the same events from appearing as suggestions repeatedly.
 type ProcessedCalendarEvent struct {
 	ID              uuid.UUID  `firestore:"id"`              // Unique identifier
+	UserID          string     `firestore:"userId"`          // Owner user
 	CalendarEventID string     `firestore:"calendarEventId"` // Google Calendar event ID
 	CalendarID      string     `firestore:"calendarId"`      // Which calendar the event belongs to
 	Action          string     `firestore:"action"`          // "imported", "dismissed", or "merged"

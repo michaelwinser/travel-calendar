@@ -68,7 +68,7 @@ func (h *Handler) GetHealth(w http.ResponseWriter, r *http.Request) {
 
 // ListTrips returns a list of trips.
 func (h *Handler) ListTrips(w http.ResponseWriter, r *http.Request, params api.ListTripsParams) {
-	trips, err := h.svc.ListTrips(params.Upcoming, params.Past, params.Purpose)
+	trips, err := h.svc.ListTrips(userID(r), params.Upcoming, params.Past, params.Purpose)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -84,7 +84,7 @@ func (h *Handler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	trip, err := h.svc.CreateTrip(&req)
+	trip, err := h.svc.CreateTrip(userID(r), &req)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -94,7 +94,7 @@ func (h *Handler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 
 // SearchTrips searches trips by query.
 func (h *Handler) SearchTrips(w http.ResponseWriter, r *http.Request, params api.SearchTripsParams) {
-	trips, err := h.svc.SearchTrips(params.Q)
+	trips, err := h.svc.SearchTrips(userID(r), params.Q)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -104,7 +104,7 @@ func (h *Handler) SearchTrips(w http.ResponseWriter, r *http.Request, params api
 
 // GetTrip returns a single trip by ID.
 func (h *Handler) GetTrip(w http.ResponseWriter, r *http.Request, tripId api.TripId) {
-	trip, err := h.svc.GetTrip(uuid.UUID(tripId))
+	trip, err := h.svc.GetTrip(userID(r), uuid.UUID(tripId))
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -124,7 +124,7 @@ func (h *Handler) UpdateTrip(w http.ResponseWriter, r *http.Request, tripId api.
 		return
 	}
 
-	trip, err := h.svc.UpdateTrip(uuid.UUID(tripId), &req)
+	trip, err := h.svc.UpdateTrip(userID(r), uuid.UUID(tripId), &req)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -138,7 +138,7 @@ func (h *Handler) UpdateTrip(w http.ResponseWriter, r *http.Request, tripId api.
 
 // DeleteTrip deletes a trip by ID.
 func (h *Handler) DeleteTrip(w http.ResponseWriter, r *http.Request, tripId api.TripId) {
-	err := h.svc.DeleteTrip(uuid.UUID(tripId))
+	err := h.svc.DeleteTrip(userID(r), uuid.UUID(tripId))
 	if errors.Is(err, store.ErrNotFound) {
 		respondError(w, http.StatusNotFound, "trip not found")
 		return
@@ -164,7 +164,7 @@ func (h *Handler) MergeTrips(w http.ResponseWriter, r *http.Request, sourceId op
 		return
 	}
 
-	trip, err := h.svc.MergeTrips(uuid.UUID(sourceId), uuid.UUID(targetId), &req)
+	trip, err := h.svc.MergeTrips(userID(r), uuid.UUID(sourceId), uuid.UUID(targetId), &req)
 	if err != nil {
 		if strings.Contains(err.Error(), "cannot merge trip into itself") {
 			respondError(w, http.StatusBadRequest, err.Error())
@@ -194,7 +194,7 @@ func (h *Handler) MoveItem(w http.ResponseWriter, r *http.Request, itemId api.It
 		return
 	}
 
-	result, err := h.svc.MoveItem(uuid.UUID(itemId), &req)
+	result, err := h.svc.MoveItem(userID(r), uuid.UUID(itemId), &req)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			respondError(w, http.StatusNotFound, err.Error())
@@ -216,7 +216,7 @@ func (h *Handler) MoveItem(w http.ResponseWriter, r *http.Request, itemId api.It
 
 // ListTripItems returns items for a trip.
 func (h *Handler) ListTripItems(w http.ResponseWriter, r *http.Request, tripId api.TripId) {
-	items, err := h.svc.ListTripItems(uuid.UUID(tripId))
+	items, err := h.svc.ListTripItems(userID(r), uuid.UUID(tripId))
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -236,7 +236,7 @@ func (h *Handler) CreateTripItem(w http.ResponseWriter, r *http.Request, tripId 
 		return
 	}
 
-	item, err := h.svc.CreateTripItem(uuid.UUID(tripId), &req)
+	item, err := h.svc.CreateTripItem(userID(r), uuid.UUID(tripId), &req)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -322,7 +322,7 @@ func (h *Handler) SetBaseLocations(w http.ResponseWriter, r *http.Request) {
 
 // GetTripLocations returns locations for a trip.
 func (h *Handler) GetTripLocations(w http.ResponseWriter, r *http.Request, tripId openapi_types.UUID) {
-	locations, err := h.svc.GetTripLocations(uuid.UUID(tripId))
+	locations, err := h.svc.GetTripLocations(userID(r), uuid.UUID(tripId))
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -342,7 +342,7 @@ func (h *Handler) SetTripLocations(w http.ResponseWriter, r *http.Request, tripI
 		return
 	}
 
-	locations, err := h.svc.SetTripLocations(uuid.UUID(tripId), &req)
+	locations, err := h.svc.SetTripLocations(userID(r), uuid.UUID(tripId), &req)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -358,7 +358,7 @@ func (h *Handler) SetTripLocations(w http.ResponseWriter, r *http.Request, tripI
 
 // GetLocationOnDate returns the user's location on a specific date.
 func (h *Handler) GetLocationOnDate(w http.ResponseWriter, r *http.Request, date openapi_types.Date) {
-	location, err := h.svc.GetLocationOnDate(date.Time)
+	location, err := h.svc.GetLocationOnDate(userID(r), date.Time)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -376,7 +376,7 @@ func (h *Handler) GetLocationRange(w http.ResponseWriter, r *http.Request, param
 		return
 	}
 
-	segments, err := h.svc.GetLocationRange(from, to)
+	segments, err := h.svc.GetLocationRange(userID(r), from, to)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -680,7 +680,7 @@ func (h *Handler) ResetProcessedEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.calendar.ResetProcessedEvents()
+	err := h.calendar.ResetProcessedEvents(userID(r))
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
