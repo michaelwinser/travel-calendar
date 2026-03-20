@@ -1,188 +1,115 @@
 # Product Roadmap
 
-This roadmap tracks implementation progress for the Travel Calendar application. It references [PRD.md](PRD.md) for overall vision and [prd/*.md](prd/) for detailed use cases.
+Travel Calendar helps you see **where you'll be** across time. A trip is fundamentally a location + dates. Calendar events, confirmations, and other details are context that surfaces alongside trips — not the trips themselves.
 
 ---
 
 ## Current Focus
 
-### Phase 1: Core MVP
+### Phase 5: Location-Centric Trips
 
-**Goal**: Basic trip CRUD with web UI and MCP access
+**Goal**: Refocus the app on location awareness. A trip = where + when.
 
-| Feature | Status | Use Cases | Notes |
-|---------|--------|-----------|-------|
-| Data model & SQLite storage | Done | - | Go backend with entities |
-| REST API (trips CRUD) | Done | UC-TRP-001 to UC-TRP-005 | OpenAPI-generated types |
-| Web UI: Trip list | Done | UC-TRP-002 | SvelteKit with calendar bars |
-| Web UI: Trip create/edit | Done | UC-TRP-001, UC-TRP-004 | Form with validation |
-| Web UI: Trip delete | Done | UC-TRP-005 | With confirmation |
-| MCP server: Trip tools | Done | UC-TRP-007 | Go implementation |
-| Trip search | Done | UC-TRP-006 | Full-text search on name/notes |
-| Trip items (flights, hotels) | Done | UC-TRP-003 | Flights, hotels, trains, drives, events |
-| Document upload | Not Started | - | File storage + association (deferred) |
-| JSON import/export | Not Started | - | Backup/restore capability |
+#### 5A: UX Quick Wins
 
-**Next priority**: Phase 2C Trip Organization (document upload deferred)
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Month calendar view | Not Started | Complement the year view; month is the natural planning unit |
+| "New Trip" button on every page | Not Started | Currently only on trips page |
+| Trip creation returns to calendar | Not Started | Don't strand user on trip details page |
+| Location as primary trip field | Not Started | Prominent in create/edit UI, shown on calendar |
+| Fix trip purpose selector feedback | Not Started | No visual indication when a choice is selected |
+
+#### 5B: Quick Entry
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Free-text trip creation | Not Started | "Milan Jan 23-27" or "London next week business" parsed into trip |
+| Natural language dates | Not Started | All date fields accept "Jan 23", "next Tuesday", "Mar 5-9" |
+
+#### 5C: Related Items Panel
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Calendar events panel on trip | Not Started | Show Google Calendar events that fall within trip dates, as context |
+| Location conflict detection | Not Started | Flag home-area appointments during travel (e.g. dentist while in Milan) |
+| Promote event to trip item | Not Started | Optional — user can add a related event as a trip item if desired |
 
 ---
 
-## Current Focus
+## Next
 
-### Phase 2: Calendar Integration
-
-**Goal**: Google Calendar sync for conflict detection and trip suggestions
-
-#### Phase 2A: OAuth Foundation (DONE)
+### Phase 6: Account & Data Management
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Google Calendar OAuth | Done | OAuth flow, settings UI, calendar selection |
+| User-controlled account deletion | Not Started | "Delete my data" in Settings |
+| `./tc admin:delete-user <email>` | Not Started | Admin command to remove all user data |
+| `./tc admin:cleanup-orphans` | Not Started | Purge pre-multi-tenancy data with empty user_id |
 
-#### Phase 2B: Calendar Trip Intelligence (DONE)
-
-**Goal**: Import trips with items, TripIt support, smart suggestions
-
-| Feature | Status | Use Cases | Notes |
-|---------|--------|-----------|-------|
-| Suggest trips from calendar | Done | - | Basic suggestions with filtering |
-| Filter virtual meetings | Done | UC-CAL-010 | URLs and meeting rooms excluded (#28) |
-| Import trips with items | Done | UC-CAL-001 | Calendar events → trip items with preview |
-| TripIt event parsing | Done | UC-CAL-002, UC-CAL-003 | Parse TripIt calendar format |
-| Event type classification | Done | UC-CAL-006 | All-day → trips, timed → items |
-| Merge candidate detection | Done | UC-CAL-005 | Show similar existing trips |
-| Merge suggestion into trip | Done | UC-CAL-004 | Merge dropdown in suggestions UI |
-| Remember processed events | Done | UC-CAL-011 | Dismiss button + reset in settings |
-
-**PRD**: [prd/calendar-trip-intelligence.md](prd/calendar-trip-intelligence.md)
-
-#### Phase 2C: Trip Organization (LATER)
-
-**Goal**: Reorganize trips and items after creation
-
-| Feature | Status | Use Cases | Notes |
-|---------|--------|-----------|-------|
-| Merge existing trips | Done | UC-ORG-001 | Combine two trips into one |
-| Convert trip to item | Not Started | UC-ORG-002 | Day trip → event on larger trip |
-| Move item between trips | Done | UC-ORG-003 | Reassign items |
-| Create trip from item(s) | Not Started | UC-ORG-004 | Split trip workflow |
-| Bulk move items | Not Started | UC-ORG-005 | Multi-select operations |
-
-**PRD**: [prd/trip-organization.md](prd/trip-organization.md)
-
-#### Phase 2D: Additional Calendar Features (LATER)
+### Phase 7: Sharing & Collaboration
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Read calendar for conflicts | Not Started | Detect home events during trips |
-| Write trips to calendar | Not Started | Optional, dedicated "Travel" calendar |
+| Share trip visibility | Not Started | Let contacts see where you'll be (ties into whereish concepts) |
+| Write trips to calendar | Not Started | Optional sync to a dedicated "Travel" calendar |
 
 ---
 
-## Later
+## Parked
 
-### Phase 3: Document Intelligence
+Features built or planned that are deprioritized pending the location-centric refocus.
 
-**Goal**: Automated document capture and parsing
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Email forwarding capture | Not Started | Dedicated address for forwarding |
-| PDF parsing | Not Started | Extract confirmation numbers, amounts |
-| Auto-association | Not Started | Match documents to trips by date/location |
-| Receipt/expense extraction | Not Started | OCR or structured parsing |
-
-### Phase 4: Advanced Features
-
-**Goal**: Power features for frequent travelers
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Expense tracking & reporting | Not Started | Budget categories, totals |
-| Multi-device sync | Not Started | Cloud backend option |
-| Sharing/collaboration | Not Started | Family trips, shared docs |
-| Mobile app or PWA | Not Started | Responsive UI first |
+| Feature | Status | Reason Parked |
+|---------|--------|---------------|
+| Trip items (flights, hotels, trains) | Built | Overbuilt for primary use case; may resurface via related items panel |
+| Trip import from calendar (as items) | Built | Created too much detail; replaced by related items approach |
+| TripIt event parsing | Built | Specialized; not core to location awareness |
+| Merge candidate detection | Built | Complexity for calendar import flow; less relevant with simpler trips |
+| Trip organization (merge, move, bulk) | Partially built | Premature; revisit if item management returns |
+| Document upload | Not started | No clear use case yet |
+| Document intelligence (email, PDF) | Not started | Premature |
+| Expense tracking | Not started | Not core to "where will I be" |
+| JSON import/export | Not started | Low priority |
 
 ---
 
-## Completed Milestones
+## Completed
 
-### Infrastructure Foundation (Jan 2026)
-- Go monorepo with backend, CLI, MCP server
+### Infrastructure & Deployment (Jan–Mar 2026)
+- Go monorepo: backend, CLI, MCP server
 - OpenAPI 3.1 spec as source of truth
 - TypeScript types generated from OpenAPI
-- Docker development environment via `tc` script
+- Docker dev environment via `./tc` script
 - SvelteKit frontend embedded in Go binary
-- Commit workflow with code review
-- Pre-commit checks and CI pipeline
+- Cloud Run deployment (`./tc deploy`, `./tc provision`)
+- Firestore + SQLite dual-store pattern
 
 ### Trip Management MVP (Jan 2026)
-- Trip CRUD operations (create, read, update, delete)
-- Trip list with calendar visualization
-- Trip editing UI with form validation
-- Backend unit tests for store, service, and handler layers
+- Trip CRUD with REST API
+- Year calendar visualization
+- Trip items (flights, hotels, trains, drives, events)
+- Trip search, MCP tools
+- Pre-commit checks and test pipeline
 
-### Trip Items Feature (Jan 2026)
-- Items CRUD (flights, hotels, trains, drives, events)
-- Add Item UI with type-specific forms
-- Item timeline grouped by date
-- MCP tools for item management
-- E2E and browser tests for UC-TRP-003
-
-### Google Calendar OAuth Foundation (Jan 2026)
-- OAuth 2.0 flow with Google Calendar API
-- Settings page with connect/disconnect UI
+### Google Calendar Integration (Jan–Mar 2026)
+- OAuth 2.0 with calendar permissions
 - Calendar selection for monitoring
-- Database schema for credentials and calendar links
-- Multi-user ready architecture
+- Trip suggestions from calendar events
+- TripIt parsing, merge candidates, event filtering
+
+### Authentication & Multi-Tenancy (Mar 2026)
+- Google OAuth login (single consent for auth + calendar)
+- Session-based auth with cookie middleware
+- User-scoped data isolation (trips, credentials, processed events)
+- ALLOWED_USERS env var for access control
 
 ---
 
-## Use Case Reference
+## Design Principles
 
-### Trip Management ([prd/trip-management.md](prd/trip-management.md))
-
-| ID | Description | Status |
-|----|-------------|--------|
-| UC-TRP-001 | Create a basic trip | Done |
-| UC-TRP-002 | List upcoming trips | Done |
-| UC-TRP-003 | Get trip with all items | Done |
-| UC-TRP-004 | Update trip details | Done |
-| UC-TRP-005 | Delete trip and all items | Done |
-| UC-TRP-006 | Search trips by name or location | Done |
-| UC-TRP-007 | Ask LLM about next trip | Done (MCP server) |
-
-### Calendar Trip Intelligence ([prd/calendar-trip-intelligence.md](prd/calendar-trip-intelligence.md))
-
-| ID | Description | Status |
-|----|-------------|--------|
-| UC-CAL-001 | Import trip with travel items | Done |
-| UC-CAL-002 | Parse TripIt all-day summary event | Done |
-| UC-CAL-003 | Parse TripIt flight segment event | Done |
-| UC-CAL-004 | Merge imported trip with existing trip | Done |
-| UC-CAL-005 | Detect merge candidates for trip suggestion | Done |
-| UC-CAL-006 | Distinguish all-day events vs timed events | Done |
-| UC-CAL-007 | Create nested/related trips | Not Started |
-| UC-CAL-008 | Show related trips in UI | Not Started |
-| UC-CAL-009 | Merge two existing trips | Done (via UC-ORG-001) |
-| UC-CAL-010 | Filter virtual meetings from suggestions | Done |
-| UC-CAL-011 | Remember processed calendar events | Done |
-
-### Trip Organization ([prd/trip-organization.md](prd/trip-organization.md))
-
-| ID | Description | Status |
-|----|-------------|--------|
-| UC-ORG-001 | Merge two existing trips | Done |
-| UC-ORG-002 | Convert trip to item on another trip | Not Started |
-| UC-ORG-003 | Move item to another trip | Done |
-| UC-ORG-004 | Create trip from item(s) | Not Started |
-| UC-ORG-005 | Bulk move items between trips | Not Started |
-
----
-
-## How to Use This Roadmap
-
-1. **Pick work from "Current Focus"** - items here are highest priority
-2. **Check the PRD** for detailed requirements before implementing
-3. **Update status** when completing features
-4. **Add new use cases** to relevant PRD files as needed
+1. **A trip is a location + dates** — not an itinerary
+2. **Calendar events are context** — they surface alongside trips, not as trips
+3. **Quick entry over forms** — typing "Milan Jan 23" should just work
+4. **Location conflicts are the key insight** — "you have a dentist appointment while you're in Milan"
+5. **Start simple, layer detail** — users can optionally add items; the app doesn't force it
