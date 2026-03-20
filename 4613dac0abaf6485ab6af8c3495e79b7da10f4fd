@@ -1,0 +1,55 @@
+packages/frontend/src/routes/oauth/google/callback/+page.svelte
+  e93c4510c8646995 5,17,29,37-39,41,57-58,65-66,73,75,78,80
+packages/backend/internal/store/firestore.go
+  e93c4510c8646995 39,1270-1348
+packages/frontend/src/lib/stores/auth.ts
+  e93c4510c8646995 1-69
+packages/backend/internal/auth/middleware.go
+  e93c4510c8646995 1-97
+packages/backend/cmd/server/main.go
+  e93c4510c8646995 14,36,81-99
+packages/backend/internal/entity/session.go
+  e93c4510c8646995 1-41
+packages/frontend/src/routes/settings/+page.svelte
+  e93c4510c8646995 39,263,266,282,292,332-333
+packages/frontend/src/routes/+layout.svelte
+  e93c4510c8646995 3-35,38-62
+packages/frontend/src/routes/login/+page.svelte
+  e93c4510c8646995 1-78
+packages/frontend/src/lib/api/client.ts
+  e93c4510c8646995 94-105
+packages/backend/internal/handler/handler_test.go
+  e93c4510c8646995 25
+packages/backend/internal/store/interface.go
+  e93c4510c8646995 20-22,24-26,28,49,74-80,82-85
+packages/backend/internal/entity/calendar_link.go
+  e93c4510c8646995 15
+packages/backend/internal/service/calendar.go
+  e93c4510c8646995 62-64,67-70,72,78-79,113-123,134,137-140,143-154,157-159,165,178-185,188-193,258-260,273-275,291,296,324-326,397-398,460-461,471,479,500,509,540-541,552,741,743,993,995,1042,1044,1087-1088,1101,1103
+packages/backend/internal/handler/handler.go
+  e93c4510c8646995 8,15,24,28-29,40-60,387,389,410,423,425-428,433-444,454-455,463-465,467-476,478-481,486,492-498,510,526,548,567,598,617,640,663
+packages/backend/internal/entity/trip.go
+  e93c4510c8646995 15
+packages/backend/internal/store/sqlite.go
+  e93c4510c8646995 165-176,1367-1413
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "4613dac0abaf6485ab6af8c3495e79b7da10f4fd",
+  "prompts": {
+    "e93c4510c8646995": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "92809005-0e6c-41e7-a931-f9dd58bb8c15",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 817,
+      "total_deletions": 250,
+      "accepted_lines": 736,
+      "overriden_lines": 0
+    }
+  }
+}
