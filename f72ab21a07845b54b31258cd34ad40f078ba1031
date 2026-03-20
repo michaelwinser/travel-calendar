@@ -1,0 +1,41 @@
+packages/backend/internal/mcp/tools_location.go
+  e93c4510c8646995 53,120,139,167
+packages/backend/internal/service/service_test.go
+  e93c4510c8646995 34,47,58,72,75,96,107,116,132,136,155,176,191,209,228,238,259,270,274,285,296,315,318,327,348,366,381,389,416,418,424,429,437,452,463,468,489,498,502,519,530,541,556,562,572,577,588,593,612,622,627,641,653,658,669,673
+packages/backend/internal/entity/processed_event.go
+  e93c4510c8646995 13
+packages/backend/internal/store/sqlite.go
+  e93c4510c8646995 48,93,157,168,190-192,228-230,243-244,247,261-262,271,288-289,304,306-307,310,585,605,805-807,811,1242-1243,1255,1267-1269,1271,1283-1284,1286,1297-1299,1301,1318-1320,1329,1354
+packages/backend/internal/service/service.go
+  e93c4510c8646995 29,36,49-50,68,70,91-92,101,110-111,115-116,133,135,143,185,199,205,224,238,269,271,292,294,385,387,404,406,422,428,430,496,507
+packages/backend/internal/store/firestore.go
+  e93c4510c8646995 63-64,119,132-134,148-149,152-153,160-165,177,180-181,188-193,711,717,1170,1192,1206-1208,1214,1216,1223-1229,1235-1236,1263-1265,1384,1414,1649
+packages/backend/internal/service/calendar.go
+  e93c4510c8646995 757,772,1013,1024,1033,1036,1078,1081,1097,1113,1122,1151,1158,1161,1164-1166,1315,1318
+packages/backend/internal/handler/handler.go
+  e93c4510c8646995 71,87,97,107,127,141,167,197,219,239,325,345,361,379,683
+packages/backend/internal/mcp/tools_trips.go
+  e93c4510c8646995 27,50,103,156,181,197,299,367,421
+packages/backend/internal/store/store_test.go
+  e93c4510c8646995 103,113,127,143,154,170,184,195,204,230,256,270,273,288,296,299,306,328,341,364,374,384,738,1032,1051,1070,1092,1111,1114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "f72ab21a07845b54b31258cd34ad40f078ba1031",
+  "prompts": {
+    "e93c4510c8646995": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "92809005-0e6c-41e7-a931-f9dd58bb8c15",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 271,
+      "total_deletions": 228,
+      "accepted_lines": 268,
+      "overriden_lines": 0
+    }
+  }
+}
