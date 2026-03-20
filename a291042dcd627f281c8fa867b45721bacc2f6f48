@@ -1,0 +1,23 @@
+docs/roadmap.md
+  e93c4510c8646995 3,9,11,13,17-21,23,25-28,30,34-36,40,42,46-48,50,54-57,59-73,77,79-80,83,85-86,89-96,98-99,101-105,109,111-115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "a291042dcd627f281c8fa867b45721bacc2f6f48",
+  "prompts": {
+    "e93c4510c8646995": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "92809005-0e6c-41e7-a931-f9dd58bb8c15",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 80,
+      "total_deletions": 153,
+      "accepted_lines": 75,
+      "overriden_lines": 0
+    }
+  }
+}
