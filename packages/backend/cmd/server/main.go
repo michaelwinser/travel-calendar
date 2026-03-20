@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/user/travel-calendar/backend/internal/api"
+	"github.com/user/travel-calendar/backend/internal/auth"
 	"github.com/user/travel-calendar/backend/internal/handler"
 	"github.com/user/travel-calendar/backend/internal/mcp"
 	"github.com/user/travel-calendar/backend/internal/service"
@@ -32,7 +33,7 @@ func main() {
 
 	// Initialize service and handlers
 	svc := service.New(db)
-	h := handler.New(svc)
+	h := handler.New(svc, db)
 	mcpHandler := mcp.NewHandler(svc)
 
 	// Initialize calendar service if configured
@@ -75,6 +76,27 @@ func main() {
 			}
 			next.ServeHTTP(w, req)
 		})
+	})
+
+	// Auth middleware — checks session cookie for /api/* routes
+	r.Use(auth.Middleware(db))
+
+	// Logout endpoint (outside OpenAPI — simple POST that clears session)
+	r.Post("/api/auth/logout", func(w http.ResponseWriter, req *http.Request) {
+		cookie, err := req.Cookie("travel_session")
+		if err == nil && cookie.Value != "" {
+			db.DeleteSession(cookie.Value)
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:     "travel_session",
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+		})
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"ok":true}`))
 	})
 
 	// Register OpenAPI handlers for /api/* and /health

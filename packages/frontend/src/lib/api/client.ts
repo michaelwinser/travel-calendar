@@ -91,6 +91,18 @@ export interface DocumentFilters {
 }
 
 export const api = {
+	auth: {
+		async status(): Promise<{ loggedIn: boolean; email?: string; connected?: boolean }> {
+			const response = await fetch(`${API_BASE}/api/auth/google/status`);
+			return handleResponse(response);
+		},
+
+		async logout(): Promise<void> {
+			const response = await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST' });
+			return handleResponse<void>(response);
+		}
+	},
+
 	trips: {
 		async list(filters?: TripFilters): Promise<Trip[]> {
 			const qs = buildQueryString(filters || {});

@@ -22,7 +22,7 @@ func setupTestHandler(t *testing.T) *Handler {
 	require.NoError(t, err)
 	t.Cleanup(func() { s.Close() })
 	svc := service.New(s)
-	return New(svc)
+	return New(svc, s)
 }
 
 // Helper to create a test trip via the handler

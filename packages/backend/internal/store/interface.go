@@ -17,15 +17,15 @@ type StoreInterface interface {
 	// Lifecycle
 	Close() error
 
-	// Trip methods
-	ListTrips(upcoming, past *bool, purpose *string) ([]entity.Trip, error)
-	GetTrip(id uuid.UUID) (*entity.Trip, error)
+	// Trip methods (user-scoped)
+	ListTrips(userID string, upcoming, past *bool, purpose *string) ([]entity.Trip, error)
+	GetTrip(userID string, id uuid.UUID) (*entity.Trip, error)
 	CreateTrip(trip *entity.Trip) error
-	UpdateTrip(trip *entity.Trip) error
-	DeleteTrip(id uuid.UUID) error
-	SearchTrips(q string) ([]entity.Trip, error)
+	UpdateTrip(userID string, trip *entity.Trip) error
+	DeleteTrip(userID string, id uuid.UUID) error
+	SearchTrips(userID string, q string) ([]entity.Trip, error)
 
-	// Item methods
+	// Item methods (scoped through trip ownership)
 	ListItems(tripID uuid.UUID) ([]entity.Item, error)
 	GetItem(id uuid.UUID) (*entity.Item, error)
 	CreateItem(item *entity.Item) error
@@ -46,7 +46,7 @@ type StoreInterface interface {
 	// Trip Location methods
 	GetTripLocations(tripID uuid.UUID) ([]entity.TripLocation, error)
 	SetTripLocations(tripID uuid.UUID, locations []entity.TripLocation) error
-	GetTripsForDateRange(from, to time.Time) ([]entity.Trip, error)
+	GetTripsForDateRange(userID string, from, to time.Time) ([]entity.Trip, error)
 	GetTripLocationsForDateRange(tripID uuid.UUID, from, to time.Time) ([]entity.TripLocation, error)
 
 	// Google Credentials methods
@@ -71,10 +71,16 @@ type StoreInterface interface {
 	DeleteCalendarLink(id uuid.UUID) error
 	DeleteCalendarLinksByTrip(tripID uuid.UUID) error
 
-	// Processed Calendar Events methods
+	// Session methods
+	CreateSession(session *entity.Session) error
+	GetSession(id string) (*entity.Session, error)
+	DeleteSession(id string) error
+	DeleteExpiredSessions() error
+
+	// Processed Calendar Events methods (user-scoped)
 	CreateProcessedEvent(event *entity.ProcessedCalendarEvent) error
-	GetProcessedEventByCalendarEvent(calendarID, eventID string) (*entity.ProcessedCalendarEvent, error)
-	IsEventProcessed(calendarID, eventID string) (bool, error)
-	ListProcessedEvents(calendarID string) ([]entity.ProcessedCalendarEvent, error)
-	DeleteAllProcessedEvents() error
+	GetProcessedEventByCalendarEvent(userID string, calendarID, eventID string) (*entity.ProcessedCalendarEvent, error)
+	IsEventProcessed(userID string, calendarID, eventID string) (bool, error)
+	ListProcessedEvents(userID string, calendarID string) ([]entity.ProcessedCalendarEvent, error)
+	DeleteAllProcessedEvents(userID string) error
 }

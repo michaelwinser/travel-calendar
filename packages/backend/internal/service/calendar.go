@@ -54,24 +54,29 @@ func (c *CalendarService) IsConfigured() bool {
 	return c.clientID != "" && c.clientSecret != "" && c.redirectURL != ""
 }
 
-// DefaultUserID is used for single-user mode.
-const DefaultUserID = "default"
-
-// OAuth scopes for Google Calendar
+// OAuth scopes
 const (
 	ScopeCalendarReadonly  = "https://www.googleapis.com/auth/calendar.readonly"
 	ScopeCalendarEvents    = "https://www.googleapis.com/auth/calendar.events"
 	ScopeCalendarReadWrite = "https://www.googleapis.com/auth/calendar"
+	ScopeOpenID            = "openid"
+	ScopeEmail             = "email"
+	ScopeProfile           = "profile"
 )
 
-// GetAuthURL generates the OAuth URL for Google Calendar authorization.
+// DefaultLoginScopes are requested during login.
+var DefaultLoginScopes = strings.Join([]string{
+	ScopeOpenID, ScopeEmail, ScopeProfile, ScopeCalendarReadonly,
+}, " ")
+
+// GetAuthURL generates the OAuth URL for Google login + Calendar authorization.
 func (c *CalendarService) GetAuthURL(scopes string) (*api.OAuthUrlResponse, error) {
 	if !c.IsConfigured() {
 		return nil, fmt.Errorf("Google Calendar not configured")
 	}
 
-	// Parse scopes - default to readonly
-	scopeList := ScopeCalendarReadonly
+	// Use login scopes (openid + email + profile + calendar)
+	scopeList := DefaultLoginScopes
 	if scopes != "" {
 		scopeList = scopes
 	}
@@ -91,8 +96,6 @@ func (c *CalendarService) GetAuthURL(scopes string) (*api.OAuthUrlResponse, erro
 
 	authURL := "https://accounts.google.com/o/oauth2/v2/auth?" + params.Encode()
 
-	// Note: state is included in URL params but not returned in response
-	// Frontend should extract it from the URL if needed for CSRF validation
 	return &api.OAuthUrlResponse{
 		Url: authURL,
 	}, nil
@@ -107,8 +110,17 @@ type tokenResponse struct {
 	Scope        string `json:"scope"`
 }
 
-// HandleCallback exchanges the authorization code for tokens and stores them.
-func (c *CalendarService) HandleCallback(ctx context.Context, code string) (*api.GoogleAuthStatus, error) {
+// LoginResult contains the result of a successful login.
+type LoginResult struct {
+	SessionID string
+	Email     string
+	UserID    string
+	Status    api.GoogleAuthStatus
+}
+
+// HandleCallback exchanges the authorization code for tokens, creates a session, and stores credentials.
+// allowedUsers is a list of allowed email addresses. If empty, all users are allowed.
+func (c *CalendarService) HandleCallback(ctx context.Context, code string, allowedUsers []string) (*LoginResult, error) {
 	if !c.IsConfigured() {
 		return nil, fmt.Errorf("Google Calendar not configured")
 	}
@@ -119,35 +131,66 @@ func (c *CalendarService) HandleCallback(ctx context.Context, code string) (*api
 		return nil, fmt.Errorf("exchanging code: %w", err)
 	}
 
-	// Get user email from token info
+	// Get user email (required for login)
 	email, err := c.getUserEmail(ctx, tokens.AccessToken)
 	if err != nil {
-		// Non-fatal - we can still proceed without email
-		email = ""
+		return nil, fmt.Errorf("getting user email: %w", err)
 	}
+	if email == "" {
+		return nil, fmt.Errorf("could not determine user email")
+	}
+
+	// Check allowlist
+	if len(allowedUsers) > 0 {
+		allowed := false
+		for _, u := range allowedUsers {
+			if strings.EqualFold(u, email) {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return nil, fmt.Errorf("user %s is not authorized", email)
+		}
+	}
+
+	// Use email as user ID for multi-tenancy
+	userID := email
 
 	// Calculate expiration time
 	expiresAt := time.Now().Add(time.Duration(tokens.ExpiresIn) * time.Second)
 
 	// Create and save credentials
 	creds := entity.NewGoogleCredentials(
-		DefaultUserID,
+		userID,
 		tokens.AccessToken,
 		tokens.RefreshToken,
 		tokens.TokenType,
 		expiresAt,
 		strings.Split(tokens.Scope, " "),
 	)
-	if email != "" {
-		creds.Email = &email
-	}
+	creds.Email = &email
 
 	if err := c.store.SaveGoogleCredentials(&creds); err != nil {
 		return nil, fmt.Errorf("saving credentials: %w", err)
 	}
 
+	// Create session
+	session := entity.NewSession(userID, email, 30*24*time.Hour)
+	if err := c.store.CreateSession(&session); err != nil {
+		return nil, fmt.Errorf("creating session: %w", err)
+	}
+
+	// Clean up expired sessions lazily
+	go c.store.DeleteExpiredSessions()
+
 	status := creds.ToAPIStatus()
-	return &status, nil
+	return &LoginResult{
+		SessionID: session.ID,
+		Email:     email,
+		UserID:    userID,
+		Status:    status,
+	}, nil
 }
 
 // exchangeCode exchanges an authorization code for tokens.
@@ -212,9 +255,9 @@ func (c *CalendarService) getUserEmail(ctx context.Context, accessToken string) 
 	return userInfo.Email, nil
 }
 
-// GetAuthStatus returns the current authentication status.
-func (c *CalendarService) GetAuthStatus(ctx context.Context) (*api.GoogleAuthStatus, error) {
-	creds, err := c.store.GetGoogleCredentials(DefaultUserID)
+// GetAuthStatus returns the current authentication status for the given user.
+func (c *CalendarService) GetAuthStatus(ctx context.Context, userID string) (*api.GoogleAuthStatus, error) {
+	creds, err := c.store.GetGoogleCredentials(userID)
 	if err != nil {
 		return nil, fmt.Errorf("getting credentials: %w", err)
 	}
@@ -227,9 +270,9 @@ func (c *CalendarService) GetAuthStatus(ctx context.Context) (*api.GoogleAuthSta
 	return &status, nil
 }
 
-// Disconnect revokes access and removes credentials.
-func (c *CalendarService) Disconnect(ctx context.Context) error {
-	creds, err := c.store.GetGoogleCredentials(DefaultUserID)
+// Disconnect revokes access and removes credentials for the given user.
+func (c *CalendarService) Disconnect(ctx context.Context, userID string) error {
+	creds, err := c.store.GetGoogleCredentials(userID)
 	if err != nil {
 		return fmt.Errorf("getting credentials: %w", err)
 	}
@@ -245,12 +288,12 @@ func (c *CalendarService) Disconnect(ctx context.Context) error {
 	}
 
 	// Delete local credentials
-	if err := c.store.DeleteGoogleCredentials(DefaultUserID); err != nil {
+	if err := c.store.DeleteGoogleCredentials(userID); err != nil {
 		return fmt.Errorf("deleting credentials: %w", err)
 	}
 
 	// Delete associated user calendars
-	if err := c.store.DeleteUserCalendarsByUser(DefaultUserID); err != nil {
+	if err := c.store.DeleteUserCalendarsByUser(userID); err != nil {
 		return fmt.Errorf("deleting user calendars: %w", err)
 	}
 
@@ -278,9 +321,9 @@ func (c *CalendarService) revokeToken(ctx context.Context, token string) error {
 	return nil
 }
 
-// RefreshTokenIfNeeded refreshes the access token if it's expired.
-func (c *CalendarService) RefreshTokenIfNeeded(ctx context.Context) (*entity.GoogleCredentials, error) {
-	creds, err := c.store.GetGoogleCredentials(DefaultUserID)
+// RefreshTokenIfNeeded refreshes the access token if it's expired for the given user.
+func (c *CalendarService) RefreshTokenIfNeeded(ctx context.Context, userID string) (*entity.GoogleCredentials, error) {
+	creds, err := c.store.GetGoogleCredentials(userID)
 	if err != nil {
 		return nil, fmt.Errorf("getting credentials: %w", err)
 	}
@@ -351,8 +394,8 @@ func (c *CalendarService) refreshToken(ctx context.Context, refreshToken string)
 }
 
 // ListCalendars fetches available calendars from Google.
-func (c *CalendarService) ListCalendars(ctx context.Context) ([]api.GoogleCalendar, error) {
-	creds, err := c.RefreshTokenIfNeeded(ctx)
+func (c *CalendarService) ListCalendars(ctx context.Context, userID string) ([]api.GoogleCalendar, error) {
+	creds, err := c.RefreshTokenIfNeeded(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -414,8 +457,8 @@ func (c *CalendarService) ListCalendars(ctx context.Context) ([]api.GoogleCalend
 }
 
 // GetSelectedCalendars returns the user's selected calendars.
-func (c *CalendarService) GetSelectedCalendars(ctx context.Context) ([]api.UserCalendar, error) {
-	calendars, err := c.store.ListUserCalendars(DefaultUserID)
+func (c *CalendarService) GetSelectedCalendars(ctx context.Context, userID string) ([]api.UserCalendar, error) {
+	calendars, err := c.store.ListUserCalendars(userID)
 	if err != nil {
 		return nil, fmt.Errorf("listing user calendars: %w", err)
 	}
@@ -425,7 +468,7 @@ func (c *CalendarService) GetSelectedCalendars(ctx context.Context) ([]api.UserC
 
 // SetSelectedCalendars updates the user's selected calendars.
 // It first fetches calendar names from Google, then stores the selection.
-func (c *CalendarService) SetSelectedCalendars(ctx context.Context, req *api.SetSelectedCalendarsRequest) ([]api.UserCalendar, error) {
+func (c *CalendarService) SetSelectedCalendars(ctx context.Context, userID string, req *api.SetSelectedCalendarsRequest) ([]api.UserCalendar, error) {
 	// Build a map of calendar IDs to enable
 	enabledIDs := make(map[string]bool)
 	for _, id := range req.CalendarIds {
@@ -433,7 +476,7 @@ func (c *CalendarService) SetSelectedCalendars(ctx context.Context, req *api.Set
 	}
 
 	// Fetch calendar list from Google to get names
-	googleCalendars, err := c.ListCalendars(ctx)
+	googleCalendars, err := c.ListCalendars(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("listing Google calendars: %w", err)
 	}
@@ -454,7 +497,7 @@ func (c *CalendarService) SetSelectedCalendars(ctx context.Context, req *api.Set
 		}
 		calendars = append(calendars, entity.UserCalendar{
 			ID:         uuid.New(),
-			UserID:     DefaultUserID,
+			UserID:     userID,
 			CalendarID: calID,
 			Name:       name,
 			Enabled:    true, // All IDs in the request are enabled
@@ -463,7 +506,7 @@ func (c *CalendarService) SetSelectedCalendars(ctx context.Context, req *api.Set
 		})
 	}
 
-	if err := c.store.SetUserCalendars(DefaultUserID, calendars); err != nil {
+	if err := c.store.SetUserCalendars(userID, calendars); err != nil {
 		return nil, fmt.Errorf("setting user calendars: %w", err)
 	}
 
@@ -494,8 +537,8 @@ type googleEventsResponse struct {
 }
 
 // ListCalendarEvents fetches events from Google Calendar within a date range.
-func (c *CalendarService) ListCalendarEvents(ctx context.Context, from, to time.Time, calendarID *string) ([]api.CalendarEvent, error) {
-	creds, err := c.RefreshTokenIfNeeded(ctx)
+func (c *CalendarService) ListCalendarEvents(ctx context.Context, userID string, from, to time.Time, calendarID *string) ([]api.CalendarEvent, error) {
+	creds, err := c.RefreshTokenIfNeeded(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -506,7 +549,7 @@ func (c *CalendarService) ListCalendarEvents(ctx context.Context, from, to time.
 		calendarIDs = []string{*calendarID}
 	} else {
 		// Get selected calendars
-		userCalendars, err := c.store.ListUserCalendars(DefaultUserID)
+		userCalendars, err := c.store.ListUserCalendars(userID)
 		if err != nil {
 			return nil, fmt.Errorf("listing user calendars: %w", err)
 		}
@@ -695,9 +738,9 @@ func isTravelRelatedEvent(event api.CalendarEvent) bool {
 }
 
 // SuggestTripsFromCalendar analyzes calendar events and suggests trips.
-func (c *CalendarService) SuggestTripsFromCalendar(ctx context.Context, from, to time.Time) ([]api.TripSuggestion, error) {
+func (c *CalendarService) SuggestTripsFromCalendar(ctx context.Context, userID string, from, to time.Time) ([]api.TripSuggestion, error) {
 	// Fetch all events in the date range
-	events, err := c.ListCalendarEvents(ctx, from, to, nil)
+	events, err := c.ListCalendarEvents(ctx, userID, from, to, nil)
 	if err != nil {
 		return nil, fmt.Errorf("listing events: %w", err)
 	}
@@ -947,9 +990,9 @@ func generateTripName(events []api.CalendarEvent, location string) string {
 }
 
 // ImportTripSuggestion creates a new trip from a suggestion.
-func (c *CalendarService) ImportTripSuggestion(ctx context.Context, svc *Service, suggestionID string, from, to time.Time) (*api.Trip, error) {
+func (c *CalendarService) ImportTripSuggestion(ctx context.Context, svc *Service, userID string, suggestionID string, from, to time.Time) (*api.Trip, error) {
 	// Find the suggestion (including processed events, since we're acting on it)
-	suggestion, err := c.findSuggestionByID(ctx, suggestionID, from, to)
+	suggestion, err := c.findSuggestionByID(ctx, userID, suggestionID, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -996,9 +1039,9 @@ func (c *CalendarService) ImportTripSuggestion(ctx context.Context, svc *Service
 // findSuggestionByID looks up a suggestion by ID, including processed events.
 // This is used for import/dismiss/merge operations where we need to find the
 // suggestion even if its events have already been processed.
-func (c *CalendarService) findSuggestionByID(ctx context.Context, suggestionID string, from, to time.Time) (*api.TripSuggestion, error) {
+func (c *CalendarService) findSuggestionByID(ctx context.Context, userID string, suggestionID string, from, to time.Time) (*api.TripSuggestion, error) {
 	// Fetch all events without filtering processed ones
-	events, err := c.ListCalendarEvents(ctx, from, to, nil)
+	events, err := c.ListCalendarEvents(ctx, userID, from, to, nil)
 	if err != nil {
 		return nil, fmt.Errorf("listing events: %w", err)
 	}
@@ -1041,8 +1084,8 @@ func (c *CalendarService) markEventsAsProcessed(events []api.CalendarEvent, acti
 }
 
 // DismissTripSuggestion marks a suggestion as dismissed so it won't appear again.
-func (c *CalendarService) DismissTripSuggestion(ctx context.Context, suggestionID string, from, to time.Time) error {
-	suggestion, err := c.findSuggestionByID(ctx, suggestionID, from, to)
+func (c *CalendarService) DismissTripSuggestion(ctx context.Context, userID string, suggestionID string, from, to time.Time) error {
+	suggestion, err := c.findSuggestionByID(ctx, userID, suggestionID, from, to)
 	if err != nil {
 		return err
 	}
@@ -1055,9 +1098,9 @@ func (c *CalendarService) DismissTripSuggestion(ctx context.Context, suggestionI
 }
 
 // MergeTripSuggestion merges a suggestion into an existing trip.
-func (c *CalendarService) MergeTripSuggestion(ctx context.Context, svc *Service, suggestionID string, tripID uuid.UUID, from, to time.Time) (*api.Trip, error) {
+func (c *CalendarService) MergeTripSuggestion(ctx context.Context, svc *Service, userID string, suggestionID string, tripID uuid.UUID, from, to time.Time) (*api.Trip, error) {
 	// Find the suggestion
-	suggestion, err := c.findSuggestionByID(ctx, suggestionID, from, to)
+	suggestion, err := c.findSuggestionByID(ctx, userID, suggestionID, from, to)
 	if err != nil {
 		return nil, err
 	}

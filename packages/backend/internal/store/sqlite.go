@@ -162,6 +162,18 @@ func (s *SQLiteStore) migrate() error {
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_processed_events_calendar ON processed_calendar_events(calendar_id);
+
+	-- User sessions for authentication
+	CREATE TABLE IF NOT EXISTS sessions (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		email TEXT NOT NULL,
+		expires_at TEXT NOT NULL,
+		created_at TEXT NOT NULL
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+	CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 	`
 
 	_, err := s.db.Exec(schema)
@@ -1350,6 +1362,53 @@ func scanProcessedEventRow(row *sql.Row) (entity.ProcessedCalendarEvent, error) 
 	}
 
 	return event, nil
+}
+
+// Session methods
+
+// CreateSession inserts a new session.
+func (s *SQLiteStore) CreateSession(session *entity.Session) error {
+	query := `INSERT INTO sessions (id, user_id, email, expires_at, created_at) VALUES (?, ?, ?, ?, ?)`
+	_, err := s.db.Exec(query,
+		session.ID,
+		session.UserID,
+		session.Email,
+		session.ExpiresAt.Format(time.RFC3339),
+		session.CreatedAt.Format(time.RFC3339),
+	)
+	return err
+}
+
+// GetSession retrieves a session by ID.
+func (s *SQLiteStore) GetSession(id string) (*entity.Session, error) {
+	query := `SELECT id, user_id, email, expires_at, created_at FROM sessions WHERE id = ?`
+	row := s.db.QueryRow(query, id)
+
+	var session entity.Session
+	var expiresAt, createdAt string
+	err := row.Scan(&session.ID, &session.UserID, &session.Email, &expiresAt, &createdAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	session.ExpiresAt, _ = time.Parse(time.RFC3339, expiresAt)
+	session.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+	return &session, nil
+}
+
+// DeleteSession removes a session by ID.
+func (s *SQLiteStore) DeleteSession(id string) error {
+	_, err := s.db.Exec("DELETE FROM sessions WHERE id = ?", id)
+	return err
+}
+
+// DeleteExpiredSessions removes all expired sessions.
+func (s *SQLiteStore) DeleteExpiredSessions() error {
+	_, err := s.db.Exec("DELETE FROM sessions WHERE expires_at < ?", time.Now().Format(time.RFC3339))
+	return err
 }
 
 // Silence the unused import warning

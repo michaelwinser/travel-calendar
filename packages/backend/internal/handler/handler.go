@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	"github.com/user/travel-calendar/backend/internal/api"
+	"github.com/user/travel-calendar/backend/internal/auth"
 	"github.com/user/travel-calendar/backend/internal/service"
 	"github.com/user/travel-calendar/backend/internal/store"
 )
@@ -19,11 +21,12 @@ import (
 type Handler struct {
 	svc      *service.Service
 	calendar *service.CalendarService
+	store    store.StoreInterface
 }
 
 // New creates a new Handler with the given service.
-func New(svc *service.Service) *Handler {
-	return &Handler{svc: svc}
+func New(svc *service.Service, s store.StoreInterface) *Handler {
+	return &Handler{svc: svc, store: s}
 }
 
 // SetCalendarService sets the calendar service for OAuth operations.
@@ -33,6 +36,27 @@ func (h *Handler) SetCalendarService(cal *service.CalendarService) {
 
 // Ensure Handler implements ServerInterface
 var _ api.ServerInterface = (*Handler)(nil)
+
+// userID extracts the authenticated user ID from the request context.
+func userID(r *http.Request) string {
+	return auth.UserIDFromContext(r.Context())
+}
+
+// allowedUsers returns the ALLOWED_USERS list from env, or nil if unset.
+func allowedUsers() []string {
+	val := os.Getenv("ALLOWED_USERS")
+	if val == "" {
+		return nil
+	}
+	var users []string
+	for _, u := range strings.Split(val, ",") {
+		u = strings.TrimSpace(u)
+		if u != "" {
+			users = append(users, u)
+		}
+	}
+	return users
+}
 
 // GetHealth returns the health status of the service.
 func (h *Handler) GetHealth(w http.ResponseWriter, r *http.Request) {
@@ -360,9 +384,9 @@ func (h *Handler) GetLocationRange(w http.ResponseWriter, r *http.Request, param
 	respondJSON(w, http.StatusOK, segments)
 }
 
-// Google Calendar OAuth endpoints
+// Google Calendar OAuth / Auth endpoints
 
-// GetGoogleAuthUrl returns the OAuth URL to initiate Google Calendar authorization.
+// GetGoogleAuthUrl returns the OAuth URL to initiate login.
 func (h *Handler) GetGoogleAuthUrl(w http.ResponseWriter, r *http.Request, params api.GetGoogleAuthUrlParams) {
 	if h.calendar == nil || !h.calendar.IsConfigured() {
 		respondError(w, http.StatusServiceUnavailable, "Google Calendar integration not configured")
@@ -383,7 +407,7 @@ func (h *Handler) GetGoogleAuthUrl(w http.ResponseWriter, r *http.Request, param
 	respondJSON(w, http.StatusOK, result)
 }
 
-// HandleGoogleCallback handles the OAuth callback from Google.
+// HandleGoogleCallback handles the OAuth callback — creates a session and sets a cookie.
 func (h *Handler) HandleGoogleCallback(w http.ResponseWriter, r *http.Request, params api.HandleGoogleCallbackParams) {
 	if h.calendar == nil || !h.calendar.IsConfigured() {
 		respondError(w, http.StatusServiceUnavailable, "Google Calendar integration not configured")
@@ -396,13 +420,28 @@ func (h *Handler) HandleGoogleCallback(w http.ResponseWriter, r *http.Request, p
 		return
 	}
 
-	status, err := h.calendar.HandleCallback(r.Context(), params.Code)
+	result, err := h.calendar.HandleCallback(r.Context(), params.Code, allowedUsers())
 	if err != nil {
+		if strings.Contains(err.Error(), "not authorized") {
+			respondError(w, http.StatusForbidden, err.Error())
+			return
+		}
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	respondJSON(w, http.StatusOK, status)
+	// Set session cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "travel_session",
+		Value:    result.SessionID,
+		Path:     "/",
+		MaxAge:   30 * 24 * 60 * 60, // 30 days
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+	})
+
+	respondJSON(w, http.StatusOK, result.Status)
 }
 
 // DisconnectGoogle revokes Google Calendar access.
@@ -412,7 +451,8 @@ func (h *Handler) DisconnectGoogle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.calendar.Disconnect(r.Context()); err != nil {
+	uid := userID(r)
+	if err := h.calendar.Disconnect(r.Context(), uid); err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -420,21 +460,42 @@ func (h *Handler) DisconnectGoogle(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetGoogleAuthStatus returns the current Google authentication status.
+// GetGoogleAuthStatus returns the current auth status.
+// When called without a session (exempt path), returns login status.
+// When called with a session, returns calendar connection status.
 func (h *Handler) GetGoogleAuthStatus(w http.ResponseWriter, r *http.Request) {
-	if h.calendar == nil {
-		// Return disconnected status if not configured
-		respondJSON(w, http.StatusOK, api.GoogleAuthStatus{Connected: false})
+	uid := userID(r)
+	if uid == "" {
+		// No session — return not logged in
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"connected": false,
+			"loggedIn":  false,
+		})
 		return
 	}
 
-	status, err := h.calendar.GetAuthStatus(r.Context())
+	if h.calendar == nil {
+		respondJSON(w, http.StatusOK, map[string]interface{}{
+			"connected": false,
+			"loggedIn":  true,
+			"email":     auth.EmailFromContext(r.Context()),
+		})
+		return
+	}
+
+	status, err := h.calendar.GetAuthStatus(r.Context(), uid)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	respondJSON(w, http.StatusOK, status)
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"connected": status.Connected,
+		"loggedIn":  true,
+		"email":     auth.EmailFromContext(r.Context()),
+		"scopes":    status.Scopes,
+		"expiresAt": status.ExpiresAt,
+	})
 }
 
 // Calendar endpoints
@@ -446,7 +507,7 @@ func (h *Handler) ListCalendars(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	calendars, err := h.calendar.ListCalendars(r.Context())
+	calendars, err := h.calendar.ListCalendars(r.Context(), userID(r))
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -462,7 +523,7 @@ func (h *Handler) GetSelectedCalendars(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	calendars, err := h.calendar.GetSelectedCalendars(r.Context())
+	calendars, err := h.calendar.GetSelectedCalendars(r.Context(), userID(r))
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -484,7 +545,7 @@ func (h *Handler) SetSelectedCalendars(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	calendars, err := h.calendar.SetSelectedCalendars(r.Context(), &req)
+	calendars, err := h.calendar.SetSelectedCalendars(r.Context(), userID(r), &req)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -500,11 +561,10 @@ func (h *Handler) ListCalendarEvents(w http.ResponseWriter, r *http.Request, par
 		return
 	}
 
-	// Convert dates to time.Time
 	from := time.Time(params.From.Time)
 	to := time.Time(params.To.Time)
 
-	events, err := h.calendar.ListCalendarEvents(r.Context(), from, to, params.CalendarId)
+	events, err := h.calendar.ListCalendarEvents(r.Context(), userID(r), from, to, params.CalendarId)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -526,10 +586,8 @@ func (h *Handler) SuggestTripsFromCalendar(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Default date range: today to 90 days from now
 	from := time.Now()
 	to := from.AddDate(0, 0, 90)
-
 	if params.From != nil {
 		from = time.Time(params.From.Time)
 	}
@@ -537,7 +595,7 @@ func (h *Handler) SuggestTripsFromCalendar(w http.ResponseWriter, r *http.Reques
 		to = time.Time(params.To.Time)
 	}
 
-	suggestions, err := h.calendar.SuggestTripsFromCalendar(r.Context(), from, to)
+	suggestions, err := h.calendar.SuggestTripsFromCalendar(r.Context(), userID(r), from, to)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -553,11 +611,10 @@ func (h *Handler) ImportTripSuggestion(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	// Use same default date range as SuggestTripsFromCalendar
 	from := time.Now()
 	to := from.AddDate(0, 0, 90)
 
-	trip, err := h.calendar.ImportTripSuggestion(r.Context(), h.svc, suggestionId, from, to)
+	trip, err := h.calendar.ImportTripSuggestion(r.Context(), h.svc, userID(r), suggestionId, from, to)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			respondError(w, http.StatusNotFound, err.Error())
@@ -577,11 +634,10 @@ func (h *Handler) DismissTripSuggestion(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	// Use same default date range as SuggestTripsFromCalendar
 	from := time.Now()
 	to := from.AddDate(0, 0, 90)
 
-	err := h.calendar.DismissTripSuggestion(r.Context(), suggestionId, from, to)
+	err := h.calendar.DismissTripSuggestion(r.Context(), userID(r), suggestionId, from, to)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			respondError(w, http.StatusNotFound, err.Error())
@@ -601,11 +657,10 @@ func (h *Handler) MergeTripSuggestion(w http.ResponseWriter, r *http.Request, su
 		return
 	}
 
-	// Use same default date range as SuggestTripsFromCalendar
 	from := time.Now()
 	to := from.AddDate(0, 0, 90)
 
-	trip, err := h.calendar.MergeTripSuggestion(r.Context(), h.svc, suggestionId, uuid.UUID(tripId), from, to)
+	trip, err := h.calendar.MergeTripSuggestion(r.Context(), h.svc, userID(r), suggestionId, uuid.UUID(tripId), from, to)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			respondError(w, http.StatusNotFound, err.Error())

@@ -36,6 +36,7 @@ const (
 	collUserCalendars    = "userCalendars"
 	collCalendarLinks    = "calendarLinks"
 	collProcessedEvents  = "processedEvents"
+	collSessions         = "sessions"
 )
 
 // NewFirestore creates a new FirestoreStore with the given project ID.
@@ -1261,6 +1262,85 @@ func (s *FirestoreStore) DeleteAllProcessedEvents() error {
 		_, err := batch.Commit(s.ctx)
 		if err != nil {
 			return fmt.Errorf("committing final delete batch: %w", err)
+		}
+	}
+	return nil
+}
+
+// --- Session methods ---
+
+// CreateSession inserts a new session.
+func (s *FirestoreStore) CreateSession(session *entity.Session) error {
+	_, err := s.client.Collection(collSessions).Doc(session.ID).Set(s.ctx, map[string]interface{}{
+		"userId":    session.UserID,
+		"email":     session.Email,
+		"expiresAt": session.ExpiresAt,
+		"createdAt": session.CreatedAt,
+	})
+	if err != nil {
+		return fmt.Errorf("creating session: %w", err)
+	}
+	return nil
+}
+
+// GetSession retrieves a session by ID.
+func (s *FirestoreStore) GetSession(id string) (*entity.Session, error) {
+	doc, err := s.client.Collection(collSessions).Doc(id).Get(s.ctx)
+	if status.Code(err) == codes.NotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("getting session: %w", err)
+	}
+
+	data := doc.Data()
+	session := &entity.Session{
+		ID:        doc.Ref.ID,
+		UserID:    data["userId"].(string),
+		Email:     data["email"].(string),
+		ExpiresAt: toTime(data["expiresAt"]),
+		CreatedAt: toTime(data["createdAt"]),
+	}
+	return session, nil
+}
+
+// DeleteSession removes a session by ID.
+func (s *FirestoreStore) DeleteSession(id string) error {
+	_, err := s.client.Collection(collSessions).Doc(id).Delete(s.ctx)
+	if err != nil {
+		return fmt.Errorf("deleting session: %w", err)
+	}
+	return nil
+}
+
+// DeleteExpiredSessions removes all expired sessions.
+func (s *FirestoreStore) DeleteExpiredSessions() error {
+	iter := s.client.Collection(collSessions).Where("expiresAt", "<", time.Now()).Documents(s.ctx)
+	defer iter.Stop()
+
+	batch := s.client.Batch()
+	count := 0
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("iterating expired sessions: %w", err)
+		}
+		batch.Delete(doc.Ref)
+		count++
+		if count >= 500 {
+			if _, err = batch.Commit(s.ctx); err != nil {
+				return fmt.Errorf("committing session delete batch: %w", err)
+			}
+			batch = s.client.Batch()
+			count = 0
+		}
+	}
+	if count > 0 {
+		if _, err := batch.Commit(s.ctx); err != nil {
+			return fmt.Errorf("committing final session delete batch: %w", err)
 		}
 	}
 	return nil

@@ -12,6 +12,7 @@ import (
 // Trip represents a travel trip in the database.
 type Trip struct {
 	ID        uuid.UUID  `db:"id" firestore:"-"`
+	UserID    string     `db:"user_id" firestore:"userId"`
 	Name      string     `db:"name" firestore:"name"`
 	Purpose   string     `db:"purpose" firestore:"purpose"`
 	StartDate *time.Time `db:"start_date" firestore:"startDate"`

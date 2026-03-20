@@ -12,6 +12,7 @@ import (
 // CalendarLink tracks the sync state between trip items and Google Calendar events.
 type CalendarLink struct {
 	ID         uuid.UUID  `db:"id" firestore:"id"`
+	UserID     string     `db:"user_id" firestore:"userId"`
 	TripID     uuid.UUID  `db:"trip_id" firestore:"tripId"`
 	ItemID     *uuid.UUID `db:"item_id" firestore:"itemId"` // nil if linked to whole trip
 	CalendarID string     `db:"calendar_id" firestore:"calendarId"`
