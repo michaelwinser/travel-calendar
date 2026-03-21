@@ -1,0 +1,41 @@
+packages/backend/internal/store/firestore.go
+  e93c4510c8646995 1388,1419
+packages/frontend/src/lib/components/trip/TripForm.svelte
+  e93c4510c8646995 12,19-40,56,98-110,139,142,151
+packages/frontend/src/routes/trips/new/+page.svelte
+  e93c4510c8646995 16-17,25
+packages/api/openapi.yaml
+  e93c4510c8646995 1200-1203,1234-1236,1259-1261
+packages/backend/internal/entity/trip.go
+  e93c4510c8646995 18,45-47,86-88,114-116
+packages/frontend/src/routes/calendar/+page.svelte
+  e93c4510c8646995 7,14-16,206-221,271-272,298-325
+packages/backend/internal/store/sqlite.go
+  e93c4510c8646995 51,192,230,244-245,251,264,268,309,587-588,593,608-609,614,811
+packages/frontend/src/routes/+layout.svelte
+  e93c4510c8646995 52-57
+docs/roadmap.md
+  e93c4510c8646995 17-22
+packages/frontend/src/lib/components/calendar/MonthGrid.svelte
+  e93c4510c8646995 9,15-16,19-21,24-28,31-36,38-41,43-74,76-86,88-91,99-100,102-104,106-110,112-114,118-120,124,126-127,131,134,138,144,147-150,152-163,165-167,169-179,183-200,202
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "3cdca1e419fcc6990601bfd6dc8473ecfb6327fa",
+  "prompts": {
+    "e93c4510c8646995": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "92809005-0e6c-41e7-a931-f9dd58bb8c15",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 653,
+      "total_deletions": 192,
+      "accepted_lines": 593,
+      "overriden_lines": 0
+    }
+  }
+}
