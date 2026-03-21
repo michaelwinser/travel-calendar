@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Trip, TripPurpose, TripStatus, CreateTripRequest, UpdateTripRequest } from '@travel-calendar/shared';
+	import { parseNaturalDate } from '$lib/utils/tripParser';
 
 	export let trip: Partial<Trip> = {};
 	export let mode: 'create' | 'edit' = 'create';
@@ -114,9 +115,11 @@
 						Start Date
 					</label>
 					<input
-						type="date"
+						type="text"
 						id="startDate"
 						bind:value={startDate}
+						on:blur={() => { const p = parseNaturalDate(startDate); if (p) startDate = p; }}
+						placeholder="Jan 23 or 2026-01-23"
 						class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
 					/>
 				</div>
@@ -125,9 +128,11 @@
 						End Date
 					</label>
 					<input
-						type="date"
+						type="text"
 						id="endDate"
 						bind:value={endDate}
+						on:blur={() => { const p = parseNaturalDate(endDate); if (p) endDate = p; }}
+						placeholder="Jan 27 or 2026-01-27"
 						class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
 					/>
 				</div>

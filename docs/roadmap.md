@@ -25,8 +25,8 @@ Travel Calendar helps you see **where you'll be** across time. A trip is fundame
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Free-text trip creation | Not Started | "Milan Jan 23-27" or "London next week business" parsed into trip |
-| Natural language dates | Not Started | All date fields accept "Jan 23", "next Tuesday", "Mar 5-9" |
+| Free-text trip creation | Done | QuickEntry component on calendar page; parses "Milan Jan 23-27", "London next week business" |
+| Natural language dates | Done | Date fields accept "Jan 23", "next Tuesday", "tomorrow"; converts on blur |
 
 #### 5C: Related Items Panel
 

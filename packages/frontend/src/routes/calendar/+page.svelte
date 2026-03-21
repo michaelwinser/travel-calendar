@@ -5,6 +5,8 @@
 	import { trips } from '$lib/stores';
 	import MonthRow from '$lib/components/calendar/MonthRow.svelte';
 	import MonthGrid from '$lib/components/calendar/MonthGrid.svelte';
+	import QuickEntry from '$lib/components/trip/QuickEntry.svelte';
+	import type { ParsedTrip } from '$lib/utils/tripParser';
 
 	let loading = true;
 	let error: string | null = null;
@@ -151,6 +153,20 @@
 		}
 	}
 
+	async function handleQuickEntry(parsed: ParsedTrip) {
+		try {
+			await trips.create({
+				name: parsed.name,
+				location: parsed.location,
+				startDate: parsed.startDate || undefined,
+				endDate: parsed.endDate || undefined,
+				purpose: parsed.purpose || 'other'
+			});
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to create trip';
+		}
+	}
+
 	// Purpose legend items
 	const purposes: { key: TripPurpose; label: string }[] = [
 		{ key: 'conference', label: 'Conference' },
@@ -244,6 +260,11 @@
 </header>
 
 <main class="max-w-6xl mx-auto px-4 py-6 h-[calc(100vh-73px)] flex flex-col">
+	<!-- Quick Entry -->
+	<div class="mb-4 flex-shrink-0">
+		<QuickEntry onSubmit={handleQuickEntry} />
+	</div>
+
 	<!-- Legend -->
 	<div class="flex gap-4 mb-4 text-xs flex-shrink-0">
 		{#each purposes as { key, label }}
