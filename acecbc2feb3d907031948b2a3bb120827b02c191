@@ -1,0 +1,23 @@
+tc
+  e93c4510c8646995 9,163,165-169,303-316,366,422,592,610,633,643-644,647-648,650-651,662-672
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "acecbc2feb3d907031948b2a3bb120827b02c191",
+  "prompts": {
+    "e93c4510c8646995": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "92809005-0e6c-41e7-a931-f9dd58bb8c15",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 45,
+      "total_deletions": 240,
+      "accepted_lines": 45,
+      "overriden_lines": 0
+    }
+  }
+}
