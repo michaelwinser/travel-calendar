@@ -398,7 +398,7 @@ func (h *Handler) GetGoogleAuthUrl(w http.ResponseWriter, r *http.Request, param
 		scopes = *params.Scopes
 	}
 
-	result, err := h.calendar.GetAuthURL(scopes)
+	result, err := h.calendar.GetAuthURL(r, scopes)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -420,7 +420,7 @@ func (h *Handler) HandleGoogleCallback(w http.ResponseWriter, r *http.Request, p
 		return
 	}
 
-	result, err := h.calendar.HandleCallback(r.Context(), params.Code, allowedUsers())
+	result, err := h.calendar.HandleCallback(r, params.Code, allowedUsers())
 	if err != nil {
 		if strings.Contains(err.Error(), "not authorized") {
 			respondError(w, http.StatusForbidden, err.Error())

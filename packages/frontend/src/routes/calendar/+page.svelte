@@ -215,10 +215,15 @@
 			await trips.create({
 				name: parsed.name,
 				purpose: parsed.purpose || 'other',
+				location: parsed.location || undefined,
 				startDate: parsed.startDate || undefined,
-				endDate: parsed.endDate || undefined,
-				notes: parsed.location ? `Location: ${parsed.location}` : undefined
+				endDate: parsed.endDate || undefined
 			} as any);
+			// Reload day entries since trip creation may have auto-created them
+			const now = new Date();
+			const from = new Date(now.getFullYear() - 1, now.getMonth(), 1);
+			const to = new Date(now.getFullYear() + 1, now.getMonth() + 1, 0);
+			await dayEntries.load(from.toISOString().split('T')[0], to.toISOString().split('T')[0]);
 		} catch (e) {
 			quickEntryError = e instanceof Error ? e.message : 'Failed to create trip';
 		}

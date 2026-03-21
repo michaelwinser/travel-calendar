@@ -19,7 +19,7 @@ Travel Calendar helps you see **where you'll be** across time. A trip is fundame
 | Trip creation returns to calendar | Done | Redirects to /calendar instead of trip detail |
 | Location as primary trip field | Done | Added to OpenAPI, backend, both stores, and trip form UI |
 | Fix trip purpose selector feedback | Done | Explicit Tailwind class mappings instead of dynamic interpolation |
-| Auto-detect OAuth redirect URL | Not Started | Infer from request Host/protocol instead of requiring GOOGLE_REDIRECT_URL env var |
+| Auto-detect OAuth redirect URL | Done | Inferred from request Host/protocol; GOOGLE_REDIRECT_URL env var optional override |
 
 #### 5B: Quick Entry
 

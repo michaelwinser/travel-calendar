@@ -41,9 +41,6 @@ func main() {
 	googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
 	googleRedirectURL := os.Getenv("GOOGLE_REDIRECT_URL")
 	if googleClientID != "" && googleClientSecret != "" {
-		if googleRedirectURL == "" {
-			googleRedirectURL = fmt.Sprintf("http://localhost:%s/oauth/google/callback", port)
-		}
 		calendarSvc := service.NewCalendarService(db, service.CalendarConfig{
 			ClientID:     googleClientID,
 			ClientSecret: googleClientSecret,

@@ -81,6 +81,10 @@ func (s *Service) CreateTrip(userID string, req *api.CreateTripRequest) (*api.Tr
 		if err := s.store.SetTripLocations(trip.ID, locations); err != nil {
 			return nil, fmt.Errorf("setting trip locations: %w", err)
 		}
+		// Auto-create day entries for all dates in the trip range
+		if err := s.CreateDayEntriesForTrip(userID, trip.ID, *req.Location, *trip.StartDate, *trip.EndDate); err != nil {
+			return nil, fmt.Errorf("creating day entries for trip: %w", err)
+		}
 	}
 
 	result := trip.ToAPI()

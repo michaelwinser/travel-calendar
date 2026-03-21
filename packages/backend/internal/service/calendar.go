@@ -51,7 +51,20 @@ func NewCalendarService(s store.StoreInterface, config CalendarConfig) *Calendar
 
 // IsConfigured returns true if the calendar service is properly configured.
 func (c *CalendarService) IsConfigured() bool {
-	return c.clientID != "" && c.clientSecret != "" && c.redirectURL != ""
+	return c.clientID != "" && c.clientSecret != ""
+}
+
+// getRedirectURL returns the OAuth redirect URL.
+// If not explicitly configured, builds it from the request's Host header.
+func (c *CalendarService) getRedirectURL(r *http.Request) string {
+	if c.redirectURL != "" {
+		return c.redirectURL
+	}
+	scheme := "https"
+	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
+		scheme = "http"
+	}
+	return fmt.Sprintf("%s://%s/oauth/google/callback", scheme, r.Host)
 }
 
 // OAuth scopes
@@ -70,7 +83,7 @@ var DefaultLoginScopes = strings.Join([]string{
 }, " ")
 
 // GetAuthURL generates the OAuth URL for Google login + Calendar authorization.
-func (c *CalendarService) GetAuthURL(scopes string) (*api.OAuthUrlResponse, error) {
+func (c *CalendarService) GetAuthURL(r *http.Request, scopes string) (*api.OAuthUrlResponse, error) {
 	if !c.IsConfigured() {
 		return nil, fmt.Errorf("Google Calendar not configured")
 	}
@@ -87,7 +100,7 @@ func (c *CalendarService) GetAuthURL(scopes string) (*api.OAuthUrlResponse, erro
 	// Build OAuth URL
 	params := url.Values{}
 	params.Set("client_id", c.clientID)
-	params.Set("redirect_uri", c.redirectURL)
+	params.Set("redirect_uri", c.getRedirectURL(r))
 	params.Set("response_type", "code")
 	params.Set("scope", scopeList)
 	params.Set("access_type", "offline")
@@ -120,13 +133,14 @@ type LoginResult struct {
 
 // HandleCallback exchanges the authorization code for tokens, creates a session, and stores credentials.
 // allowedUsers is a list of allowed email addresses. If empty, all users are allowed.
-func (c *CalendarService) HandleCallback(ctx context.Context, code string, allowedUsers []string) (*LoginResult, error) {
+func (c *CalendarService) HandleCallback(r *http.Request, code string, allowedUsers []string) (*LoginResult, error) {
+	ctx := r.Context()
 	if !c.IsConfigured() {
 		return nil, fmt.Errorf("Google Calendar not configured")
 	}
 
 	// Exchange code for tokens
-	tokens, err := c.exchangeCode(ctx, code)
+	tokens, err := c.exchangeCode(ctx, code, c.getRedirectURL(r))
 	if err != nil {
 		return nil, fmt.Errorf("exchanging code: %w", err)
 	}
@@ -194,12 +208,12 @@ func (c *CalendarService) HandleCallback(ctx context.Context, code string, allow
 }
 
 // exchangeCode exchanges an authorization code for tokens.
-func (c *CalendarService) exchangeCode(ctx context.Context, code string) (*tokenResponse, error) {
+func (c *CalendarService) exchangeCode(ctx context.Context, code string, redirectURL string) (*tokenResponse, error) {
 	data := url.Values{}
 	data.Set("code", code)
 	data.Set("client_id", c.clientID)
 	data.Set("client_secret", c.clientSecret)
-	data.Set("redirect_uri", c.redirectURL)
+	data.Set("redirect_uri", redirectURL)
 	data.Set("grant_type", "authorization_code")
 
 	req, err := http.NewRequestWithContext(ctx, "POST", "https://oauth2.googleapis.com/token", strings.NewReader(data.Encode()))
