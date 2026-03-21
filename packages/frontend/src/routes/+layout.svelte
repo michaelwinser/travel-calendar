@@ -49,6 +49,12 @@
 			<a href="/settings" class="text-sm font-medium text-gray-700 hover:text-gray-900">Settings</a>
 		</nav>
 		<div class="flex items-center gap-3">
+			<a
+				href="/trips/new"
+				class="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded"
+			>
+				+ New Trip
+			</a>
 			<span class="text-sm text-gray-500">{$authStore.email}</span>
 			<button
 				class="text-sm text-gray-500 hover:text-gray-700"

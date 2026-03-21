@@ -15,6 +15,7 @@ type Trip struct {
 	UserID    string     `db:"user_id" firestore:"userId"`
 	Name      string     `db:"name" firestore:"name"`
 	Purpose   string     `db:"purpose" firestore:"purpose"`
+	Location  *string    `db:"location" firestore:"location"`
 	StartDate *time.Time `db:"start_date" firestore:"startDate"`
 	EndDate   *time.Time `db:"end_date" firestore:"endDate"`
 	Status    string     `db:"status" firestore:"status"`
@@ -40,6 +41,9 @@ func (t *Trip) ToAPI() api.Trip {
 	if t.EndDate != nil {
 		date := openapi_types.Date{Time: *t.EndDate}
 		trip.EndDate = &date
+	}
+	if t.Location != nil {
+		trip.Location = t.Location
 	}
 	if t.Notes != nil {
 		trip.Notes = t.Notes
@@ -79,6 +83,9 @@ func TripFromCreateRequest(req *api.CreateTripRequest) Trip {
 	if req.Status != nil {
 		trip.Status = string(*req.Status)
 	}
+	if req.Location != nil {
+		trip.Location = req.Location
+	}
 	if req.Notes != nil {
 		trip.Notes = req.Notes
 	}
@@ -103,6 +110,9 @@ func (t *Trip) ApplyUpdate(req *api.UpdateTripRequest) {
 	}
 	if req.Status != nil {
 		t.Status = string(*req.Status)
+	}
+	if req.Location != nil {
+		t.Location = req.Location
 	}
 	if req.Notes != nil {
 		t.Notes = req.Notes

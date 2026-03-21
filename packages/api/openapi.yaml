@@ -1197,6 +1197,10 @@ components:
           description: Trip end date (YYYY-MM-DD)
         status:
           $ref: '#/components/schemas/TripStatus'
+        location:
+          type: string
+          maxLength: 255
+          description: Primary location for the trip (e.g., "Milan", "London")
         notes:
           type: string
           maxLength: 10000
@@ -1227,6 +1231,9 @@ components:
           maxLength: 255
         purpose:
           $ref: '#/components/schemas/TripPurpose'
+        location:
+          type: string
+          maxLength: 255
         startDate:
           type: string
           format: date
@@ -1239,10 +1246,6 @@ components:
         notes:
           type: string
           maxLength: 10000
-        location:
-          type: string
-          maxLength: 255
-          description: Default location for all days of this trip (optional convenience)
 
     UpdateTripRequest:
       type: object
@@ -1253,6 +1256,9 @@ components:
           maxLength: 255
         purpose:
           $ref: '#/components/schemas/TripPurpose'
+        location:
+          type: string
+          maxLength: 255
         startDate:
           type: string
           format: date

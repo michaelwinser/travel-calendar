@@ -1385,6 +1385,7 @@ func tripToMap(trip *entity.Trip) map[string]interface{} {
 		"name":      trip.Name,
 		"purpose":   trip.Purpose,
 		"status":    trip.Status,
+		"location":  trip.Location,
 		"createdAt": trip.CreatedAt,
 		"updatedAt": trip.UpdatedAt,
 	}
@@ -1415,6 +1416,7 @@ func docToTrip(doc *firestore.DocumentSnapshot) (entity.Trip, error) {
 	trip.Name, _ = data["name"].(string)
 	trip.Purpose, _ = data["purpose"].(string)
 	trip.Status, _ = data["status"].(string)
+	trip.Location = getOptionalString(data, "location")
 
 	if sd, ok := data["startDate"].(string); ok && sd != "" {
 		t, err := time.Parse("2006-01-02", sd)

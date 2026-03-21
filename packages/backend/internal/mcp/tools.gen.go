@@ -16,7 +16,7 @@ func GetServerInfo() ServerInfo {
 	return ServerInfo{
 		Name:         "travel-calendar",
 		Version:      "1.0.0",
-		Instructions: "Travel Calendar MCP Server. Use these tools to manage trips, items, documents, location queries, and Google Calendar integration.\n\nKey tools:\n- get_trips: List and filter trips by upcoming/past/purpose\n- get_trip: Get detailed trip info including items and locations\n- create_trip: Create a new trip with optional default location\n- search_trips: Full-text search across trips\n- add_item: Add flights, hotels, trains, drives, or events to a trip\n- get_location_on_date: Find where the user will be on a specific date\n- get_location_range: Get location timeline for a date range\n- list_calendars: List available Google Calendars (requires OAuth)\n- get_calendar_conflicts: Detect conflicts between calendar events and trip locations\n- suggest_trips_from_calendar: Analyze calendar events to suggest potential trips\n\nAll dates use YYYY-MM-DD format. IDs are UUIDs.\n",
+		Instructions: "Travel Calendar MCP Server. Use these tools to manage trips, items, documents, location queries, and Google Calendar integration.\n\nKey tools:\n- get_trips: List and filter trips by upcoming/past/purpose\n- get_trip: Get detailed trip info including items and locations\n- create_trip: Create a new trip with optional default location\n- search_trips: Full-text search across trips\n- add_item: Add flights, hotels, trains, drives, or events to a trip\n- get_location_on_date: Find where the user will be on a specific date\n- get_location_range: Get location timeline for a date range\n- list_calendars: List available Google Calendars (requires OAuth)\n- get_calendar_conflicts: Detect conflicts between calendar events and trip locations\n- suggest_trips_from_calendar: Analyze calendar events to suggest potential trips\n- merge_trips: Merge two trips into one, combining all items\n- move_item: Move an item to a different trip\n\nAll dates use YYYY-MM-DD format. IDs are UUIDs.\n",
 	}
 }
 
@@ -116,7 +116,6 @@ func GetTools() []Tool {
 						"type": "string"
 					},
 					"location": {
-						"description": "Default location for all days of this trip (optional convenience)",
 						"type": "string"
 					},
 					"name": {
@@ -340,6 +339,97 @@ func GetTools() []Tool {
 			}`),
 		},
 		{
+			Name:        "merge_trips",
+			Description: "Merge one trip into another, combining all items. Source trip is deleted after merge.",
+			InputSchema: parseSchema(`{
+				"properties": {
+					"delete_source": {
+						"default": true,
+						"description": "Whether to delete the source trip after merge",
+						"type": "boolean"
+					},
+					"merge_notes": {
+						"default": true,
+						"description": "Whether to concatenate notes from both trips",
+						"type": "boolean"
+					},
+					"source_id": {
+						"description": "Source trip ID (to be merged and deleted)",
+						"type": "string"
+					},
+					"target_id": {
+						"description": "Target trip ID (will receive items)",
+						"type": "string"
+					}
+				},
+				"required": [
+					"source_id",
+					"target_id"
+				],
+				"type": "object"
+			}`),
+		},
+		{
+			Name:        "move_item",
+			Description: "Move an item to a different trip, or create a new trip for the item.",
+			InputSchema: parseSchema(`{
+				"properties": {
+					"item_id": {
+						"description": "Item ID",
+						"type": "string"
+					},
+					"new_trip": {
+						"properties": {
+							"end_date": {
+								"type": "string"
+							},
+							"location": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"notes": {
+								"type": "string"
+							},
+							"purpose": {
+								"enum": [
+									"business",
+									"vacation",
+									"conference",
+									"family",
+									"other"
+								],
+								"type": "string"
+							},
+							"start_date": {
+								"type": "string"
+							},
+							"status": {
+								"enum": [
+									"planning",
+									"confirmed",
+									"in_progress",
+									"completed",
+									"cancelled"
+								],
+								"type": "string"
+							}
+						},
+						"type": "object"
+					},
+					"target_trip_id": {
+						"description": "ID of existing trip to move item to",
+						"type": "string"
+					}
+				},
+				"required": [
+					"item_id"
+				],
+				"type": "object"
+			}`),
+		},
+		{
 			Name:        "search_trips",
 			Description: "Search trips by text. Searches across trip names, notes, and item details. Returns matching trips.",
 			InputSchema: parseSchema(`{
@@ -433,6 +523,9 @@ func GetTools() []Tool {
 			InputSchema: parseSchema(`{
 				"properties": {
 					"end_date": {
+						"type": "string"
+					},
+					"location": {
 						"type": "string"
 					},
 					"name": {

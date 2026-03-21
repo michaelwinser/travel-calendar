@@ -6,39 +6,89 @@
 	export let trips: Trip[] = [];
 	export let onTripClick: (trip: Trip) => void = () => {};
 
+	const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 	const monthNames = [
 		'January', 'February', 'March', 'April', 'May', 'June',
 		'July', 'August', 'September', 'October', 'November', 'December'
 	];
 
-	// Get number of days in month
-	function getDaysInMonth(year: number, month: number): number {
-		return new Date(year, month + 1, 0).getDate();
+	function getDaysInMonth(y: number, m: number): number {
+		return new Date(y, m + 1, 0).getDate();
 	}
 
-	// Check if a day is weekend (0 = Sunday, 6 = Saturday)
-	function isWeekend(year: number, month: number, day: number): boolean {
-		const dow = new Date(year, month, day).getDay();
-		return dow === 0 || dow === 6;
-	}
-
-	// Check if a day is today
-	function isToday(year: number, month: number, day: number): boolean {
+	function isToday(y: number, m: number, d: number): boolean {
 		const today = new Date();
-		return (
-			today.getFullYear() === year &&
-			today.getMonth() === month &&
-			today.getDate() === day
-		);
+		return today.getFullYear() === y && today.getMonth() === m && today.getDate() === d;
 	}
 
-	// Calculate trip bars for this month
-	function calculateTripBars(trips: Trip[], year: number, month: number): TripBar[] {
-		const daysInMonth = getDaysInMonth(year, month);
-		const monthStart = new Date(year, month, 1);
-		const monthEnd = new Date(year, month, daysInMonth);
+	interface CalendarDay {
+		day: number;
+		inMonth: boolean; // false for padding days from adjacent months
+		year: number;
+		month: number;
+	}
 
-		const bars: TripBar[] = [];
+	interface WeekTripBar {
+		trip: Trip;
+		startCol: number; // 0-6 column in the week
+		span: number;     // number of columns
+		row: number;      // stacking row within the cell area
+	}
+
+	interface CalendarWeek {
+		days: CalendarDay[];
+		tripBars: WeekTripBar[];
+		maxRow: number;
+	}
+
+	function buildCalendar(y: number, m: number): CalendarWeek[] {
+		const daysInMonth = getDaysInMonth(y, m);
+		const firstDow = new Date(y, m, 1).getDay(); // 0=Sun
+
+		// Build flat list of days including padding
+		const allDays: CalendarDay[] = [];
+
+		// Padding from previous month
+		if (firstDow > 0) {
+			const prevMonth = m === 0 ? 11 : m - 1;
+			const prevYear = m === 0 ? y - 1 : y;
+			const prevDays = getDaysInMonth(prevYear, prevMonth);
+			for (let i = firstDow - 1; i >= 0; i--) {
+				allDays.push({ day: prevDays - i, inMonth: false, year: prevYear, month: prevMonth });
+			}
+		}
+
+		// Current month days
+		for (let d = 1; d <= daysInMonth; d++) {
+			allDays.push({ day: d, inMonth: true, year: y, month: m });
+		}
+
+		// Padding from next month
+		const remaining = 7 - (allDays.length % 7);
+		if (remaining < 7) {
+			const nextMonth = m === 11 ? 0 : m + 1;
+			const nextYear = m === 11 ? y + 1 : y;
+			for (let d = 1; d <= remaining; d++) {
+				allDays.push({ day: d, inMonth: false, year: nextYear, month: nextMonth });
+			}
+		}
+
+		// Split into weeks
+		const weeks: CalendarWeek[] = [];
+		for (let i = 0; i < allDays.length; i += 7) {
+			const days = allDays.slice(i, i + 7);
+			const tripBars = calculateWeekBars(days);
+			const maxRow = Math.max(-1, ...tripBars.map(b => b.row));
+			weeks.push({ days, tripBars, maxRow });
+		}
+
+		return weeks;
+	}
+
+	function calculateWeekBars(days: CalendarDay[]): WeekTripBar[] {
+		const bars: WeekTripBar[] = [];
+		const weekStart = new Date(days[0].year, days[0].month, days[0].day);
+		const weekEnd = new Date(days[6].year, days[6].month, days[6].day);
 
 		for (const trip of trips) {
 			if (!trip.startDate || !trip.endDate) continue;
@@ -46,104 +96,108 @@
 			const tripStart = new Date(trip.startDate);
 			const tripEnd = new Date(trip.endDate);
 
-			// Skip if trip doesn't overlap with this month
-			if (tripEnd < monthStart || tripStart > monthEnd) continue;
+			// Skip if trip doesn't overlap with this week
+			if (tripEnd < weekStart || tripStart > weekEnd) continue;
 
-			// Calculate start and end day within this month
-			const startDay = tripStart < monthStart ? 1 : tripStart.getDate();
-			const endDay = tripEnd > monthEnd ? daysInMonth : tripEnd.getDate();
+			// Calculate start and end columns (0-6)
+			let startCol = 0;
+			let endCol = 6;
 
-			// Calculate if trip continues from previous/to next month
-			const continuesFromPrev = tripStart < monthStart;
-			const continuesToNext = tripEnd > monthEnd;
+			for (let c = 0; c < 7; c++) {
+				const cellDate = new Date(days[c].year, days[c].month, days[c].day);
+				if (cellDate < tripStart) startCol = c + 1;
+				if (cellDate <= tripEnd) endCol = c;
+			}
+
+			if (startCol > 6) continue;
+			startCol = Math.max(0, startCol);
+			endCol = Math.min(6, endCol);
 
 			bars.push({
 				trip,
-				startDay,
-				endDay,
-				continuesFromPrev,
-				continuesToNext
+				startCol,
+				span: endCol - startCol + 1,
+				row: 0 // assigned below
 			});
 		}
 
-		// Sort bars by start day, then by duration (longer trips first)
+		// Sort by startCol, then longer bars first
 		bars.sort((a, b) => {
-			if (a.startDay !== b.startDay) return a.startDay - b.startDay;
-			return (b.endDay - b.startDay) - (a.endDay - a.startDay);
+			if (a.startCol !== b.startCol) return a.startCol - b.startCol;
+			return b.span - a.span;
 		});
 
 		// Assign rows to avoid overlap
-		const rows: number[] = []; // tracks end day for each row
+		const rowEnds: number[] = [];
 		for (const bar of bars) {
 			let row = 0;
-			while (rows[row] !== undefined && rows[row] >= bar.startDay) {
+			while (rowEnds[row] !== undefined && rowEnds[row] >= bar.startCol) {
 				row++;
 			}
 			bar.row = row;
-			rows[row] = bar.endDay;
+			rowEnds[row] = bar.startCol + bar.span - 1;
 		}
 
 		return bars;
 	}
 
-	interface TripBar {
-		trip: Trip;
-		startDay: number;
-		endDay: number;
-		continuesFromPrev: boolean;
-		continuesToNext: boolean;
-		row?: number;
-	}
-
-	$: daysInMonth = getDaysInMonth(year, month);
-	$: days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-	$: tripBars = calculateTripBars(trips, year, month);
-	$: maxRow = Math.max(0, ...tripBars.map(b => b.row || 0));
-	$: barAreaHeight = (maxRow + 1) * 28 + 4; // 28px per row + 4px padding
+	$: weeks = buildCalendar(year, month);
 </script>
 
-<div class="bg-white rounded-lg shadow-sm border overflow-hidden">
-	<div class="px-4 py-2 bg-gray-50 border-b font-medium text-gray-700">
-		{monthNames[month]} {year}
+<div class="bg-white rounded-lg border overflow-hidden">
+	<!-- Month header -->
+	<div class="px-4 py-3 bg-gray-50 border-b">
+		<h2 class="text-lg font-semibold text-gray-800">{monthNames[month]} {year}</h2>
 	</div>
-	<div class="p-3">
-		<!-- Day numbers grid -->
-		<div class="grid gap-px mb-1" style="grid-template-columns: repeat({daysInMonth}, minmax(28px, 1fr));">
-			{#each days as day}
+
+	<!-- Day-of-week header -->
+	<div class="grid grid-cols-7 border-b bg-gray-50">
+		{#each dayNames as name}
+			<div class="px-2 py-2 text-xs font-medium text-gray-500 text-center">{name}</div>
+		{/each}
+	</div>
+
+	<!-- Week rows -->
+	{#each weeks as week}
+		<div class="grid grid-cols-7 border-b last:border-b-0">
+			{#each week.days as day}
 				<div
-					class="text-center text-xs py-0.5 {isWeekend(year, month, day) ? 'text-gray-300' : 'text-gray-400'}"
+					class="border-r last:border-r-0 px-1.5 pt-1 pb-0 min-h-[2.5rem]
+						{day.inMonth ? '' : 'bg-gray-50'}
+						{day.inMonth && (new Date(day.year, day.month, day.day).getDay() === 0 || new Date(day.year, day.month, day.day).getDay() === 6) ? 'bg-gray-50/50' : ''}"
 				>
-					{#if isToday(year, month, day)}
-						<span class="inline-flex items-center justify-center w-5 h-5 bg-blue-500 text-white rounded-full">
-							{day}
-						</span>
-					{:else}
-						{day}
-					{/if}
+					<div class="text-right">
+						{#if isToday(day.year, day.month, day.day)}
+							<span class="inline-flex items-center justify-center w-6 h-6 bg-blue-500 text-white rounded-full text-xs font-medium">
+								{day.day}
+							</span>
+						{:else}
+							<span class="text-xs {day.inMonth ? 'text-gray-700' : 'text-gray-300'}">
+								{day.day}
+							</span>
+						{/if}
+					</div>
 				</div>
 			{/each}
-		</div>
 
-		<!-- Trip bars area -->
-		<div class="relative" style="height: {barAreaHeight}px;">
-			{#each tripBars as bar}
-				{@const widthPercent = ((bar.endDay - bar.startDay + 1) / daysInMonth) * 100}
-				{@const leftPercent = ((bar.startDay - 1) / daysInMonth) * 100}
-				<button
-					type="button"
-					class="trip-bar trip-bar-{bar.trip.purpose} absolute"
-					style="left: {leftPercent}%; width: {widthPercent}%; top: {(bar.row || 0) * 28}px;"
-					on:click={() => onTripClick(bar.trip)}
-				>
-					{#if bar.continuesFromPrev}
-						<span class="mr-1">&larr;</span>
-					{/if}
-					{bar.trip.name}
-					{#if bar.continuesToNext}
-						<span class="ml-1">&rarr;</span>
-					{/if}
-				</button>
-			{/each}
+			<!-- Trip bars overlay for this week -->
+			{#if week.tripBars.length > 0}
+				<div class="col-span-7 relative px-0" style="height: {(week.maxRow + 1) * 22 + 2}px; margin-top: -2px;">
+					{#each week.tripBars as bar}
+						{@const leftPercent = (bar.startCol / 7) * 100}
+						{@const widthPercent = (bar.span / 7) * 100}
+						<button
+							type="button"
+							class="trip-bar trip-bar-{bar.trip.purpose} absolute text-xs truncate px-1.5"
+							style="left: {leftPercent}%; width: {widthPercent}%; top: {bar.row * 22}px; height: 18px; line-height: 18px;"
+							on:click={() => onTripClick(bar.trip)}
+							title="{bar.trip.name}{bar.trip.location ? ' - ' + bar.trip.location : ''}"
+						>
+							{bar.trip.name}
+						</button>
+					{/each}
+				</div>
+			{/if}
 		</div>
-	</div>
+	{/each}
 </div>

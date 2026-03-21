@@ -13,8 +13,8 @@
 		error = null;
 
 		try {
-			const trip = await trips.create(data);
-			goto(`/trips/${trip.id}`);
+			await trips.create(data);
+			goto('/calendar');
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to create trip';
 			saving = false;
@@ -22,7 +22,7 @@
 	}
 
 	function handleCancel() {
-		goto('/trips');
+		goto('/calendar');
 	}
 
 	function handleSaveClick() {

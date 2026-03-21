@@ -48,6 +48,7 @@ func (s *SQLiteStore) migrate() error {
 		user_id TEXT NOT NULL DEFAULT '',
 		name TEXT NOT NULL,
 		purpose TEXT NOT NULL,
+		location TEXT,
 		start_date TEXT,
 		end_date TEXT,
 		status TEXT NOT NULL DEFAULT 'planning',
@@ -188,7 +189,7 @@ func (s *SQLiteStore) migrate() error {
 
 // ListTrips returns all trips, optionally filtered.
 func (s *SQLiteStore) ListTrips(userID string, upcoming, past *bool, purpose *string) ([]entity.Trip, error) {
-	query := "SELECT id, user_id, name, purpose, start_date, end_date, status, notes, created_at, updated_at FROM trips WHERE user_id = ?"
+	query := "SELECT id, user_id, name, purpose, location, start_date, end_date, status, notes, created_at, updated_at FROM trips WHERE user_id = ?"
 	args := []interface{}{userID}
 
 	now := time.Now().Format("2006-01-02")
@@ -226,7 +227,7 @@ func (s *SQLiteStore) ListTrips(userID string, upcoming, past *bool, purpose *st
 
 // GetTrip returns a single trip by ID.
 func (s *SQLiteStore) GetTrip(userID string, id uuid.UUID) (*entity.Trip, error) {
-	query := "SELECT id, user_id, name, purpose, start_date, end_date, status, notes, created_at, updated_at FROM trips WHERE user_id = ? AND id = ?"
+	query := "SELECT id, user_id, name, purpose, location, start_date, end_date, status, notes, created_at, updated_at FROM trips WHERE user_id = ? AND id = ?"
 	row := s.db.QueryRow(query, userID, id.String())
 	trip, err := scanTripRow(row)
 	if err == sql.ErrNoRows {
@@ -240,13 +241,14 @@ func (s *SQLiteStore) GetTrip(userID string, id uuid.UUID) (*entity.Trip, error)
 
 // CreateTrip inserts a new trip.
 func (s *SQLiteStore) CreateTrip(trip *entity.Trip) error {
-	query := `INSERT INTO trips (id, user_id, name, purpose, start_date, end_date, status, notes, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	query := `INSERT INTO trips (id, user_id, name, purpose, location, start_date, end_date, status, notes, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := s.db.Exec(query,
 		trip.ID.String(),
 		trip.UserID,
 		trip.Name,
 		trip.Purpose,
+		trip.Location,
 		formatDatePtr(trip.StartDate),
 		formatDatePtr(trip.EndDate),
 		trip.Status,
@@ -259,10 +261,11 @@ func (s *SQLiteStore) CreateTrip(trip *entity.Trip) error {
 
 // UpdateTrip updates an existing trip.
 func (s *SQLiteStore) UpdateTrip(userID string, trip *entity.Trip) error {
-	query := `UPDATE trips SET name = ?, purpose = ?, start_date = ?, end_date = ?, status = ?, notes = ?, updated_at = ? WHERE user_id = ? AND id = ?`
+	query := `UPDATE trips SET name = ?, purpose = ?, location = ?, start_date = ?, end_date = ?, status = ?, notes = ?, updated_at = ? WHERE user_id = ? AND id = ?`
 	result, err := s.db.Exec(query,
 		trip.Name,
 		trip.Purpose,
+		trip.Location,
 		formatDatePtr(trip.StartDate),
 		formatDatePtr(trip.EndDate),
 		trip.Status,
@@ -303,7 +306,7 @@ func (s *SQLiteStore) DeleteTrip(userID string, id uuid.UUID) error {
 // SearchTrips searches trips by query string.
 func (s *SQLiteStore) SearchTrips(userID string, q string) ([]entity.Trip, error) {
 	pattern := "%" + q + "%"
-	query := `SELECT id, user_id, name, purpose, start_date, end_date, status, notes, created_at, updated_at FROM trips
+	query := `SELECT id, user_id, name, purpose, location, start_date, end_date, status, notes, created_at, updated_at FROM trips
 		WHERE user_id = ? AND (name LIKE ? OR notes LIKE ?)
 		ORDER BY COALESCE(start_date, '9999-12-31') ASC`
 
@@ -581,12 +584,13 @@ type scanner interface {
 
 func scanTrip(rows *sql.Rows) (entity.Trip, error) {
 	var trip entity.Trip
-	var id, startDate, endDate, notes, createdAt, updatedAt sql.NullString
-	err := rows.Scan(&id, &trip.UserID, &trip.Name, &trip.Purpose, &startDate, &endDate, &trip.Status, &notes, &createdAt, &updatedAt)
+	var id, location, startDate, endDate, notes, createdAt, updatedAt sql.NullString
+	err := rows.Scan(&id, &trip.UserID, &trip.Name, &trip.Purpose, &location, &startDate, &endDate, &trip.Status, &notes, &createdAt, &updatedAt)
 	if err != nil {
 		return trip, err
 	}
 	trip.ID, _ = uuid.Parse(id.String)
+	trip.Location = nullToPtr(location)
 	trip.StartDate = parseDatePtr(nullToPtr(startDate))
 	trip.EndDate = parseDatePtr(nullToPtr(endDate))
 	trip.Notes = nullToPtr(notes)
@@ -601,12 +605,13 @@ func scanTrip(rows *sql.Rows) (entity.Trip, error) {
 
 func scanTripRow(row *sql.Row) (entity.Trip, error) {
 	var trip entity.Trip
-	var id, startDate, endDate, notes, createdAt, updatedAt sql.NullString
-	err := row.Scan(&id, &trip.UserID, &trip.Name, &trip.Purpose, &startDate, &endDate, &trip.Status, &notes, &createdAt, &updatedAt)
+	var id, location, startDate, endDate, notes, createdAt, updatedAt sql.NullString
+	err := row.Scan(&id, &trip.UserID, &trip.Name, &trip.Purpose, &location, &startDate, &endDate, &trip.Status, &notes, &createdAt, &updatedAt)
 	if err != nil {
 		return trip, err
 	}
 	trip.ID, _ = uuid.Parse(id.String)
+	trip.Location = nullToPtr(location)
 	trip.StartDate = parseDatePtr(nullToPtr(startDate))
 	trip.EndDate = parseDatePtr(nullToPtr(endDate))
 	trip.Notes = nullToPtr(notes)
@@ -803,7 +808,7 @@ func (s *SQLiteStore) SetTripLocations(tripID uuid.UUID, locations []entity.Trip
 
 // GetTripsForDateRange returns trips that overlap with the given date range.
 func (s *SQLiteStore) GetTripsForDateRange(userID string, from, to time.Time) ([]entity.Trip, error) {
-	query := `SELECT id, user_id, name, purpose, start_date, end_date, status, notes, created_at, updated_at FROM trips
+	query := `SELECT id, user_id, name, purpose, location, start_date, end_date, status, notes, created_at, updated_at FROM trips
 		WHERE user_id = ? AND start_date IS NOT NULL AND end_date IS NOT NULL
 		AND start_date <= ? AND end_date >= ?
 		ORDER BY start_date ASC`

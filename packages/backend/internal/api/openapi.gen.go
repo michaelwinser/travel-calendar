@@ -175,9 +175,7 @@ type CreateItemRequest struct {
 
 // CreateTripRequest defines model for CreateTripRequest.
 type CreateTripRequest struct {
-	EndDate *openapi_types.Date `json:"endDate,omitempty"`
-
-	// Location Default location for all days of this trip (optional convenience)
+	EndDate   *openapi_types.Date `json:"endDate,omitempty"`
 	Location  *string             `json:"location,omitempty"`
 	Name      string              `json:"name"`
 	Notes     *string             `json:"notes,omitempty"`
@@ -444,6 +442,9 @@ type Trip struct {
 	// Items Trip items (only included when fetching a single trip)
 	Items *[]Item `json:"items,omitempty"`
 
+	// Location Primary location for the trip (e.g., "Milan", "London")
+	Location *string `json:"location,omitempty"`
+
 	// Locations Per-date locations for this trip (only included when fetching a single trip)
 	Locations *[]TripDayLocation `json:"locations,omitempty"`
 	Name      string             `json:"name"`
@@ -508,6 +509,7 @@ type TripSuggestionSource string
 // UpdateTripRequest defines model for UpdateTripRequest.
 type UpdateTripRequest struct {
 	EndDate   *openapi_types.Date `json:"endDate,omitempty"`
+	Location  *string             `json:"location,omitempty"`
 	Name      *string             `json:"name,omitempty"`
 	Notes     *string             `json:"notes,omitempty"`
 	Purpose   *TripPurpose        `json:"purpose,omitempty"`

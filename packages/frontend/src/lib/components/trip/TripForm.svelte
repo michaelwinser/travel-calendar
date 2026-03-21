@@ -9,18 +9,35 @@
 	export let onCancel: () => void;
 
 	let name = trip.name || '';
+	let location = trip.location || '';
 	let purpose: TripPurpose = trip.purpose || 'conference';
 	let startDate = trip.startDate || '';
 	let endDate = trip.endDate || '';
 	let status: TripStatus = trip.status || 'planning';
 	let notes = trip.notes || '';
 
-	const purposes: { value: TripPurpose; label: string; color: string }[] = [
-		{ value: 'conference', label: 'Conference', color: 'orange' },
-		{ value: 'business', label: 'Business', color: 'yellow' },
-		{ value: 'vacation', label: 'Vacation', color: 'blue' },
-		{ value: 'family', label: 'Family', color: 'green' },
-		{ value: 'other', label: 'Other', color: 'purple' }
+	const purposeSelectedClasses: Record<TripPurpose, string> = {
+		conference: 'border-orange-500 bg-orange-50',
+		business: 'border-yellow-500 bg-yellow-50',
+		vacation: 'border-blue-500 bg-blue-50',
+		family: 'border-green-500 bg-green-50',
+		other: 'border-purple-500 bg-purple-50'
+	};
+
+	const purposeDotClasses: Record<TripPurpose, string> = {
+		conference: 'bg-orange-300',
+		business: 'bg-yellow-300',
+		vacation: 'bg-blue-300',
+		family: 'bg-green-300',
+		other: 'bg-purple-300'
+	};
+
+	const purposes: { value: TripPurpose; label: string }[] = [
+		{ value: 'conference', label: 'Conference' },
+		{ value: 'business', label: 'Business' },
+		{ value: 'vacation', label: 'Vacation' },
+		{ value: 'family', label: 'Family' },
+		{ value: 'other', label: 'Other' }
 	];
 
 	$: isValid = name.trim().length > 0;
@@ -36,6 +53,7 @@
 
 		const data: CreateTripRequest | UpdateTripRequest = {
 			name: name.trim(),
+			location: location.trim() || undefined,
 			purpose,
 			startDate: startDate || undefined,
 			endDate: endDate || undefined,
@@ -77,6 +95,19 @@
 				/>
 			</div>
 
+			<div>
+				<label for="location" class="block text-sm font-medium text-gray-700 mb-1">
+					Location
+				</label>
+				<input
+					type="text"
+					id="location"
+					bind:value={location}
+					placeholder="e.g., Milan, London, Tokyo"
+					class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+				/>
+			</div>
+
 			<div class="grid grid-cols-2 gap-4">
 				<div>
 					<label for="startDate" class="block text-sm font-medium text-gray-700 mb-1">
@@ -105,10 +136,10 @@
 			<div>
 				<label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
 				<div class="flex flex-wrap gap-2">
-					{#each purposes as { value, label, color }}
+					{#each purposes as { value, label }}
 						<label
 							class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors
-								{purpose === value ? `border-${color}-500 bg-${color}-50` : ''}"
+								{purpose === value ? purposeSelectedClasses[value] : ''}"
 						>
 							<input
 								type="radio"
@@ -117,7 +148,7 @@
 								bind:group={purpose}
 								class="sr-only"
 							/>
-							<span class="w-3 h-3 rounded-full bg-{color}-300"></span>
+							<span class="w-3 h-3 rounded-full {purposeDotClasses[value]}"></span>
 							<span class="text-sm">{label}</span>
 						</label>
 					{/each}

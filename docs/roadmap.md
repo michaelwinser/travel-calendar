@@ -14,11 +14,12 @@ Travel Calendar helps you see **where you'll be** across time. A trip is fundame
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Month calendar view | Not Started | Complement the year view; month is the natural planning unit |
-| "New Trip" button on every page | Not Started | Currently only on trips page |
-| Trip creation returns to calendar | Not Started | Don't strand user on trip details page |
-| Location as primary trip field | Not Started | Prominent in create/edit UI, shown on calendar |
-| Fix trip purpose selector feedback | Not Started | No visual indication when a choice is selected |
+| Month calendar view | In Progress | 7-column week grid (Sun–Sat), trip bars spanning days, endless scroll of months |
+| "New Trip" button on every page | Done | Moved to global layout header |
+| Trip creation returns to calendar | Done | Redirects to /calendar instead of trip detail |
+| Location as primary trip field | Done | Added to OpenAPI, backend, both stores, and trip form UI |
+| Fix trip purpose selector feedback | Done | Explicit Tailwind class mappings instead of dynamic interpolation |
+| Auto-detect OAuth redirect URL | Not Started | Infer from request Host/protocol instead of requiring GOOGLE_REDIRECT_URL env var |
 
 #### 5B: Quick Entry
 
