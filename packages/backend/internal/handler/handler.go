@@ -689,6 +689,71 @@ func (h *Handler) ResetProcessedEvents(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// Day Entry endpoints
+
+// ListDayEntries returns day entries for a date range.
+func (h *Handler) ListDayEntries(w http.ResponseWriter, r *http.Request, params api.ListDayEntriesParams) {
+	from := params.From.Time
+	to := params.To.Time
+
+	entries, err := h.svc.ListDayEntries(userID(r), from, to)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, entries)
+}
+
+// CreateDayEntry creates a new day entry.
+func (h *Handler) CreateDayEntry(w http.ResponseWriter, r *http.Request) {
+	var req api.CreateDayEntryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	entry, err := h.svc.CreateDayEntry(userID(r), &req)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusCreated, entry)
+}
+
+// UpdateDayEntry updates an existing day entry.
+func (h *Handler) UpdateDayEntry(w http.ResponseWriter, r *http.Request, dayEntryId api.DayEntryId) {
+	var req api.UpdateDayEntryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	entry, err := h.svc.UpdateDayEntry(userID(r), uuid.UUID(dayEntryId), &req)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if entry == nil {
+		respondError(w, http.StatusNotFound, "day entry not found")
+		return
+	}
+	respondJSON(w, http.StatusOK, entry)
+}
+
+// DeleteDayEntry deletes a day entry.
+func (h *Handler) DeleteDayEntry(w http.ResponseWriter, r *http.Request, dayEntryId api.DayEntryId) {
+	err := h.svc.DeleteDayEntry(userID(r), uuid.UUID(dayEntryId))
+	if errors.Is(err, store.ErrNotFound) {
+		respondError(w, http.StatusNotFound, "day entry not found")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // Calendar sync endpoints
 
 // GetTripCalendarLinks returns calendar links for a trip.

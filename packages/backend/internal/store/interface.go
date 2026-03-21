@@ -43,7 +43,16 @@ type StoreInterface interface {
 	SetConfig(key, value string) error
 	DeleteConfig(key string) error
 
-	// Trip Location methods
+	// Day Entry methods
+	ListDayEntries(userID string, from, to time.Time) ([]entity.DayEntry, error)
+	GetDayEntry(userID string, id uuid.UUID) (*entity.DayEntry, error)
+	CreateDayEntry(entry *entity.DayEntry) error
+	UpdateDayEntry(userID string, entry *entity.DayEntry) error
+	DeleteDayEntry(userID string, id uuid.UUID) error
+	GetDayEntriesForTrip(userID string, tripID uuid.UUID) ([]entity.DayEntry, error)
+	DeleteDayEntriesByTrip(tripID uuid.UUID) error
+
+	// Trip Location methods (legacy — being replaced by day entries)
 	GetTripLocations(tripID uuid.UUID) ([]entity.TripLocation, error)
 	SetTripLocations(tripID uuid.UUID, locations []entity.TripLocation) error
 	GetTripsForDateRange(userID string, from, to time.Time) ([]entity.Trip, error)

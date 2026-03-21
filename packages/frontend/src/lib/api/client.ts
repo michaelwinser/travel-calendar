@@ -237,6 +237,39 @@ export const api = {
 		}
 	},
 
+	days: {
+		async list(from: string, to: string): Promise<any[]> {
+			const qs = buildQueryString({ from, to });
+			const response = await fetch(`${API_BASE}/api/days${qs}`);
+			return handleResponse<any[]>(response);
+		},
+
+		async create(input: { date: string; location: string; description?: string; tripId?: string }): Promise<any> {
+			const response = await fetch(`${API_BASE}/api/days`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(input)
+			});
+			return handleResponse<any>(response);
+		},
+
+		async update(id: string, input: { location?: string; description?: string; tripId?: string }): Promise<any> {
+			const response = await fetch(`${API_BASE}/api/days/${id}`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(input)
+			});
+			return handleResponse<any>(response);
+		},
+
+		async delete(id: string): Promise<void> {
+			const response = await fetch(`${API_BASE}/api/days/${id}`, {
+				method: 'DELETE'
+			});
+			return handleResponse<void>(response);
+		}
+	},
+
 	calendar: {
 		async getAuthUrl(scopes?: string): Promise<OAuthUrlResponse> {
 			const qs = scopes ? buildQueryString({ scopes }) : '';

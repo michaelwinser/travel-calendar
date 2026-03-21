@@ -37,6 +37,7 @@ const (
 	collCalendarLinks    = "calendarLinks"
 	collProcessedEvents  = "processedEvents"
 	collSessions         = "sessions"
+	collDayEntries       = "dayEntries"
 )
 
 // NewFirestore creates a new FirestoreStore with the given project ID.
@@ -1377,6 +1378,187 @@ func (s *FirestoreStore) DeleteExpiredSessions() error {
 	return nil
 }
 
+// --- Day Entry methods ---
+
+// ListDayEntries returns day entries for a user within a date range.
+func (s *FirestoreStore) ListDayEntries(userID string, from, to time.Time) ([]entity.DayEntry, error) {
+	iter := s.client.Collection(collDayEntries).Where("userId", "==", userID).Documents(s.ctx)
+	defer iter.Stop()
+
+	fromStr := from.Format("2006-01-02")
+	toStr := to.Format("2006-01-02")
+	var entries []entity.DayEntry
+
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("iterating day entries: %w", err)
+		}
+
+		entry, err := docToDayEntry(doc)
+		if err != nil {
+			return nil, fmt.Errorf("parsing day entry doc: %w", err)
+		}
+
+		// Filter by date range in Go (Firestore only supports inequality on one field)
+		dateStr := entry.Date.Format("2006-01-02")
+		if dateStr < fromStr || dateStr > toStr {
+			continue
+		}
+
+		entries = append(entries, entry)
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Date.Before(entries[j].Date)
+	})
+
+	return entries, nil
+}
+
+// GetDayEntry retrieves a single day entry by ID, verifying ownership.
+func (s *FirestoreStore) GetDayEntry(userID string, id uuid.UUID) (*entity.DayEntry, error) {
+	doc, err := s.client.Collection(collDayEntries).Doc(id.String()).Get(s.ctx)
+	if status.Code(err) == codes.NotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("getting day entry: %w", err)
+	}
+
+	entry, err := docToDayEntry(doc)
+	if err != nil {
+		return nil, err
+	}
+	// Verify ownership
+	if entry.UserID != userID {
+		return nil, nil
+	}
+	return &entry, nil
+}
+
+// CreateDayEntry inserts a new day entry document.
+func (s *FirestoreStore) CreateDayEntry(entry *entity.DayEntry) error {
+	_, err := s.client.Collection(collDayEntries).Doc(entry.ID.String()).Set(s.ctx, dayEntryToMap(entry))
+	if err != nil {
+		return fmt.Errorf("creating day entry: %w", err)
+	}
+	return nil
+}
+
+// UpdateDayEntry updates an existing day entry. Returns ErrNotFound if it doesn't exist or doesn't belong to the user.
+func (s *FirestoreStore) UpdateDayEntry(userID string, entry *entity.DayEntry) error {
+	docRef := s.client.Collection(collDayEntries).Doc(entry.ID.String())
+
+	// Check existence and ownership
+	doc, err := docRef.Get(s.ctx)
+	if status.Code(err) == codes.NotFound {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("checking day entry existence: %w", err)
+	}
+	existing, err := docToDayEntry(doc)
+	if err != nil {
+		return fmt.Errorf("parsing existing day entry: %w", err)
+	}
+	if existing.UserID != userID {
+		return ErrNotFound
+	}
+
+	_, err = docRef.Set(s.ctx, dayEntryToMap(entry))
+	if err != nil {
+		return fmt.Errorf("updating day entry: %w", err)
+	}
+	return nil
+}
+
+// DeleteDayEntry deletes a day entry by ID, verifying ownership.
+func (s *FirestoreStore) DeleteDayEntry(userID string, id uuid.UUID) error {
+	docRef := s.client.Collection(collDayEntries).Doc(id.String())
+
+	// Check existence and ownership
+	doc, err := docRef.Get(s.ctx)
+	if status.Code(err) == codes.NotFound {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("checking day entry existence: %w", err)
+	}
+	existing, err := docToDayEntry(doc)
+	if err != nil {
+		return fmt.Errorf("parsing existing day entry: %w", err)
+	}
+	if existing.UserID != userID {
+		return ErrNotFound
+	}
+
+	_, err = docRef.Delete(s.ctx)
+	if err != nil {
+		return fmt.Errorf("deleting day entry: %w", err)
+	}
+	return nil
+}
+
+// GetDayEntriesForTrip returns all day entries associated with a trip.
+func (s *FirestoreStore) GetDayEntriesForTrip(userID string, tripID uuid.UUID) ([]entity.DayEntry, error) {
+	iter := s.client.Collection(collDayEntries).
+		Where("userId", "==", userID).
+		Where("tripId", "==", tripID.String()).
+		Documents(s.ctx)
+	defer iter.Stop()
+
+	var entries []entity.DayEntry
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("iterating day entries for trip: %w", err)
+		}
+
+		entry, err := docToDayEntry(doc)
+		if err != nil {
+			return nil, fmt.Errorf("parsing day entry doc: %w", err)
+		}
+		entries = append(entries, entry)
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Date.Before(entries[j].Date)
+	})
+
+	return entries, nil
+}
+
+// DeleteDayEntriesByTrip deletes all day entries associated with a trip.
+func (s *FirestoreStore) DeleteDayEntriesByTrip(tripID uuid.UUID) error {
+	iter := s.client.Collection(collDayEntries).Where("tripId", "==", tripID.String()).Documents(s.ctx)
+	defer iter.Stop()
+
+	batch := s.client.Batch()
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("iterating day entries for delete: %w", err)
+		}
+		batch.Delete(doc.Ref)
+	}
+
+	_, err := batch.Commit(s.ctx)
+	if err != nil {
+		return fmt.Errorf("committing delete day entries batch: %w", err)
+	}
+	return nil
+}
+
 // --- Helper functions for document/entity conversion ---
 
 func tripToMap(trip *entity.Trip) map[string]interface{} {
@@ -1554,6 +1736,52 @@ func docToTripLocation(doc *firestore.DocumentSnapshot) (entity.TripLocation, er
 	loc.CreatedAt = toTime(data["createdAt"])
 
 	return loc, nil
+}
+
+func dayEntryToMap(entry *entity.DayEntry) map[string]interface{} {
+	m := map[string]interface{}{
+		"userId":    entry.UserID,
+		"date":      entry.Date.Format("2006-01-02"),
+		"location":  entry.Location,
+		"createdAt": entry.CreatedAt,
+	}
+	if entry.Description != nil {
+		m["description"] = *entry.Description
+	} else {
+		m["description"] = nil
+	}
+	if entry.TripID != nil {
+		m["tripId"] = entry.TripID.String()
+	} else {
+		m["tripId"] = nil
+	}
+	return m
+}
+
+func docToDayEntry(doc *firestore.DocumentSnapshot) (entity.DayEntry, error) {
+	var entry entity.DayEntry
+	data := doc.Data()
+
+	entry.ID, _ = uuid.Parse(doc.Ref.ID)
+	entry.UserID, _ = data["userId"].(string)
+	entry.Location, _ = data["location"].(string)
+
+	if d, ok := data["date"].(string); ok {
+		entry.Date, _ = time.Parse("2006-01-02", d)
+	}
+
+	if desc, ok := data["description"].(string); ok && desc != "" {
+		entry.Description = &desc
+	}
+
+	if tid, ok := data["tripId"].(string); ok && tid != "" {
+		parsed, _ := uuid.Parse(tid)
+		entry.TripID = &parsed
+	}
+
+	entry.CreatedAt = toTime(data["createdAt"])
+
+	return entry, nil
 }
 
 func docToGoogleCredentials(doc *firestore.DocumentSnapshot, userID string) (entity.GoogleCredentials, error) {

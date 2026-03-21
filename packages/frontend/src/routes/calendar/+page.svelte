@@ -3,8 +3,11 @@
 	import { goto } from '$app/navigation';
 	import type { Trip, TripPurpose } from '@travel-calendar/shared';
 	import { trips } from '$lib/stores';
+	import { dayEntries } from '$lib/stores/dayEntries';
+	import type { DayEntry } from '$lib/stores/dayEntries';
 	import MonthRow from '$lib/components/calendar/MonthRow.svelte';
 	import MonthGrid from '$lib/components/calendar/MonthGrid.svelte';
+	import DayEntryPopup from '$lib/components/calendar/DayEntryPopup.svelte';
 	import QuickEntry from '$lib/components/trip/QuickEntry.svelte';
 	import type { ParsedTrip } from '$lib/utils/tripParser';
 
@@ -155,6 +158,57 @@
 
 	let quickEntryError: string | null = null;
 
+	// Day entry popup state
+	let popupDate: string | null = null;
+	let popupX = 0;
+	let popupY = 0;
+
+	function handleDayClick(date: string, event: MouseEvent) {
+		const rect = (event.target as HTMLElement).getBoundingClientRect();
+		popupX = Math.min(rect.left, window.innerWidth - 300);
+		popupY = Math.min(rect.bottom + 4, window.innerHeight - 250);
+		popupDate = date;
+	}
+
+	function parseDayEntryText(text: string): { location: string; description?: string } {
+		// Parse "dentist in Fairfield" → { location: "Fairfield", description: "dentist" }
+		// Parse "NYC" → { location: "NYC" }
+		// Parse "CTO club meeting in NYC" → { location: "NYC", description: "CTO club meeting" }
+		const inMatch = text.match(/^(.+?)\s+in\s+(.+)$/i);
+		if (inMatch) {
+			return { description: inMatch[1].trim(), location: inMatch[2].trim() };
+		}
+		const atMatch = text.match(/^(.+?)\s+at\s+(.+)$/i);
+		if (atMatch) {
+			return { description: atMatch[1].trim(), location: atMatch[2].trim() };
+		}
+		return { location: text };
+	}
+
+	async function handleDayEntryCreate(e: CustomEvent<{ date: string; text: string }>) {
+		const { date, text } = e.detail;
+		const parsed = parseDayEntryText(text);
+		try {
+			await dayEntries.create({
+				date,
+				location: parsed.location,
+				description: parsed.description
+			});
+		} catch (err) {
+			quickEntryError = err instanceof Error ? err.message : 'Failed to create entry';
+		}
+	}
+
+	async function handleDayEntryDelete(e: CustomEvent<{ id: string }>) {
+		try {
+			await dayEntries.delete(e.detail.id);
+		} catch (err) {
+			quickEntryError = err instanceof Error ? err.message : 'Failed to delete entry';
+		}
+	}
+
+	$: popupEntries = popupDate ? ($dayEntries).filter((e: DayEntry) => e.date.startsWith(popupDate!)) : [];
+
 	async function handleQuickEntry(parsed: ParsedTrip) {
 		quickEntryError = null;
 		try {
@@ -185,6 +239,11 @@
 
 		try {
 			await trips.load();
+			// Load day entries for a wide range (±12 months)
+			const now = new Date();
+			const from = new Date(now.getFullYear() - 1, now.getMonth(), 1);
+			const to = new Date(now.getFullYear() + 1, now.getMonth() + 1, 0);
+			await dayEntries.load(from.toISOString().split('T')[0], to.toISOString().split('T')[0]);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load trips';
 		} finally {
@@ -340,7 +399,9 @@
 								{year}
 								{month}
 								trips={$trips}
+								dayEntries={$dayEntries}
 								onTripClick={handleTripClick}
+								onDayClick={handleDayClick}
 							/>
 						</div>
 					{:else}
@@ -348,7 +409,9 @@
 							{year}
 							{month}
 							trips={$trips}
+							dayEntries={$dayEntries}
 							onTripClick={handleTripClick}
+							onDayClick={handleDayClick}
 						/>
 					{/if}
 				{/each}
@@ -356,3 +419,15 @@
 		</div>
 	{/if}
 </main>
+
+{#if popupDate}
+	<DayEntryPopup
+		date={popupDate}
+		entries={popupEntries}
+		x={popupX}
+		y={popupY}
+		on:create={handleDayEntryCreate}
+		on:delete={handleDayEntryDelete}
+		on:close={() => popupDate = null}
+	/>
+{/if}

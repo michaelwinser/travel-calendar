@@ -156,6 +156,14 @@ type CalendarLink struct {
 	TripId openapi_types.UUID `json:"tripId"`
 }
 
+// CreateDayEntryRequest defines model for CreateDayEntryRequest.
+type CreateDayEntryRequest struct {
+	Date        openapi_types.Date  `json:"date"`
+	Description *string             `json:"description,omitempty"`
+	Location    string              `json:"location"`
+	TripId      *openapi_types.UUID `json:"tripId,omitempty"`
+}
+
 // CreateItemRequest defines model for CreateItemRequest.
 type CreateItemRequest struct {
 	Carrier      *string             `json:"carrier,omitempty"`
@@ -182,6 +190,17 @@ type CreateTripRequest struct {
 	Purpose   TripPurpose         `json:"purpose"`
 	StartDate *openapi_types.Date `json:"startDate,omitempty"`
 	Status    *TripStatus         `json:"status,omitempty"`
+}
+
+// DayEntry defines model for DayEntry.
+type DayEntry struct {
+	CreatedAt   time.Time           `json:"createdAt"`
+	Date        openapi_types.Date  `json:"date"`
+	Description *string             `json:"description,omitempty"`
+	Id          openapi_types.UUID  `json:"id"`
+	Location    string              `json:"location"`
+	TripId      *openapi_types.UUID `json:"tripId,omitempty"`
+	UserId      string              `json:"userId"`
 }
 
 // Document defines model for Document.
@@ -506,6 +525,13 @@ type TripSuggestion struct {
 // TripSuggestionSource Source of the suggestion (google calendar or tripit)
 type TripSuggestionSource string
 
+// UpdateDayEntryRequest defines model for UpdateDayEntryRequest.
+type UpdateDayEntryRequest struct {
+	Description *string             `json:"description,omitempty"`
+	Location    *string             `json:"location,omitempty"`
+	TripId      *openapi_types.UUID `json:"tripId,omitempty"`
+}
+
 // UpdateTripRequest defines model for UpdateTripRequest.
 type UpdateTripRequest struct {
 	EndDate   *openapi_types.Date `json:"endDate,omitempty"`
@@ -528,6 +554,9 @@ type UserCalendar struct {
 	// Name Calendar display name
 	Name string `json:"name"`
 }
+
+// DayEntryId defines model for DayEntryId.
+type DayEntryId = openapi_types.UUID
 
 // ItemId defines model for ItemId.
 type ItemId = openapi_types.UUID
@@ -586,6 +615,15 @@ type SuggestTripsFromCalendarParams struct {
 	To *openapi_types.Date `form:"to,omitempty" json:"to,omitempty"`
 }
 
+// ListDayEntriesParams defines parameters for ListDayEntries.
+type ListDayEntriesParams struct {
+	// From Start date (YYYY-MM-DD)
+	From openapi_types.Date `form:"from" json:"from"`
+
+	// To End date (YYYY-MM-DD)
+	To openapi_types.Date `form:"to" json:"to"`
+}
+
 // ListDocumentsParams defines parameters for ListDocuments.
 type ListDocumentsParams struct {
 	// TripId Filter by trip ID
@@ -627,6 +665,12 @@ type SetSelectedCalendarsJSONRequestBody = SetSelectedCalendarsRequest
 
 // SetBaseLocationsJSONRequestBody defines body for SetBaseLocations for application/json ContentType.
 type SetBaseLocationsJSONRequestBody = SetBaseLocationsRequest
+
+// CreateDayEntryJSONRequestBody defines body for CreateDayEntry for application/json ContentType.
+type CreateDayEntryJSONRequestBody = CreateDayEntryRequest
+
+// UpdateDayEntryJSONRequestBody defines body for UpdateDayEntry for application/json ContentType.
+type UpdateDayEntryJSONRequestBody = UpdateDayEntryRequest
 
 // MoveItemJSONRequestBody defines body for MoveItem for application/json ContentType.
 type MoveItemJSONRequestBody = MoveItemRequest
@@ -699,6 +743,18 @@ type ServerInterface interface {
 	// Set base locations
 	// (PUT /api/config/locations)
 	SetBaseLocations(w http.ResponseWriter, r *http.Request)
+	// List day entries
+	// (GET /api/days)
+	ListDayEntries(w http.ResponseWriter, r *http.Request, params ListDayEntriesParams)
+	// Create a new day entry
+	// (POST /api/days)
+	CreateDayEntry(w http.ResponseWriter, r *http.Request)
+	// Delete a day entry
+	// (DELETE /api/days/{dayEntryId})
+	DeleteDayEntry(w http.ResponseWriter, r *http.Request, dayEntryId DayEntryId)
+	// Update a day entry
+	// (PUT /api/days/{dayEntryId})
+	UpdateDayEntry(w http.ResponseWriter, r *http.Request, dayEntryId DayEntryId)
 	// List documents
 	// (GET /api/documents)
 	ListDocuments(w http.ResponseWriter, r *http.Request, params ListDocumentsParams)
@@ -855,6 +911,30 @@ func (_ Unimplemented) GetBaseLocations(w http.ResponseWriter, r *http.Request) 
 // Set base locations
 // (PUT /api/config/locations)
 func (_ Unimplemented) SetBaseLocations(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List day entries
+// (GET /api/days)
+func (_ Unimplemented) ListDayEntries(w http.ResponseWriter, r *http.Request, params ListDayEntriesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a new day entry
+// (POST /api/days)
+func (_ Unimplemented) CreateDayEntry(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete a day entry
+// (DELETE /api/days/{dayEntryId})
+func (_ Unimplemented) DeleteDayEntry(w http.ResponseWriter, r *http.Request, dayEntryId DayEntryId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Update a day entry
+// (PUT /api/days/{dayEntryId})
+func (_ Unimplemented) UpdateDayEntry(w http.ResponseWriter, r *http.Request, dayEntryId DayEntryId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1380,6 +1460,119 @@ func (siw *ServerInterfaceWrapper) SetBaseLocations(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetBaseLocations(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListDayEntries operation middleware
+func (siw *ServerInterfaceWrapper) ListDayEntries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListDayEntriesParams
+
+	// ------------- Required query parameter "from" -------------
+
+	if paramValue := r.URL.Query().Get("from"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "from", r.URL.Query(), &params.From)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "to" -------------
+
+	if paramValue := r.URL.Query().Get("to"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "to", r.URL.Query(), &params.To)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDayEntries(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateDayEntry operation middleware
+func (siw *ServerInterfaceWrapper) CreateDayEntry(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateDayEntry(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteDayEntry operation middleware
+func (siw *ServerInterfaceWrapper) DeleteDayEntry(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "dayEntryId" -------------
+	var dayEntryId DayEntryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "dayEntryId", chi.URLParam(r, "dayEntryId"), &dayEntryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dayEntryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteDayEntry(w, r, dayEntryId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateDayEntry operation middleware
+func (siw *ServerInterfaceWrapper) UpdateDayEntry(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "dayEntryId" -------------
+	var dayEntryId DayEntryId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "dayEntryId", chi.URLParam(r, "dayEntryId"), &dayEntryId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dayEntryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateDayEntry(w, r, dayEntryId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2072,6 +2265,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/api/config/locations", wrapper.SetBaseLocations)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/days", wrapper.ListDayEntries)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/days", wrapper.CreateDayEntry)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/api/days/{dayEntryId}", wrapper.DeleteDayEntry)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/api/days/{dayEntryId}", wrapper.UpdateDayEntry)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/documents", wrapper.ListDocuments)

@@ -179,6 +179,19 @@ func (s *SQLiteStore) migrate() error {
 
 	CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 	CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+
+	CREATE TABLE IF NOT EXISTS day_entries (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		date TEXT NOT NULL,
+		location TEXT NOT NULL,
+		description TEXT,
+		trip_id TEXT,
+		created_at TEXT NOT NULL
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_day_entries_user_date ON day_entries(user_id, date);
+	CREATE INDEX IF NOT EXISTS idx_day_entries_trip ON day_entries(trip_id);
 	`
 
 	_, err := s.db.Exec(schema)
@@ -1421,6 +1434,183 @@ func (s *SQLiteStore) DeleteSession(id string) error {
 func (s *SQLiteStore) DeleteExpiredSessions() error {
 	_, err := s.db.Exec("DELETE FROM sessions WHERE expires_at < ?", time.Now().Format(time.RFC3339))
 	return err
+}
+
+// Day Entry methods
+
+// ListDayEntries returns day entries for a user within a date range.
+func (s *SQLiteStore) ListDayEntries(userID string, from, to time.Time) ([]entity.DayEntry, error) {
+	query := `SELECT id, user_id, date, location, description, trip_id, created_at
+		FROM day_entries WHERE user_id = ? AND date >= ? AND date <= ?
+		ORDER BY date ASC`
+	rows, err := s.db.Query(query, userID, from.Format("2006-01-02"), to.Format("2006-01-02"))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []entity.DayEntry
+	for rows.Next() {
+		entry, err := scanDayEntry(rows)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, entry)
+	}
+	return entries, rows.Err()
+}
+
+// GetDayEntry returns a single day entry by ID.
+func (s *SQLiteStore) GetDayEntry(userID string, id uuid.UUID) (*entity.DayEntry, error) {
+	query := `SELECT id, user_id, date, location, description, trip_id, created_at
+		FROM day_entries WHERE user_id = ? AND id = ?`
+	row := s.db.QueryRow(query, userID, id.String())
+	entry, err := scanDayEntryRow(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &entry, nil
+}
+
+// CreateDayEntry inserts a new day entry.
+func (s *SQLiteStore) CreateDayEntry(entry *entity.DayEntry) error {
+	query := `INSERT INTO day_entries (id, user_id, date, location, description, trip_id, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`
+	var tripID interface{}
+	if entry.TripID != nil {
+		tripID = entry.TripID.String()
+	}
+	_, err := s.db.Exec(query,
+		entry.ID.String(),
+		entry.UserID,
+		entry.Date.Format("2006-01-02"),
+		entry.Location,
+		entry.Description,
+		tripID,
+		entry.CreatedAt.Format(time.RFC3339),
+	)
+	return err
+}
+
+// UpdateDayEntry updates an existing day entry.
+func (s *SQLiteStore) UpdateDayEntry(userID string, entry *entity.DayEntry) error {
+	query := `UPDATE day_entries SET date = ?, location = ?, description = ?, trip_id = ? WHERE user_id = ? AND id = ?`
+	var tripID interface{}
+	if entry.TripID != nil {
+		tripID = entry.TripID.String()
+	}
+	result, err := s.db.Exec(query,
+		entry.Date.Format("2006-01-02"),
+		entry.Location,
+		entry.Description,
+		tripID,
+		userID,
+		entry.ID.String(),
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// DeleteDayEntry deletes a day entry by ID.
+func (s *SQLiteStore) DeleteDayEntry(userID string, id uuid.UUID) error {
+	result, err := s.db.Exec("DELETE FROM day_entries WHERE user_id = ? AND id = ?", userID, id.String())
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// GetDayEntriesForTrip returns all day entries associated with a trip.
+func (s *SQLiteStore) GetDayEntriesForTrip(userID string, tripID uuid.UUID) ([]entity.DayEntry, error) {
+	query := `SELECT id, user_id, date, location, description, trip_id, created_at
+		FROM day_entries WHERE user_id = ? AND trip_id = ?
+		ORDER BY date ASC`
+	rows, err := s.db.Query(query, userID, tripID.String())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []entity.DayEntry
+	for rows.Next() {
+		entry, err := scanDayEntry(rows)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, entry)
+	}
+	return entries, rows.Err()
+}
+
+// DeleteDayEntriesByTrip deletes all day entries for a trip.
+func (s *SQLiteStore) DeleteDayEntriesByTrip(tripID uuid.UUID) error {
+	_, err := s.db.Exec("DELETE FROM day_entries WHERE trip_id = ?", tripID.String())
+	return err
+}
+
+// DayEntry scan helpers
+
+func scanDayEntry(rows *sql.Rows) (entity.DayEntry, error) {
+	var entry entity.DayEntry
+	var id, date, description, tripID, createdAt sql.NullString
+	err := rows.Scan(&id, &entry.UserID, &date, &entry.Location, &description, &tripID, &createdAt)
+	if err != nil {
+		return entry, err
+	}
+	entry.ID, _ = uuid.Parse(id.String)
+	if date.Valid {
+		entry.Date, _ = time.Parse("2006-01-02", date.String)
+	}
+	entry.Description = nullToPtr(description)
+	if tripID.Valid && tripID.String != "" {
+		tid, _ := uuid.Parse(tripID.String)
+		entry.TripID = &tid
+	}
+	if createdAt.Valid {
+		entry.CreatedAt, _ = time.Parse(time.RFC3339, createdAt.String)
+	}
+	return entry, nil
+}
+
+func scanDayEntryRow(row *sql.Row) (entity.DayEntry, error) {
+	var entry entity.DayEntry
+	var id, date, description, tripID, createdAt sql.NullString
+	err := row.Scan(&id, &entry.UserID, &date, &entry.Location, &description, &tripID, &createdAt)
+	if err != nil {
+		return entry, err
+	}
+	entry.ID, _ = uuid.Parse(id.String)
+	if date.Valid {
+		entry.Date, _ = time.Parse("2006-01-02", date.String)
+	}
+	entry.Description = nullToPtr(description)
+	if tripID.Valid && tripID.String != "" {
+		tid, _ := uuid.Parse(tripID.String)
+		entry.TripID = &tid
+	}
+	if createdAt.Valid {
+		entry.CreatedAt, _ = time.Parse(time.RFC3339, createdAt.String)
+	}
+	return entry, nil
 }
 
 // Silence the unused import warning

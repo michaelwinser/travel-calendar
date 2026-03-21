@@ -1,10 +1,13 @@
 <script lang="ts">
 	import type { Trip } from '@travel-calendar/shared';
+	import type { DayEntry } from '$lib/stores/dayEntries';
 
 	export let year: number;
 	export let month: number; // 0-indexed (0 = January)
 	export let trips: Trip[] = [];
+	export let dayEntries: DayEntry[] = [];
 	export let onTripClick: (trip: Trip) => void = () => {};
+	export let onDayClick: (date: string, event: MouseEvent) => void = () => {};
 
 	const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 	const monthNames = [
@@ -21,18 +24,23 @@
 		return today.getFullYear() === y && today.getMonth() === m && today.getDate() === d;
 	}
 
+	function formatDateKey(y: number, m: number, d: number): string {
+		return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+	}
+
 	interface CalendarDay {
 		day: number;
-		inMonth: boolean; // false for padding days from adjacent months
+		inMonth: boolean;
 		year: number;
 		month: number;
+		dateKey: string;
 	}
 
 	interface WeekTripBar {
 		trip: Trip;
-		startCol: number; // 0-6 column in the week
-		span: number;     // number of columns
-		row: number;      // stacking row within the cell area
+		startCol: number;
+		span: number;
+		row: number;
 	}
 
 	interface CalendarWeek {
@@ -41,11 +49,22 @@
 		maxRow: number;
 	}
 
+	// Build lookup of day entries by date
+	function buildEntryMap(entries: DayEntry[]): Map<string, DayEntry[]> {
+		const map = new Map<string, DayEntry[]>();
+		for (const entry of entries) {
+			const key = entry.date.split('T')[0]; // Handle ISO strings
+			const list = map.get(key) || [];
+			list.push(entry);
+			map.set(key, list);
+		}
+		return map;
+	}
+
 	function buildCalendar(y: number, m: number): CalendarWeek[] {
 		const daysInMonth = getDaysInMonth(y, m);
-		const firstDow = new Date(y, m, 1).getDay(); // 0=Sun
+		const firstDow = new Date(y, m, 1).getDay();
 
-		// Build flat list of days including padding
 		const allDays: CalendarDay[] = [];
 
 		// Padding from previous month
@@ -54,26 +73,24 @@
 			const prevYear = m === 0 ? y - 1 : y;
 			const prevDays = getDaysInMonth(prevYear, prevMonth);
 			for (let i = firstDow - 1; i >= 0; i--) {
-				allDays.push({ day: prevDays - i, inMonth: false, year: prevYear, month: prevMonth });
+				const day = prevDays - i;
+				allDays.push({ day, inMonth: false, year: prevYear, month: prevMonth, dateKey: formatDateKey(prevYear, prevMonth, day) });
 			}
 		}
 
-		// Current month days
 		for (let d = 1; d <= daysInMonth; d++) {
-			allDays.push({ day: d, inMonth: true, year: y, month: m });
+			allDays.push({ day: d, inMonth: true, year: y, month: m, dateKey: formatDateKey(y, m, d) });
 		}
 
-		// Padding from next month
 		const remaining = 7 - (allDays.length % 7);
 		if (remaining < 7) {
 			const nextMonth = m === 11 ? 0 : m + 1;
 			const nextYear = m === 11 ? y + 1 : y;
 			for (let d = 1; d <= remaining; d++) {
-				allDays.push({ day: d, inMonth: false, year: nextYear, month: nextMonth });
+				allDays.push({ day: d, inMonth: false, year: nextYear, month: nextMonth, dateKey: formatDateKey(nextYear, nextMonth, d) });
 			}
 		}
 
-		// Split into weeks
 		const weeks: CalendarWeek[] = [];
 		for (let i = 0; i < allDays.length; i += 7) {
 			const days = allDays.slice(i, i + 7);
@@ -96,10 +113,8 @@
 			const tripStart = new Date(trip.startDate);
 			const tripEnd = new Date(trip.endDate);
 
-			// Skip if trip doesn't overlap with this week
 			if (tripEnd < weekStart || tripStart > weekEnd) continue;
 
-			// Calculate start and end columns (0-6)
 			let startCol = 0;
 			let endCol = 6;
 
@@ -113,21 +128,14 @@
 			startCol = Math.max(0, startCol);
 			endCol = Math.min(6, endCol);
 
-			bars.push({
-				trip,
-				startCol,
-				span: endCol - startCol + 1,
-				row: 0 // assigned below
-			});
+			bars.push({ trip, startCol, span: endCol - startCol + 1, row: 0 });
 		}
 
-		// Sort by startCol, then longer bars first
 		bars.sort((a, b) => {
 			if (a.startCol !== b.startCol) return a.startCol - b.startCol;
 			return b.span - a.span;
 		});
 
-		// Assign rows to avoid overlap
 		const rowEnds: number[] = [];
 		for (const bar of bars) {
 			let row = 0;
@@ -142,6 +150,7 @@
 	}
 
 	$: weeks = buildCalendar(year, month);
+	$: entryMap = buildEntryMap(dayEntries);
 </script>
 
 <div class="bg-white rounded-lg border overflow-hidden">
@@ -161,10 +170,13 @@
 	{#each weeks as week}
 		<div class="grid grid-cols-7 border-b last:border-b-0">
 			{#each week.days as day}
-				<div
-					class="border-r last:border-r-0 px-1.5 pt-1 pb-0 min-h-[2.5rem]
+				{@const dayEntryList = entryMap.get(day.dateKey) || []}
+				<button
+					type="button"
+					class="border-r last:border-r-0 px-1.5 pt-1 pb-1 min-h-[4rem] text-left cursor-pointer hover:bg-blue-50/50 transition-colors
 						{day.inMonth ? '' : 'bg-gray-50'}
 						{day.inMonth && (new Date(day.year, day.month, day.day).getDay() === 0 || new Date(day.year, day.month, day.day).getDay() === 6) ? 'bg-gray-50/50' : ''}"
+					on:click={(e) => day.inMonth && onDayClick(day.dateKey, e)}
 				>
 					<div class="text-right">
 						{#if isToday(day.year, day.month, day.day)}
@@ -177,7 +189,20 @@
 							</span>
 						{/if}
 					</div>
-				</div>
+					<!-- Day entry locations -->
+					{#if dayEntryList.length > 0}
+						<div class="mt-0.5 space-y-0.5">
+							{#each dayEntryList.slice(0, 2) as entry}
+								<div class="text-[10px] leading-tight text-gray-500 truncate" title="{entry.location}{entry.description ? ': ' + entry.description : ''}">
+									{entry.location}
+								</div>
+							{/each}
+							{#if dayEntryList.length > 2}
+								<div class="text-[10px] text-gray-400">+{dayEntryList.length - 2} more</div>
+							{/if}
+						</div>
+					{/if}
+				</button>
 			{/each}
 
 			<!-- Trip bars overlay for this week -->
@@ -190,8 +215,8 @@
 							type="button"
 							class="trip-bar trip-bar-{bar.trip.purpose} absolute text-xs truncate px-1.5"
 							style="left: {leftPercent}%; width: {widthPercent}%; top: {bar.row * 22}px; height: 18px; line-height: 18px;"
-							on:click={() => onTripClick(bar.trip)}
-							title="{bar.trip.name}{bar.trip.location ? ' - ' + bar.trip.location : ''}"
+							on:click|stopPropagation={() => onTripClick(bar.trip)}
+							title="{bar.trip.name}"
 						>
 							{bar.trip.name}
 						</button>

@@ -657,6 +657,83 @@ func unique(strs []string) []string {
 	return result
 }
 
+// Day Entry operations
+
+// ListDayEntries returns day entries for a date range.
+func (s *Service) ListDayEntries(userID string, from, to time.Time) ([]api.DayEntry, error) {
+	entries, err := s.store.ListDayEntries(userID, from, to)
+	if err != nil {
+		return nil, fmt.Errorf("listing day entries: %w", err)
+	}
+	result := make([]api.DayEntry, len(entries))
+	for i, e := range entries {
+		result[i] = e.ToAPI()
+	}
+	return result, nil
+}
+
+// CreateDayEntry creates a new day entry.
+func (s *Service) CreateDayEntry(userID string, req *api.CreateDayEntryRequest) (*api.DayEntry, error) {
+	var tripID *uuid.UUID
+	if req.TripId != nil {
+		tid := uuid.UUID(*req.TripId)
+		tripID = &tid
+	}
+
+	entry := entity.NewDayEntry(userID, req.Date.Time, req.Location, req.Description, tripID)
+	if err := s.store.CreateDayEntry(&entry); err != nil {
+		return nil, fmt.Errorf("creating day entry: %w", err)
+	}
+
+	result := entry.ToAPI()
+	return &result, nil
+}
+
+// UpdateDayEntry updates an existing day entry.
+func (s *Service) UpdateDayEntry(userID string, id uuid.UUID, req *api.UpdateDayEntryRequest) (*api.DayEntry, error) {
+	entry, err := s.store.GetDayEntry(userID, id)
+	if err != nil {
+		return nil, fmt.Errorf("getting day entry: %w", err)
+	}
+	if entry == nil {
+		return nil, nil
+	}
+
+	if req.Location != nil {
+		entry.Location = *req.Location
+	}
+	if req.Description != nil {
+		entry.Description = req.Description
+	}
+	if req.TripId != nil {
+		tid := uuid.UUID(*req.TripId)
+		entry.TripID = &tid
+	}
+
+	if err := s.store.UpdateDayEntry(userID, entry); err != nil {
+		return nil, fmt.Errorf("updating day entry: %w", err)
+	}
+
+	result := entry.ToAPI()
+	return &result, nil
+}
+
+// DeleteDayEntry deletes a day entry.
+func (s *Service) DeleteDayEntry(userID string, id uuid.UUID) error {
+	return s.store.DeleteDayEntry(userID, id)
+}
+
+// CreateDayEntriesForTrip creates day entries for all dates in a trip's range.
+func (s *Service) CreateDayEntriesForTrip(userID string, tripID uuid.UUID, location string, startDate, endDate time.Time) error {
+	for d := startDate; !d.After(endDate); d = d.AddDate(0, 0, 1) {
+		entry := entity.NewDayEntry(userID, d, location, nil, &tripID)
+		if err := s.store.CreateDayEntry(&entry); err != nil {
+			return fmt.Errorf("creating day entry for %s: %w", d.Format("2006-01-02"), err)
+		}
+	}
+	return nil
+}
+
 func slicesEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

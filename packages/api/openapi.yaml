@@ -54,6 +54,8 @@ tags:
     description: User configuration (base locations, preferences)
   - name: Location
     description: Location queries (where is the user on a given date)
+  - name: DayEntries
+    description: Day entry management (daily location journal)
   - name: Calendar
     description: Google Calendar integration and OAuth
 
@@ -542,6 +544,115 @@ paths:
                 $ref: '#/components/schemas/BaseLocations'
         '400':
           description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # Day entry endpoints
+  /api/days:
+    get:
+      operationId: listDayEntries
+      tags: [DayEntries]
+      summary: List day entries
+      description: Returns day entries within a date range
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: Start date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          description: End date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: List of day entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DayEntry'
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      operationId: createDayEntry
+      tags: [DayEntries]
+      summary: Create a new day entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDayEntryRequest'
+      responses:
+        '201':
+          description: Day entry created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DayEntry'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/days/{dayEntryId}:
+    put:
+      operationId: updateDayEntry
+      tags: [DayEntries]
+      summary: Update a day entry
+      parameters:
+        - $ref: '#/components/parameters/DayEntryId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDayEntryRequest'
+      responses:
+        '200':
+          description: Day entry updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DayEntry'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Day entry not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      operationId: deleteDayEntry
+      tags: [DayEntries]
+      summary: Delete a day entry
+      parameters:
+        - $ref: '#/components/parameters/DayEntryId'
+      responses:
+        '204':
+          description: Day entry deleted
+        '404':
+          description: Day entry not found
           content:
             application/json:
               schema:
@@ -1144,6 +1255,14 @@ components:
       schema:
         type: string
         format: uuid
+    DayEntryId:
+      name: dayEntryId
+      in: path
+      required: true
+      description: Day entry ID
+      schema:
+        type: string
+        format: uuid
 
   schemas:
     HealthResponse:
@@ -1433,6 +1552,62 @@ components:
           type: object
           additionalProperties: true
           description: Additional error details
+
+    # Day entry schemas
+    DayEntry:
+      type: object
+      required: [id, userId, date, location, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        date:
+          type: string
+          format: date
+        location:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 1000
+        tripId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateDayEntryRequest:
+      type: object
+      required: [date, location]
+      properties:
+        date:
+          type: string
+          format: date
+        location:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 1000
+        tripId:
+          type: string
+          format: uuid
+
+    UpdateDayEntryRequest:
+      type: object
+      properties:
+        location:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+          maxLength: 1000
+        tripId:
+          type: string
+          format: uuid
 
     # Location-related schemas
     BaseLocations:
