@@ -1,0 +1,35 @@
+tc
+  e93c4510c8646995 323-392,717-720,774
+packages/backend/internal/store/sqlite.go
+  e93c4510c8646995 1422-1462
+packages/backend/cmd/server/main.go
+  e93c4510c8646995 99-123
+packages/frontend/src/routes/settings/+page.svelte
+  e93c4510c8646995 5,48-61,615,618,620-634
+docs/roadmap.md
+  e93c4510c8646995 47-49
+packages/backend/internal/store/interface.go
+  e93c4510c8646995 83-85
+packages/backend/internal/store/firestore.go
+  e93c4510c8646995 1302-1367
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "d944f38ff1a08942635feecaa7310bfa0a7960bd",
+  "prompts": {
+    "e93c4510c8646995": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "92809005-0e6c-41e7-a931-f9dd58bb8c15",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 246,
+      "total_deletions": 16,
+      "accepted_lines": 246,
+      "overriden_lines": 0
+    }
+  }
+}
