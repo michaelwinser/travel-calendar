@@ -6,26 +6,7 @@
 # Usage:
 #   ./tc <command> [options]
 #
-# Commands:
-#   start           Start backend (REST API + MCP on port 3000)
-#   stop            Stop all services
-#   restart         Restart all services
-#   build           Build/rebuild containers
-#   logs            View logs (follow mode)
-#   status          Show service status
-#   shell           Open shell in a container
-#   test            Run tests
-#   test-precommit  Fast pre-commit checks
-#   generate        Generate code from OpenAPI spec
-#
-#   db:reset    Delete SQLite database
-#   db:shell    Open SQLite shell
-#
-#   provision   Enable GCP APIs and create required resources
-#   deploy      Deploy to Google Cloud Run
-#   access      Manage allowed users for Cloud Run
-#   clean       Remove containers, volumes, and build cache
-#   help        Show this help message
+# Run ./tc help for full command list.
 
 set -e
 
@@ -179,9 +160,13 @@ cmd_status() {
 
 cmd_shell() {
     require_docker
-    service="${1:-backend}"
+    service="${1:-dev}"
     info "Opening shell in $service..."
-    docker compose exec "$service" sh
+    if [ "$service" = "dev" ]; then
+        docker compose run --rm dev sh
+    else
+        docker compose exec "$service" sh
+    fi
 }
 
 # ===========================================
@@ -266,9 +251,6 @@ cmd_test_browser() {
     fi
 
     # Run Playwright tests via the dev container
-    # - PLAYWRIGHT_SKIP_WEBSERVER: Backend is already running
-    # - PLAYWRIGHT_BASE_URL: Use backend container name for network access
-    # - PLAYWRIGHT_VIDEO: Force video recording when --video flag is passed
     # shellcheck disable=SC2086
     docker compose run --rm -T \
         -e PLAYWRIGHT_SKIP_WEBSERVER=1 \
@@ -318,19 +300,23 @@ cmd_test_precommit() {
 # ===========================================
 
 cmd_db_reset() {
-    if confirm "This will delete the SQLite database. Are you sure?"; then
-        info "Removing SQLite database..."
-        docker compose exec backend rm -f /app/data/travel.db 2>/dev/null || rm -f data/travel.db
-        success "Database cleared"
+    require_docker
+    if confirm "This will stop services, delete the database volume, and restart. Are you sure?"; then
+        info "Stopping services..."
+        docker compose down --remove-orphans 2>/dev/null || true
+
+        info "Removing database volume..."
+        docker volume rm travel-backend-data 2>/dev/null || true
+
+        info "Starting services..."
+        docker compose up -d --remove-orphans
+
+        success "Database reset complete"
+        echo ""
+        echo "  Backend: http://localhost:${PORT_1:-4000}"
     else
         info "Cancelled"
     fi
-}
-
-cmd_db_shell() {
-    require_docker
-    info "Opening SQLite shell..."
-    docker compose exec backend sqlite3 /app/data/travel.db 2>/dev/null || sqlite3 data/travel.db
 }
 
 # ===========================================
@@ -377,7 +363,7 @@ cmd_curl() {
     if [ $# -eq 0 ]; then
         echo "Usage: ./tc curl <url> [curl-options...]"
         echo ""
-        echo "Run curl inside the backend container."
+        echo "Run curl inside the backend container (uses internal port 3000)."
         echo ""
         echo "Examples:"
         echo "  ./tc curl http://localhost:3000/health"
@@ -433,7 +419,7 @@ cmd_generate_backend() {
 cmd_generate_shared() {
     info "Generating shared TypeScript types from OpenAPI..."
     docker compose run --rm --no-deps -T dev sh -c \
-        "cd /app && pnpm --filter @travel-calendar/shared generate"
+        "cd /app && pnpm install --frozen-lockfile 2>/dev/null; pnpm --filter @travel-calendar/shared generate"
     success "Shared types generated"
 }
 
@@ -586,176 +572,6 @@ cmd_deploy_status() {
 }
 
 # ===========================================
-# Commands: Access Control
-# ===========================================
-
-ALLOWED_USERS_FILE="${SCRIPT_DIR}/.allowed-users"
-
-# Read emails from .allowed-users, skipping comments and blank lines
-read_allowed_users() {
-    if [ ! -f "$ALLOWED_USERS_FILE" ]; then
-        return
-    fi
-    grep -v '^\s*#' "$ALLOWED_USERS_FILE" | grep -v '^\s*$' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
-}
-
-# Get current invoker members from Cloud Run IAM
-get_current_invokers() {
-    REGION="$(deploy_region)"
-    gcloud run services get-iam-policy "$DEPLOY_SERVICE" \
-        --region "$REGION" \
-        --project "$GOOGLE_CLOUD_PROJECT" \
-        --flatten='bindings[].members' \
-        --filter='bindings.role=roles/run.invoker' \
-        --format='value(bindings.members)' 2>/dev/null
-}
-
-cmd_access() {
-    require_gcloud
-    require_project_id
-
-    action="${1:-list}"
-
-    case "$action" in
-        list)
-            cmd_access_list
-            ;;
-        sync)
-            cmd_access_sync
-            ;;
-        add)
-            shift
-            cmd_access_add "$@"
-            ;;
-        remove)
-            shift
-            cmd_access_remove "$@"
-            ;;
-        *)
-            echo "Usage: ./tc access [list|sync|add|remove]"
-            echo ""
-            echo "  list             - Show current allowed users (default)"
-            echo "  sync             - Sync .allowed-users to Cloud Run IAM"
-            echo "  add <email>      - Add user to .allowed-users and sync"
-            echo "  remove <email>   - Remove user from .allowed-users and sync"
-            echo ""
-            echo "Users are managed in .allowed-users (one email per line)."
-            ;;
-    esac
-}
-
-cmd_access_list() {
-    REGION="$(deploy_region)"
-    info "Allowed users (.allowed-users):"
-    if [ -f "$ALLOWED_USERS_FILE" ]; then
-        read_allowed_users | while read -r email; do
-            echo "  $email"
-        done
-    else
-        warn "No .allowed-users file found"
-    fi
-
-    echo ""
-    info "Current Cloud Run invokers:"
-    current=$(get_current_invokers)
-    if [ -n "$current" ]; then
-        echo "$current" | while read -r member; do
-            echo "  $member"
-        done
-    else
-        echo "  (none)"
-    fi
-}
-
-cmd_access_sync() {
-    REGION="$(deploy_region)"
-
-    if [ ! -f "$ALLOWED_USERS_FILE" ]; then
-        error "No .allowed-users file found. Create one with: ./tc access add <email>"
-    fi
-
-    info "Syncing .allowed-users to Cloud Run IAM..."
-
-    # Collect desired users from file
-    desired=$(read_allowed_users)
-    if [ -z "$desired" ]; then
-        warn "No users in .allowed-users"
-        return
-    fi
-
-    # Add each user from file (idempotent)
-    echo "$desired" | while read -r email; do
-        info "Granting access: ${email}"
-        gcloud run services add-iam-policy-binding "$DEPLOY_SERVICE" \
-            --region "$REGION" \
-            --project "$GOOGLE_CLOUD_PROJECT" \
-            --member="user:${email}" \
-            --role="roles/run.invoker" \
-            --quiet >/dev/null
-    done
-
-    # Remove invokers not in the file
-    current=$(get_current_invokers)
-    if [ -n "$current" ]; then
-        echo "$current" | while read -r member; do
-            # Extract email from "user:email@example.com"
-            email=$(echo "$member" | sed 's/^user://')
-            if ! echo "$desired" | grep -qFx "$email"; then
-                info "Revoking access: ${email}"
-                gcloud run services remove-iam-policy-binding "$DEPLOY_SERVICE" \
-                    --region "$REGION" \
-                    --project "$GOOGLE_CLOUD_PROJECT" \
-                    --member="$member" \
-                    --role="roles/run.invoker" \
-                    --quiet >/dev/null
-            fi
-        done
-    fi
-
-    success "Access synced"
-}
-
-cmd_access_add() {
-    email="${1:-}"
-    if [ -z "$email" ]; then
-        error "Usage: ./tc access add <email>"
-    fi
-
-    # Create file if it doesn't exist
-    if [ ! -f "$ALLOWED_USERS_FILE" ]; then
-        echo "# Allowed users for Cloud Run (one email per line)" > "$ALLOWED_USERS_FILE"
-    fi
-
-    # Check for duplicate
-    if grep -qFx "$email" "$ALLOWED_USERS_FILE" 2>/dev/null; then
-        warn "${email} is already in .allowed-users"
-    else
-        echo "$email" >> "$ALLOWED_USERS_FILE"
-        success "Added ${email} to .allowed-users"
-    fi
-
-    cmd_access_sync
-}
-
-cmd_access_remove() {
-    email="${1:-}"
-    if [ -z "$email" ]; then
-        error "Usage: ./tc access remove <email>"
-    fi
-
-    if [ ! -f "$ALLOWED_USERS_FILE" ]; then
-        error "No .allowed-users file found"
-    fi
-
-    # Remove from file (portable sed in-place)
-    tmp="${ALLOWED_USERS_FILE}.tmp"
-    grep -vFx "$email" "$ALLOWED_USERS_FILE" > "$tmp" && mv "$tmp" "$ALLOWED_USERS_FILE"
-    success "Removed ${email} from .allowed-users"
-
-    cmd_access_sync
-}
-
-# ===========================================
 # Commands: Cleanup
 # ===========================================
 
@@ -773,7 +589,7 @@ cmd_clean() {
             fi
             ;;
         volumes)
-            if confirm "Remove containers AND volumes (Go cache)?"; then
+            if confirm "Remove containers AND volumes (database, Go cache)?"; then
                 info "Removing containers and volumes..."
                 docker compose --profile dev down -v
                 success "Containers and volumes removed"
@@ -791,7 +607,7 @@ cmd_clean() {
             echo "Usage: ./tc clean [containers|volumes|all]"
             echo ""
             echo "  containers - Remove containers only (default)"
-            echo "  volumes    - Remove containers and volumes"
+            echo "  volumes    - Remove containers and volumes (database, Go cache)"
             echo "  all        - Remove everything including build cache"
             ;;
     esac
@@ -814,7 +630,7 @@ Service Commands:
   build [--clean]        Build containers (--clean for fresh build)
   logs [service]         View logs (optionally for specific service)
   status                 Show container status
-  shell [service]        Open shell in container (default: backend)
+  shell [service]        Open shell in container (default: dev)
 
 Testing & Quality:
   test [target]          Run tests (all, e2e, backend, frontend, browser)
@@ -824,24 +640,17 @@ Testing & Quality:
 Code Generation:
   generate [target]      Generate code from OpenAPI (all, backend, shared)
 
-Health & Diagnostics:
-  health [service]       Check service health (all, backend)
-  curl <url> [opts]      Run curl inside backend container
+Database:
+  db:reset               Reset database (stops services, removes volume, restarts)
 
-Cloud:
-  provision              Enable GCP APIs and create required resources (one-time)
+Health & Diagnostics:
+  health [service]       Check service health
+  curl <url> [opts]      Run curl inside backend container (port 3000)
+
+Cloud (requires gcloud CLI + GOOGLE_CLOUD_PROJECT in .env):
+  provision              Enable GCP APIs and create resources (one-time)
   deploy                 Build and deploy to Cloud Run via Cloud Build
   deploy status          Show Cloud Run service status
-
-Access Control:
-  access                 Show allowed users (file and Cloud Run IAM)
-  access sync            Sync .allowed-users to Cloud Run IAM
-  access add <email>     Add user and sync
-  access remove <email>  Remove user and sync
-
-Database:
-  db:reset               Delete SQLite database
-  db:shell               Open SQLite shell
 
 Cleanup:
   clean [level]          Cleanup (containers, volumes, all)
@@ -850,19 +659,17 @@ Other:
   help                   Show this help message
 
 Examples:
-  ./tc start                    # Start backend (includes MCP)
-  ./tc logs backend             # Follow backend logs
-  ./tc health                   # Check all service health
-  ./tc curl http://localhost:3000/api/trips  # Call API endpoint
-  ./tc test backend             # Run backend tests
-  ./tc test-precommit           # Run pre-commit checks
-  ./tc generate                 # Regenerate all code from OpenAPI
-  ./tc generate backend         # Regenerate backend Go types only
-  ./tc shell backend            # Shell into backend container
-  ./tc provision                 # One-time GCP setup (APIs, Artifact Registry, Firestore)
-  ./tc deploy                   # Build, push, and deploy to Cloud Run
-  ./tc deploy status            # Check Cloud Run service status
-  ./tc clean volumes            # Remove containers and Go cache
+  ./tc start                     # Start backend
+  ./tc logs                      # Follow all service logs
+  ./tc health                    # Check service health
+  ./tc test backend              # Run backend Go tests
+  ./tc test-precommit            # Run pre-commit checks
+  ./tc generate                  # Regenerate all code from OpenAPI
+  ./tc db:reset                  # Reset database and restart
+  ./tc shell                     # Open shell in dev container
+  ./tc provision                 # One-time GCP setup
+  ./tc deploy                    # Deploy to Cloud Run
+  ./tc clean volumes             # Remove containers, database, and caches
 EOF
 }
 
@@ -887,10 +694,8 @@ case "$command" in
     generate)   cmd_generate "$@" ;;
     provision)  cmd_provision "$@" ;;
     deploy)     cmd_deploy "$@" ;;
-    access)     cmd_access "$@" ;;
 
     db:reset)   cmd_db_reset "$@" ;;
-    db:shell)   cmd_db_shell "$@" ;;
 
     clean)      cmd_clean "$@" ;;
 
