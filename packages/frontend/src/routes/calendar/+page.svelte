@@ -150,9 +150,10 @@
 	}
 
 	async function goToToday() {
-		// Scroll to the current month element
 		if (currentMonthElement) {
 			currentMonthElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		} else {
+			await scrollToCurrentMonth();
 		}
 	}
 
@@ -270,11 +271,21 @@
 			}
 		}
 
-		// Scroll to current month
-		if (currentMonthElement) {
-			currentMonthElement.scrollIntoView({ block: 'center' });
-		}
+		// Scroll to current month — retry until the element is available
+		await scrollToCurrentMonth();
 	});
+
+	async function scrollToCurrentMonth() {
+		// Wait for DOM to settle, then scroll
+		for (let attempt = 0; attempt < 10; attempt++) {
+			await tick();
+			if (currentMonthElement) {
+				currentMonthElement.scrollIntoView({ block: 'center' });
+				return;
+			}
+			await new Promise(resolve => setTimeout(resolve, 50));
+		}
+	}
 </script>
 
 <svelte:head>
@@ -376,7 +387,9 @@
 							{year}
 							{month}
 							trips={$trips}
+							dayEntries={$dayEntries}
 							onTripClick={handleTripClick}
+							onDayClick={handleDayClick}
 						/>
 					</div>
 				{:else}
@@ -384,7 +397,9 @@
 						{year}
 						{month}
 						trips={$trips}
+						dayEntries={$dayEntries}
 						onTripClick={handleTripClick}
+						onDayClick={handleDayClick}
 					/>
 				{/if}
 			{/each}
