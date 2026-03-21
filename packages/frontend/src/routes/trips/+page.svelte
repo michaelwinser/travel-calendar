@@ -8,7 +8,7 @@
 
 	let searchQuery = '';
 	let purposeFilter: TripPurpose | '' = '';
-	let timeFilter: 'upcoming' | 'past' | 'all' = 'upcoming';
+	let timeFilter: 'upcoming' | 'past' | 'all' = 'all';
 	let loading = true;
 	let error: string | null = null;
 
