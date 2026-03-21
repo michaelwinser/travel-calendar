@@ -1,0 +1,23 @@
+packages/frontend/src/lib/utils/tripParser.ts
+  e93c4510c8646995 191,193-194,215,217-218,227,229-230,239,241-242,247,251-261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "e3210084e7afa74a7946d8c9fe1dfdf116fb88fa",
+  "prompts": {
+    "e93c4510c8646995": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "92809005-0e6c-41e7-a931-f9dd58bb8c15",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 24,
+      "total_deletions": 14,
+      "accepted_lines": 24,
+      "overriden_lines": 0
+    }
+  }
+}
