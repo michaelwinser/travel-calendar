@@ -1427,29 +1427,27 @@ func (s *SQLiteStore) DeleteAllUserData(userID string) error {
 	}
 	defer tx.Rollback()
 
-	// Delete in dependency order
-	tables := []string{
+	// Tables with user_id column
+	userTables := []string{
 		"day_entries",
 		"processed_calendar_events",
-		"calendar_links",
-		"items",       // cascade from trips, but also clean directly
-		"trip_locations",
 		"user_calendars",
 		"google_credentials",
 		"sessions",
 	}
-	for _, table := range tables {
+	for _, table := range userTables {
 		if _, err := tx.Exec("DELETE FROM "+table+" WHERE user_id = ?", userID); err != nil {
 			return fmt.Errorf("deleting from %s: %w", table, err)
 		}
 	}
 
-	// Items and trip_locations don't have user_id — delete via trip ownership
-	if _, err := tx.Exec(`DELETE FROM items WHERE trip_id IN (SELECT id FROM trips WHERE user_id = ?)`, userID); err != nil {
-		return fmt.Errorf("deleting items: %w", err)
-	}
-	if _, err := tx.Exec(`DELETE FROM trip_locations WHERE trip_id IN (SELECT id FROM trips WHERE user_id = ?)`, userID); err != nil {
-		return fmt.Errorf("deleting trip_locations: %w", err)
+	// Tables scoped through trip ownership (no user_id column)
+	tripSubquery := `SELECT id FROM trips WHERE user_id = ?`
+	tripChildTables := []string{"items", "trip_locations", "calendar_links"}
+	for _, table := range tripChildTables {
+		if _, err := tx.Exec("DELETE FROM "+table+" WHERE trip_id IN ("+tripSubquery+")", userID); err != nil {
+			return fmt.Errorf("deleting from %s: %w", table, err)
+		}
 	}
 
 	// Delete trips last
