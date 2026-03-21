@@ -153,17 +153,20 @@
 		}
 	}
 
+	let quickEntryError: string | null = null;
+
 	async function handleQuickEntry(parsed: ParsedTrip) {
+		quickEntryError = null;
 		try {
 			await trips.create({
 				name: parsed.name,
-				location: parsed.location,
+				purpose: parsed.purpose || 'other',
 				startDate: parsed.startDate || undefined,
 				endDate: parsed.endDate || undefined,
-				purpose: parsed.purpose || 'other'
-			});
+				notes: parsed.location ? `Location: ${parsed.location}` : undefined
+			} as any);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to create trip';
+			quickEntryError = e instanceof Error ? e.message : 'Failed to create trip';
 		}
 	}
 
@@ -263,6 +266,12 @@
 	<!-- Quick Entry -->
 	<div class="mb-4 flex-shrink-0">
 		<QuickEntry onSubmit={handleQuickEntry} />
+		{#if quickEntryError}
+			<div class="mt-2 p-2 bg-red-50 text-red-700 text-sm rounded">
+				{quickEntryError}
+				<button class="ml-2 text-red-500 hover:text-red-700" on:click={() => quickEntryError = null}>Dismiss</button>
+			</div>
+		{/if}
 	</div>
 
 	<!-- Legend -->
