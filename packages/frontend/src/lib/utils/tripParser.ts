@@ -188,9 +188,10 @@ function tryParseDateRange(tokens: string[], startIdx: number): DateRange | null
 	if (dayRangeMatch) {
 		const startDay = parseInt(dayRangeMatch[1]);
 		const endDay = parseInt(dayRangeMatch[2]);
+		const start = resolveMonthDay(month0, startDay);
 		return {
-			start: resolveMonthDay(month0, startDay),
-			end: resolveMonthDay(month0, endDay),
+			start,
+			end: resolveMonthDay(month0, endDay, start),
 			nextIndex: startIdx + 2
 		};
 	}
@@ -211,9 +212,10 @@ function tryParseDateRange(tokens: string[], startIdx: number): DateRange | null
 				if (month1 !== undefined && startIdx + 4 < tokens.length) {
 					const endDay = parseInt(tokens[startIdx + 4].replace(/[,]/g, ''));
 					if (!isNaN(endDay)) {
+						const start = resolveMonthDay(month0, startDay);
 						return {
-							start: resolveMonthDay(month0, startDay),
-							end: resolveMonthDay(month1, endDay),
+							start,
+							end: resolveMonthDay(month1, endDay, start),
 							nextIndex: startIdx + 5
 						};
 					}
@@ -222,33 +224,41 @@ function tryParseDateRange(tokens: string[], startIdx: number): DateRange | null
 				// "Jan 23 - 27"
 				const endDay = parseInt(t3);
 				if (!isNaN(endDay)) {
+					const start = resolveMonthDay(month0, startDay);
 					return {
-						start: resolveMonthDay(month0, startDay),
-						end: resolveMonthDay(month0, endDay),
+						start,
+						end: resolveMonthDay(month0, endDay, start),
 						nextIndex: startIdx + 4
 					};
 				}
 			}
 		}
-
-		// "Jan 23-27" where hyphen is attached: already handled above
-		// "Jan 23" with no end date
 	}
 
 	// Just "Jan 23" — single date (start = end)
+	const start = resolveMonthDay(month0, startDay);
 	return {
-		start: resolveMonthDay(month0, startDay),
-		end: resolveMonthDay(month0, startDay),
+		start,
+		end: start,
 		nextIndex: startIdx + 2
 	};
 }
 
-function resolveMonthDay(month: number, day: number): Date {
+function resolveMonthDay(month: number, day: number, afterDate?: Date): Date {
 	const now = new Date();
 	const year = now.getFullYear();
-	const candidate = new Date(year, month, day);
 
-	// If the date has passed, assume next year
+	if (afterDate) {
+		// End date: must be >= afterDate (same year or next)
+		const candidate = new Date(afterDate.getFullYear(), month, day);
+		if (candidate < afterDate) {
+			return new Date(afterDate.getFullYear() + 1, month, day);
+		}
+		return candidate;
+	}
+
+	// Start date: if in the past, assume next year
+	const candidate = new Date(year, month, day);
 	const today = new Date(year, now.getMonth(), now.getDate());
 	if (candidate < today) {
 		return new Date(year + 1, month, day);
