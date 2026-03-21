@@ -10,12 +10,14 @@
 	import ItemCard from '$lib/components/item/ItemCard.svelte';
 	import ItemForm from '$lib/components/item/ItemForm.svelte';
 	import LocationEditor from '$lib/components/location/LocationEditor.svelte';
+	import RelatedEvents from '$lib/components/trip/RelatedEvents.svelte';
 	import TripPickerModal from '$lib/components/trip/TripPickerModal.svelte';
 
 	let loading = true;
 	let error: string | null = null;
 	let deleting = false;
 	let showLocations = false;
+	let showCalendarEvents = false;
 	let showAddItem = false;
 	let showMergeModal = false;
 	let showMoveModal = false;
@@ -331,6 +333,39 @@
 				{#if showLocations}
 					<div class="p-4 border-t">
 						<LocationEditor
+							tripId={$currentTrip.id}
+							startDate={$currentTrip.startDate}
+							endDate={$currentTrip.endDate}
+						/>
+					</div>
+				{/if}
+			</div>
+		{/if}
+
+		<!-- Calendar Events Section -->
+		{#if $currentTrip.startDate && $currentTrip.endDate}
+			<div class="bg-white rounded-lg shadow-sm border mb-6">
+				<button
+					type="button"
+					class="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
+					on:click={() => (showCalendarEvents = !showCalendarEvents)}
+				>
+					<div class="flex items-center gap-2">
+						<svg
+							class="w-5 h-5 text-gray-500 transform transition-transform {showCalendarEvents ? 'rotate-90' : ''}"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+						</svg>
+						<span class="font-medium">Calendar Events</span>
+					</div>
+					<span class="text-sm text-gray-500">What's on your calendar during this trip?</span>
+				</button>
+				{#if showCalendarEvents}
+					<div class="p-4 border-t">
+						<RelatedEvents
 							tripId={$currentTrip.id}
 							startDate={$currentTrip.startDate}
 							endDate={$currentTrip.endDate}

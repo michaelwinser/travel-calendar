@@ -32,8 +32,8 @@ Travel Calendar helps you see **where you'll be** across time. A trip is fundame
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Calendar events panel on trip | Not Started | Show Google Calendar events that fall within trip dates, as context |
-| Location conflict detection | Not Started | Flag home-area appointments during travel (e.g. dentist while in Milan) |
+| Calendar events panel on trip | Done | Collapsible panel on trip detail page shows events during trip dates |
+| Location conflict detection | Done | Events with locations that don't match trip day entries flagged in red |
 | Promote event to trip item | Not Started | Optional — user can add a related event as a trip item if desired |
 
 ---
