@@ -44,9 +44,9 @@ Travel Calendar helps you see **where you'll be** across time. A trip is fundame
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| User-controlled account deletion | Not Started | "Delete my data" in Settings |
-| `./tc admin:delete-user <email>` | Not Started | Admin command to remove all user data |
-| `./tc admin:cleanup-orphans` | Not Started | Purge pre-multi-tenancy data with empty user_id |
+| User-controlled account deletion | Done | "Delete my data" in Settings, double-confirm, clears session |
+| `./tc admin:delete-user <email>` | Done | Admin command to remove all user data (SQLite) |
+| `./tc admin:cleanup-orphans` | Done | Purge pre-multi-tenancy data with empty user_id (SQLite) |
 
 ### Phase 7: Sharing & Collaboration
 

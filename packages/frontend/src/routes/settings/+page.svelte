@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { calendarStore, isCalendarConnected } from '$lib/stores/calendar';
+	import { authStore } from '$lib/stores/auth';
 	import { api } from '$lib/api/client';
 	import type { GoogleCalendar, TripSuggestion, Trip, SuggestedItem } from '@travel-calendar/shared';
 
@@ -43,6 +44,20 @@
 			selectedIds = new Set($calendarStore.selectedCalendars.map((c) => c.calendarId));
 		}
 	});
+
+	async function handleDeleteAccount() {
+		if (!confirm('Are you sure you want to delete ALL your data? This cannot be undone.')) return;
+		if (!confirm('This will permanently delete all trips, day entries, calendar settings, and sessions. Continue?')) return;
+
+		try {
+			const response = await fetch('/api/account', { method: 'DELETE' });
+			if (!response.ok) throw new Error('Failed to delete account');
+			await authStore.logout();
+			goto('/login');
+		} catch (e) {
+			alert(e instanceof Error ? e.message : 'Failed to delete account');
+		}
+	}
 
 	function toggleCalendar(id: string) {
 		if (selectedIds.has(id)) {
@@ -597,22 +612,26 @@
 				</section>
 			{/if}
 
-			<!-- Info section -->
+			<!-- Account Section -->
 			<section class="bg-white rounded-lg shadow">
 				<div class="p-6 border-b">
-					<h2 class="text-lg font-semibold text-gray-900">About Calendar Integration</h2>
+					<h2 class="text-lg font-semibold text-gray-900">Account</h2>
 				</div>
-				<div class="p-6 text-sm text-gray-600 space-y-2">
-					<p>When connected, Travel Calendar can:</p>
-					<ul class="list-disc list-inside space-y-1 ml-2">
-						<li>Detect conflicts between your calendar events and trips</li>
-						<li>Suggest new trips based on travel-related calendar events</li>
-						<li>Sync your trips to Google Calendar</li>
-					</ul>
-					<p class="mt-4 text-gray-500">
-						Your calendar data is only used to provide these features and is never shared with third
-						parties.
-					</p>
+				<div class="p-6">
+					<div class="flex items-center justify-between">
+						<div>
+							<p class="text-sm font-medium text-gray-900">Delete all my data</p>
+							<p class="text-xs text-gray-500 mt-0.5">
+								Permanently removes all your trips, day entries, calendar settings, and sessions.
+							</p>
+						</div>
+						<button
+							class="px-4 py-2 text-sm text-red-600 border border-red-200 rounded-md hover:bg-red-50"
+							on:click={handleDeleteAccount}
+						>
+							Delete My Data
+						</button>
+					</div>
 				</div>
 			</section>
 		{/if}

@@ -80,6 +80,9 @@ type StoreInterface interface {
 	DeleteCalendarLink(id uuid.UUID) error
 	DeleteCalendarLinksByTrip(tripID uuid.UUID) error
 
+	// Account management
+	DeleteAllUserData(userID string) error
+
 	// Session methods
 	CreateSession(session *entity.Session) error
 	GetSession(id string) (*entity.Session, error)

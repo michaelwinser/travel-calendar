@@ -96,6 +96,31 @@ func main() {
 		w.Write([]byte(`{"ok":true}`))
 	})
 
+	// Delete account endpoint — removes all user data
+	r.Delete("/api/account", func(w http.ResponseWriter, req *http.Request) {
+		uid := auth.UserIDFromContext(req.Context())
+		if uid == "" {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		if err := db.DeleteAllUserData(uid); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(w, `{"error":"failed to delete account data"}`, http.StatusInternalServerError)
+			return
+		}
+		// Clear session cookie
+		http.SetCookie(w, &http.Cookie{
+			Name:     "travel_session",
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+		})
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"ok":true}`))
+	})
+
 	// Register OpenAPI handlers for /api/* and /health
 	api.HandlerFromMux(h, r)
 

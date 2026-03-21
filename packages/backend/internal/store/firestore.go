@@ -1299,6 +1299,72 @@ func (s *FirestoreStore) DeleteAllProcessedEvents(userID string) error {
 	return nil
 }
 
+// --- Account management ---
+
+// DeleteAllUserData removes all data for a user across all collections.
+func (s *FirestoreStore) DeleteAllUserData(userID string) error {
+	// Collections with userId field
+	userCollections := []string{
+		collDayEntries, collProcessedEvents, collUserCalendars, collSessions,
+	}
+
+	for _, collName := range userCollections {
+		iter := s.client.Collection(collName).Where("userId", "==", userID).Documents(s.ctx)
+		batch := s.client.Batch()
+		count := 0
+		for {
+			doc, err := iter.Next()
+			if err == iterator.Done {
+				break
+			}
+			if err != nil {
+				iter.Stop()
+				return fmt.Errorf("iterating %s: %w", collName, err)
+			}
+			batch.Delete(doc.Ref)
+			count++
+			if count >= 500 {
+				if _, err = batch.Commit(s.ctx); err != nil {
+					iter.Stop()
+					return fmt.Errorf("deleting from %s: %w", collName, err)
+				}
+				batch = s.client.Batch()
+				count = 0
+			}
+		}
+		iter.Stop()
+		if count > 0 {
+			if _, err := batch.Commit(s.ctx); err != nil {
+				return fmt.Errorf("deleting from %s: %w", collName, err)
+			}
+		}
+	}
+
+	// Delete trips and their children (items, locations, calendar links)
+	tripIter := s.client.Collection(collTrips).Where("userId", "==", userID).Documents(s.ctx)
+	for {
+		doc, err := tripIter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			tripIter.Stop()
+			return fmt.Errorf("iterating trips: %w", err)
+		}
+		tripID, _ := uuid.Parse(doc.Ref.ID)
+		if err := s.DeleteTrip(userID, tripID); err != nil {
+			tripIter.Stop()
+			return fmt.Errorf("deleting trip %s: %w", doc.Ref.ID, err)
+		}
+	}
+	tripIter.Stop()
+
+	// Delete Google credentials
+	s.client.Collection(collGoogleCreds).Doc(userID).Delete(s.ctx)
+
+	return nil
+}
+
 // --- Session methods ---
 
 // CreateSession inserts a new session.

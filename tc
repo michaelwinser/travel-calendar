@@ -320,6 +320,77 @@ cmd_db_reset() {
 }
 
 # ===========================================
+# Commands: Admin
+# ===========================================
+
+cmd_admin() {
+    action="${1:-}"
+    shift 2>/dev/null || true
+
+    case "$action" in
+        delete-user)
+            cmd_admin_delete_user "$@"
+            ;;
+        cleanup-orphans)
+            cmd_admin_cleanup_orphans
+            ;;
+        *)
+            echo "Usage: ./tc admin <command>"
+            echo ""
+            echo "  delete-user <email>   Delete all data for a specific user"
+            echo "  cleanup-orphans       Remove data with empty user_id (pre-migration leftovers)"
+            ;;
+    esac
+}
+
+cmd_admin_delete_user() {
+    require_docker
+    email="${1:-}"
+    if [ -z "$email" ]; then
+        error "Usage: ./tc admin delete-user <email>"
+    fi
+
+    if confirm "Delete ALL data for user '${email}'? This cannot be undone."; then
+        info "Deleting data for ${email}..."
+        docker compose exec -T backend sh -c "
+            sqlite3 /app/data/travel.db \"
+                DELETE FROM day_entries WHERE user_id = '${email}';
+                DELETE FROM processed_calendar_events WHERE user_id = '${email}';
+                DELETE FROM user_calendars WHERE user_id = '${email}';
+                DELETE FROM google_credentials WHERE user_id = '${email}';
+                DELETE FROM sessions WHERE user_id = '${email}';
+                DELETE FROM items WHERE trip_id IN (SELECT id FROM trips WHERE user_id = '${email}');
+                DELETE FROM trip_locations WHERE trip_id IN (SELECT id FROM trips WHERE user_id = '${email}');
+                DELETE FROM trips WHERE user_id = '${email}';
+            \"
+        " 2>/dev/null && success "Data deleted for ${email}" || error "Failed — is the backend running with SQLite?"
+    else
+        info "Cancelled"
+    fi
+}
+
+cmd_admin_cleanup_orphans() {
+    require_docker
+    if confirm "Delete all data with empty user_id (pre-migration orphans)?"; then
+        info "Cleaning up orphaned data..."
+        docker compose exec -T backend sh -c "
+            sqlite3 /app/data/travel.db \"
+                DELETE FROM day_entries WHERE user_id = '';
+                DELETE FROM processed_calendar_events WHERE user_id = '';
+                DELETE FROM user_calendars WHERE user_id = '';
+                DELETE FROM sessions WHERE user_id = '';
+                DELETE FROM items WHERE trip_id IN (SELECT id FROM trips WHERE user_id = '');
+                DELETE FROM trip_locations WHERE trip_id IN (SELECT id FROM trips WHERE user_id = '');
+                DELETE FROM trips WHERE user_id = '';
+                SELECT 'Done. Remaining trips: ' || COUNT(*) FROM trips;
+            \"
+        " 2>/dev/null && success "Orphaned data cleaned up" || error "Failed — is the backend running with SQLite?"
+    else
+        info "Cancelled"
+    fi
+}
+
+# ===========================================
 # Commands: Health & Diagnostics
 # ===========================================
 
@@ -643,6 +714,10 @@ Code Generation:
 Database:
   db:reset               Reset database (stops services, removes volume, restarts)
 
+Admin:
+  admin delete-user <email>   Delete all data for a specific user
+  admin cleanup-orphans       Remove pre-migration orphaned data
+
 Health & Diagnostics:
   health [service]       Check service health
   curl <url> [opts]      Run curl inside backend container (port 3000)
@@ -696,6 +771,7 @@ case "$command" in
     deploy)     cmd_deploy "$@" ;;
 
     db:reset)   cmd_db_reset "$@" ;;
+    admin)      cmd_admin "$@" ;;
 
     clean)      cmd_clean "$@" ;;
 

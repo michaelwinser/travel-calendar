@@ -1419,6 +1419,47 @@ func (s *SQLiteStore) GetSession(id string) (*entity.Session, error) {
 	return &session, nil
 }
 
+// DeleteAllUserData removes all data for a user across all tables.
+func (s *SQLiteStore) DeleteAllUserData(userID string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Delete in dependency order
+	tables := []string{
+		"day_entries",
+		"processed_calendar_events",
+		"calendar_links",
+		"items",       // cascade from trips, but also clean directly
+		"trip_locations",
+		"user_calendars",
+		"google_credentials",
+		"sessions",
+	}
+	for _, table := range tables {
+		if _, err := tx.Exec("DELETE FROM "+table+" WHERE user_id = ?", userID); err != nil {
+			return fmt.Errorf("deleting from %s: %w", table, err)
+		}
+	}
+
+	// Items and trip_locations don't have user_id — delete via trip ownership
+	if _, err := tx.Exec(`DELETE FROM items WHERE trip_id IN (SELECT id FROM trips WHERE user_id = ?)`, userID); err != nil {
+		return fmt.Errorf("deleting items: %w", err)
+	}
+	if _, err := tx.Exec(`DELETE FROM trip_locations WHERE trip_id IN (SELECT id FROM trips WHERE user_id = ?)`, userID); err != nil {
+		return fmt.Errorf("deleting trip_locations: %w", err)
+	}
+
+	// Delete trips last
+	if _, err := tx.Exec("DELETE FROM trips WHERE user_id = ?", userID); err != nil {
+		return fmt.Errorf("deleting trips: %w", err)
+	}
+
+	return tx.Commit()
+}
+
 // DeleteSession removes a session by ID.
 func (s *SQLiteStore) DeleteSession(id string) error {
 	_, err := s.db.Exec("DELETE FROM sessions WHERE id = ?", id)
