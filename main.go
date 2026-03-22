@@ -56,6 +56,12 @@ func setup() error {
 	if err != nil {
 		return err
 	}
+
+	// Register API routes (needed by both serve and auto-serve)
+	activityServer := &ActivityServer{store: activities, parseHistory: parseHistory}
+	api.HandlerFromMux(activityServer, app.Server().Router())
+	appcli.AutoServeHandler = app.Server().Router()
+
 	return nil
 }
 
@@ -63,9 +69,8 @@ func main() {
 	cli := appcli.New("travel", "Travel calendar — plan trips, detect conflicts, stay sane", setup)
 
 	cli.SetServeFunc(func() error {
-		activityServer := &ActivityServer{store: activities, parseHistory: parseHistory}
-		api.HandlerFromMux(activityServer, app.Server().Router())
-
+		// Routes already registered in setup() for auto-serve.
+		// Just add the root page for the web UI.
 		r := app.Router()
 		r.Get("/", app.LoginPage(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html")
@@ -149,23 +154,32 @@ func main() {
 
 // --- CLI command implementations ---
 
-func apiClient(cmd *cobra.Command) (*api.ClientWithResponses, error) {
-	serverFlag, _ := cmd.Flags().GetString("server")
-	serverURL := appcli.ResolveServerURL(serverFlag, appName)
-
-	httpClient, err := appcli.AuthenticatedClient(appName)
+func apiClient(cmd *cobra.Command) (client *api.ClientWithResponses, cleanup func(), err error) {
+	serverURL, stop, err := appcli.ResolveServerWithAutoServe(cmd, appName)
 	if err != nil {
-		return nil, fmt.Errorf("not logged in — run: travel login --server %s", serverURL)
+		return nil, nil, err
 	}
 
-	return api.NewClientWithResponses(serverURL, api.WithHTTPClient(httpClient))
+	httpClient, authErr := appcli.AuthenticatedClient(appName)
+	if authErr != nil {
+		// Auto-serve mode: use a plain client (no auth needed for local)
+		httpClient = http.DefaultClient
+	}
+
+	c, err := api.NewClientWithResponses(serverURL, api.WithHTTPClient(httpClient))
+	if err != nil {
+		stop()
+		return nil, nil, err
+	}
+	return c, stop, nil
 }
 
 func addActivity(cmd *cobra.Command, args []string) error {
-	client, err := apiClient(cmd)
+	client, cleanup, err := apiClient(cmd)
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 
 	title := strings.Join(args, " ")
 	from, _ := cmd.Flags().GetString("from")
@@ -240,10 +254,11 @@ func addActivity(cmd *cobra.Command, args []string) error {
 }
 
 func quickAdd(cmd *cobra.Command, args []string) error {
-	client, err := apiClient(cmd)
+	client, cleanup, err := apiClient(cmd)
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 
 	text := strings.Join(args, " ")
 	yes, _ := cmd.Flags().GetBool("yes")
@@ -390,10 +405,11 @@ func deref(s *string, fallback string) string {
 }
 
 func listActivities(cmd *cobra.Command, args []string) error {
-	client, err := apiClient(cmd)
+	client, cleanup, err := apiClient(cmd)
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 
 	month, _ := cmd.Flags().GetString("month")
 	params := &api.ListActivitiesParams{}
@@ -434,10 +450,11 @@ func listActivities(cmd *cobra.Command, args []string) error {
 }
 
 func checkDate(cmd *cobra.Command, args []string) error {
-	client, err := apiClient(cmd)
+	client, cleanup, err := apiClient(cmd)
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 
 	dateStr := args[0]
 	d, perr := time.Parse("2006-01-02", dateStr)
@@ -498,10 +515,11 @@ func resolveByPrefix(client *api.ClientWithResponses, prefix string) (*api.Activ
 }
 
 func updateActivity(cmd *cobra.Command, args []string) error {
-	client, err := apiClient(cmd)
+	client, cleanup, err := apiClient(cmd)
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 
 	a, err := resolveByPrefix(client, args[0])
 	if err != nil {
@@ -556,10 +574,11 @@ func updateActivity(cmd *cobra.Command, args []string) error {
 }
 
 func deleteActivity(cmd *cobra.Command, args []string) error {
-	client, err := apiClient(cmd)
+	client, cleanup, err := apiClient(cmd)
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 
 	a, err := resolveByPrefix(client, args[0])
 	if err != nil {

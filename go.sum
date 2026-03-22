@@ -75,8 +75,8 @@ github.com/mailru/easyjson v0.7.7 h1:UGYAvKxe3sBsEDzO8ZeWOSlIQfWFlxbzLZe7hwFURr0
 github.com/mailru/easyjson v0.7.7/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
 github.com/mattn/go-sqlite3 v1.14.37 h1:3DOZp4cXis1cUIpCfXLtmlGolNLp2VEqhiB/PARNBIg=
 github.com/mattn/go-sqlite3 v1.14.37/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
-github.com/michaelwinser/appbase v0.1.1-0.20260322115234-cda4f8f3b8f6 h1:M1gKYthkGGRKZj2ql71zc9Qt6GSgpm9o3AcHw9U/4zs=
-github.com/michaelwinser/appbase v0.1.1-0.20260322115234-cda4f8f3b8f6/go.mod h1:eu0TMqo6W+wde2WEvjBy1rl8RwT2zGB7IJ6AyFCLHNk=
+github.com/michaelwinser/appbase v0.1.1-0.20260322144503-f00e2645bfc0 h1:Cind5txKVXk7k2naBS1SIzY0trsvJfYyHdCPp77EcSM=
+github.com/michaelwinser/appbase v0.1.1-0.20260322144503-f00e2645bfc0/go.mod h1:eu0TMqo6W+wde2WEvjBy1rl8RwT2zGB7IJ6AyFCLHNk=
 github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 h1:RWengNIwukTxcDr9M+97sNutRR1RKhG96O6jWumTTnw=
 github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826/go.mod h1:TaXosZuwdSHYgviHp1DAtfrULt5eUgsSMsZf+YrPgl8=
 github.com/oapi-codegen/runtime v1.3.0 h1:vyK1zc0gDWWXgk2xoQa4+X4RNNc5SL2RbTpJS/4vMYA=
