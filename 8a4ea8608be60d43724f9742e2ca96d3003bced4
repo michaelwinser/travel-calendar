@@ -1,0 +1,23 @@
+main.go
+  dffce09a7b9e3db1 59-64,72-73,157-158,160,163-166,169-174,178,182,257,261,408,412,453,457,518,522,577,581
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "8a4ea8608be60d43724f9742e2ca96d3003bced4",
+  "prompts": {
+    "dffce09a7b9e3db1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "584907b7-c048-4180-92e6-eaa5a0119c1f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 35,
+      "total_deletions": 16,
+      "accepted_lines": 35,
+      "overriden_lines": 0
+    }
+  }
+}
