@@ -1,0 +1,18 @@
+#!/bin/sh
+# travel-calendar project commands
+# Sources shared template from appbase — bug fixes propagate automatically.
+set -e
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Source shared dev functions
+. "../appbase/deploy/dev-template.sh"
+
+# App-specific settings
+APP_BINARY_NAME="travel"
+APP_E2E_DIR="tests/e2e"
+
+# Dispatch — add app-specific commands before the fallthrough
+case "${1:-help}" in
+    *)  dev_dispatch "$@" ;;
+esac

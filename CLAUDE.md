@@ -61,25 +61,36 @@ This app is built on `github.com/michaelwinser/appbase`. Read `../appbase/CLAUDE
 ### Running
 
 ```bash
-# Project commands (use ./tc for everything)
-./tc serve               # Start the server (loads secrets, creates data dir)
-./tc build               # Build the travel binary
-./tc test                # Run all tests
-./tc codegen             # Regenerate API code from openapi.yaml
-./tc lint                # Run go vet
-./tc lint-api            # Verify codegen is up to date
-./tc ci                  # Full CI pipeline
-./tc secret import ...   # Import Google OAuth credentials
-./tc provision email     # Full GCP setup
-./tc deploy              # Deploy to Cloud Run
+# Project commands (use ./dev for everything)
+./dev serve              # Start the web server (loads secrets)
+./dev build              # Build the travel binary
+./dev test               # Run Go tests
+./dev e2e                # Run E2E smoke tests
+./dev codegen            # Regenerate API code from openapi.yaml
+./dev lint               # Run go vet
+./dev lint-api           # Verify codegen is up to date
+./dev ci                 # Full CI pipeline (lint + build + test + e2e)
+./dev secret import ...  # Import Google OAuth credentials
+./dev provision email    # Full GCP setup
+./dev deploy             # Deploy to Cloud Run
 
-# CLI (requires a running server + login)
-./travel login --server http://localhost:3000
+# CLI — just works, no serve or login needed for local use
 ./travel add "Trip Name" --from 2026-04-01 --to 2026-04-05 --loc Paris --type travel
 ./travel list [--month 2026-04]
 ./travel check 2026-04-03
+./travel quick "FOSDEM Jan 22 - Feb 3 in Brussels" --yes
+./travel update <id-prefix> --title "New Title"
 ./travel delete <id-prefix>
+
+# Remote server (requires login)
+./travel login --server https://travel-calendar.run.app
+./travel list --server https://travel-calendar.run.app
 ```
+
+Three runtime modes:
+- **Local CLI**: `./travel add ...` — in-process transport, single-user, no TCP
+- **Web server**: `./dev serve` — full OAuth, persistent server
+- **Remote CLI**: `./travel list --server https://...` — keychain auth
 
 Config: `app.yaml` (loaded by appbase). Env var overrides still work (`STORE_TYPE`, `PORT`, etc).
 

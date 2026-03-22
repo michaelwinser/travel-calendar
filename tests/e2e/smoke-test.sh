@@ -4,8 +4,7 @@
 # Demonstrates typical usage while verifying output. Serves as both
 # a test and a usage example for new users.
 #
-# Prerequisites:
-#   - appbase binary installed (go install github.com/michaelwinser/appbase/cmd/appbase@latest)
+# Uses the in-process transport — no server, no login, no setup needed.
 #
 # Usage: ./tests/e2e/smoke-test.sh
 
@@ -15,11 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # --- Config ---
-PORT=3198
-DB_PATH="$PROJECT_DIR/data/smoke-test.db"
 BINARY="$PROJECT_DIR/travel"
-APPBASE="${APPBASE:-$(go env GOPATH)/bin/appbase}"
-SERVER_PID=""
 FAILURES=0
 
 # Colors
@@ -33,17 +28,11 @@ else
 fi
 
 cleanup() {
-    if [ -n "$SERVER_PID" ]; then
-        kill "$SERVER_PID" 2>/dev/null || true
-        wait "$SERVER_PID" 2>/dev/null || true
-    fi
-    "$APPBASE" test-logout --app travel-calendar 2>/dev/null || true
-    rm -f "$DB_PATH" "$BINARY"
+    rm -f "$BINARY"
 }
 trap cleanup EXIT
 
 # Run a command, show it, capture output, check against expected patterns.
-# Usage: run_check "description" "expected_pattern" command args...
 run_check() {
     desc="$1"; shift
     expected="$1"; shift
@@ -58,7 +47,7 @@ run_check() {
     else
         printf "${RED}  ^^^ expected to see: %s${NC}\n\n" "$expected"
         FAILURES=$((FAILURES + 1))
-        return 0  # don't exit on failure
+        return 0
     fi
 }
 
@@ -68,24 +57,6 @@ run_check() {
 
 echo "Building travel binary..."
 (cd "$PROJECT_DIR" && go build -o travel .)
-echo ""
-
-echo "Starting server on port $PORT..."
-rm -f "$DB_PATH"
-mkdir -p "$(dirname "$DB_PATH")"
-STORE_TYPE=sqlite SQLITE_DB_PATH="$DB_PATH" PORT="$PORT" \
-    "$BINARY" serve > /dev/null 2>&1 &
-SERVER_PID=$!
-
-for i in 1 2 3 4 5 6 7 8 9 10; do
-    if curl -s "http://localhost:$PORT/health" > /dev/null 2>&1; then break; fi
-    if [ "$i" = "10" ]; then echo "Server failed to start"; exit 1; fi
-    sleep 0.5
-done
-
-echo "Logging in for CLI testing..."
-STORE_TYPE=sqlite SQLITE_DB_PATH="$DB_PATH" \
-    "$APPBASE" test-login --db "$DB_PATH" --server "http://localhost:$PORT" --app travel-calendar
 echo ""
 
 # ============================================
@@ -148,7 +119,6 @@ run_check "Check empty date" "Home" \
 
 echo "--- Cancel the dentist, resolve the conflict ---"
 echo ""
-# Find the dentist ID prefix from the list
 DENTIST_PREFIX=$("$BINARY" list 2>/dev/null | grep "Dentist" | awk '{print $1}')
 if [ -n "$DENTIST_PREFIX" ]; then
     run_check "Delete dentist" "Deleted" \

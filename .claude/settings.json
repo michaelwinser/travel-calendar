@@ -89,8 +89,8 @@
       "Bash(STORE_TYPE=*)",
       "Bash(SQLITE_DB_PATH=*)",
       "Bash(GONOSUMCHECK=*)",
-      "Bash(./tc:*)",
-      "Bash(./tc *)"
+      "Bash(./dev:*)",
+      "Bash(./dev *)"
     ],
     "deny": [
       "Bash(rm -rf /:*)",

@@ -44,7 +44,15 @@ var (
 
 func setup() error {
 	var err error
-	app, err = appbase.New(appbase.Config{Name: appName, Quiet: !appcli.IsServeCommand})
+	cfg := appbase.Config{
+		Name:      appName,
+		Quiet:     !appcli.IsServeCommand,
+		LocalMode: appcli.IsLocalMode,
+	}
+	if appcli.LocalDataPath != "" {
+		cfg.DB.SQLitePath = appcli.LocalDataPath + "/app.db"
+	}
+	app, err = appbase.New(cfg)
 	if err != nil {
 		return err
 	}
@@ -57,10 +65,9 @@ func setup() error {
 		return err
 	}
 
-	// Register API routes (needed by both serve and auto-serve)
+	// Register API routes
 	activityServer := &ActivityServer{store: activities, parseHistory: parseHistory}
 	api.HandlerFromMux(activityServer, app.Server().Router())
-	appcli.AutoServeHandler = app.Server().Router()
 
 	return nil
 }
@@ -155,18 +162,16 @@ func main() {
 // --- CLI command implementations ---
 
 func apiClient(cmd *cobra.Command) (client *api.ClientWithResponses, cleanup func(), err error) {
-	serverURL, stop, err := appcli.ResolveServerWithAutoServe(cmd, appName)
+	if err := setup(); err != nil {
+		return nil, nil, err
+	}
+
+	httpClient, baseURL, stop, err := appcli.ClientForCommand(cmd, appName, app.Handler())
 	if err != nil {
 		return nil, nil, err
 	}
 
-	httpClient, authErr := appcli.AuthenticatedClient(appName)
-	if authErr != nil {
-		// Auto-serve mode: use a plain client (no auth needed for local)
-		httpClient = http.DefaultClient
-	}
-
-	c, err := api.NewClientWithResponses(serverURL, api.WithHTTPClient(httpClient))
+	c, err := api.NewClientWithResponses(baseURL, api.WithHTTPClient(httpClient))
 	if err != nil {
 		stop()
 		return nil, nil, err
