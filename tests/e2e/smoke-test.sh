@@ -102,12 +102,12 @@ echo ""
 run_check "Create conference" "European Summit" \
     "$BINARY" add "European Summit" --from 2026-10-04 --to 2026-10-07 --loc Brussels --type conference
 
-# --- Add a vacation ---
+# --- Quick add a vacation ---
 
-echo "--- Adding a Hawaiian vacation ---"
+echo "--- Quick-adding a Hawaiian vacation ---"
 echo ""
-run_check "Create vacation" "Hawaii Vacation" \
-    "$BINARY" add "Hawaii Vacation" --from 2026-10-15 --to 2026-10-22 --loc Maui --type vacation
+run_check "Quick add vacation" "Hawaii Vacation" \
+    "$BINARY" quick "Hawaii Vacation Oct 15 - Oct 22 in Maui" --yes
 
 # --- Create a conflict ---
 

@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"net/http"
@@ -126,6 +127,15 @@ func main() {
 	updateCmd.Flags().String("notes", "", "New notes")
 	cli.AddCommand(updateCmd)
 
+	quickCmd := &cobra.Command{
+		Use:   "quick [text]",
+		Short: "Parse freeform text into an activity, then create/edit/abort",
+		Args:  cobra.MinimumNArgs(1),
+		RunE:  quickAdd,
+	}
+	quickCmd.Flags().BoolP("yes", "y", false, "Skip confirmation and create immediately")
+	cli.AddCommand(quickCmd)
+
 	delCmd := &cobra.Command{
 		Use:   "delete [id-prefix]",
 		Short: "Delete an activity by ID prefix (via API)",
@@ -227,6 +237,156 @@ func addActivity(cmd *cobra.Command, args []string) error {
 		}
 	}
 	return nil
+}
+
+func quickAdd(cmd *cobra.Command, args []string) error {
+	client, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+
+	text := strings.Join(args, " ")
+	yes, _ := cmd.Flags().GetBool("yes")
+
+	// Parse via API
+	parseResp, err := client.ParseActivityWithResponse(context.Background(), api.ParseRequest{Text: text})
+	if err != nil {
+		return err
+	}
+	if parseResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", parseResp.StatusCode(), string(parseResp.Body))
+	}
+
+	result := parseResp.JSON200
+	parsed := result.Activity
+	historyID := result.Id
+
+	// Display proposed activity
+	title := deref(parsed.Title, "(none)")
+	actType := "stay"
+	if parsed.Type != nil {
+		actType = string(*parsed.Type)
+	}
+	startDate := "(none)"
+	if parsed.StartDate != nil {
+		startDate = parsed.StartDate.Format("2006-01-02")
+	}
+	endDate := startDate
+	if parsed.EndDate != nil {
+		endDate = parsed.EndDate.Format("2006-01-02")
+	}
+	location := deref(parsed.Location, "(none)")
+
+	fmt.Println()
+	fmt.Printf("  Title:     %s\n", title)
+	fmt.Printf("  Type:      %s\n", actType)
+	if startDate == endDate {
+		fmt.Printf("  Date:      %s\n", startDate)
+	} else {
+		fmt.Printf("  Dates:     %s → %s\n", startDate, endDate)
+	}
+	fmt.Printf("  Location:  %s\n", location)
+
+	if result.Unparsed != "" {
+		fmt.Printf("  Unparsed:  %s\n", result.Unparsed)
+	}
+	fmt.Println()
+
+	if !yes {
+		action := prompt("[C]reate  [E]dit  [A]bort? ")
+		switch strings.ToLower(strings.TrimSpace(action)) {
+		case "c", "":
+			// fall through to create
+		case "e":
+			title, actType, startDate, endDate, location = editFields(title, actType, startDate, endDate, location)
+		case "a":
+			fmt.Println("Aborted.")
+			return nil
+		default:
+			fmt.Println("Aborted.")
+			return nil
+		}
+	}
+
+	// Validate we have enough to create
+	if title == "(none)" || title == "" {
+		return fmt.Errorf("title is required")
+	}
+	if startDate == "(none)" || startDate == "" {
+		return fmt.Errorf("start date is required")
+	}
+
+	// Build create request
+	sd, _ := time.Parse("2006-01-02", startDate)
+	req := api.CreateActivityRequest{
+		Title:     title,
+		Type:      api.CreateActivityRequestType(actType),
+		StartDate: openapi_types.Date{Time: sd},
+	}
+	if endDate != "" && endDate != startDate {
+		ed, _ := time.Parse("2006-01-02", endDate)
+		req.EndDate = &openapi_types.Date{Time: ed}
+	}
+	if location != "(none)" && location != "" {
+		req.Location = &location
+	}
+	if historyID != "" {
+		req.ParseHistoryId = &historyID
+	}
+
+	createResp, err := client.CreateActivityWithResponse(context.Background(), req)
+	if err != nil {
+		return err
+	}
+	if createResp.StatusCode() != http.StatusCreated {
+		return fmt.Errorf("server returned %d: %s", createResp.StatusCode(), string(createResp.Body))
+	}
+
+	a := createResp.JSON201
+	loc := ""
+	if a.Location != nil {
+		loc = *a.Location
+	}
+	fmt.Printf("Created: %s (%s)\n", a.Title, a.Id[:8])
+	fmt.Printf("  %s → %s  [%s]  %s\n", a.StartDate.Format("2006-01-02"), a.EndDate.Format("2006-01-02"), a.Type, loc)
+	return nil
+}
+
+func editFields(title, actType, startDate, endDate, location string) (string, string, string, string, string) {
+	reader := bufio.NewReader(os.Stdin)
+
+	title = promptDefault(reader, "  Title", title)
+	actType = promptDefault(reader, "  Type", actType)
+	startDate = promptDefault(reader, "  Start date", startDate)
+	endDate = promptDefault(reader, "  End date", endDate)
+	location = promptDefault(reader, "  Location", location)
+	fmt.Println()
+
+	return title, actType, startDate, endDate, location
+}
+
+func promptDefault(reader *bufio.Reader, label, defaultVal string) string {
+	fmt.Printf("%s [%s]: ", label, defaultVal)
+	line, _ := reader.ReadString('\n')
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return defaultVal
+	}
+	return line
+}
+
+func prompt(msg string) string {
+	fmt.Print(msg)
+	reader := bufio.NewReader(os.Stdin)
+	line, _ := reader.ReadString('\n')
+	return strings.TrimSpace(line)
+}
+
+func deref(s *string, fallback string) string {
+	if s == nil || *s == "" {
+		return fallback
+	}
+	return *s
 }
 
 func listActivities(cmd *cobra.Command, args []string) error {
