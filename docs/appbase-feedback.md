@@ -26,9 +26,13 @@ Fixed upstream in appbase commit `22e42d2`. New `Config.Quiet` flag suppresses s
 
 **Workaround in travel-calendar:** Build and install the binary once (`go build -o ~/go/bin/appbase-secret ./cmd/secret` from within appbase), then call the installed binary from `./tc`. The `_ensure_secret_bin` helper handles this automatically.
 
-**Suggestion:** See #4 below — an installable `ab` binary would eliminate this entirely.
+**Suggestion:** See #4 below — an installable `ab` binary would eliminate this entirely. **RESOLVED** in `cc92587`.
 
-### 4. appbase should ship an installable `ab` CLI binary
+### ~~4. appbase should ship an installable `ab` CLI binary~~ RESOLVED
+
+Resolved in appbase commit `cc92587` (renamed to `appbase` in `034d989`). Install with `go install github.com/michaelwinser/appbase/cmd/appbase@latest`. The `./tc` script should be updated to use this instead of sourcing shell scripts.
+
+The following was the original proposal:
 
 **The problem:** Building a consumer `./tc` script that uses appbase's shared capabilities requires significant gymnastics:
 
@@ -91,7 +95,42 @@ The current auth flow is browser-only: `travel login` opens a browser → Google
 
 3. **Direct SQLite seeding** — The e2e script inserts a row into the `sessions` table via `sqlite3`. Pragmatic but couples the test to the SQLite schema, won't work with Firestore, and breaks if the session table structure changes.
 
-This is not blocking (option 3 works for now) but a proper solution would make appbase-based apps much easier to test end-to-end.
+**Update (2026-03-22):** appbase `164bbe5` added `appbase test-session` and `AUTH_MODE=dev`. Then `7c68301`/`cda4f8f` added `appbase test-login`/`test-logout`. All resolved — see #7 below.
+
+### ~~7. `appbase test-login` — seed both database and keychain for CLI e2e tests~~ RESOLVED
+
+Resolved in appbase commits `7c68301` and `cda4f8f`. The `appbase test-login` command creates a session in the database AND stores it in the OS keychain, and `appbase test-logout` cleans up. Smoke test uses this successfully — no platform-specific keychain code needed in consumer apps.
+
+The following was the original request:
+
+### 7. `appbase test-login` — seed both database and keychain for CLI e2e tests
+
+**Context:** The `appbase test-session` command creates a session in the database and prints the cookie value — great for curl-based tests. But when testing the actual CLI binary (e.g., `travel add`, `travel list`), the CLI reads its session from the OS keychain via `appcli.AuthenticatedClient()`, not from a cookie header.
+
+To test the CLI end-to-end, you currently need to:
+1. Create a session in the DB (`appbase test-session`)
+2. Manually seed the keychain with the session ID and server URL (`security add-generic-password` on macOS)
+3. Clean up the keychain after the test
+
+This is fragile, platform-specific, and clutter that every consumer app would need to reimplement.
+
+**Proposal:** `appbase test-login --server URL --app NAME [--email EMAIL]`
+
+This would:
+1. Create a session in the local database (like `test-session`)
+2. Store the session ID and server URL in the keychain (like `login` does after OAuth)
+
+Consumer smoke tests become clean CLI usage with no platform-specific code:
+```sh
+./travel serve &
+appbase test-login --server http://localhost:3000 --app travel-calendar
+./travel add "Trip" --from 2026-04-01 --loc Paris --type travel
+./travel list
+./travel check 2026-04-01
+appbase logout --app travel-calendar   # cleanup
+```
+
+A corresponding `appbase logout --app NAME` (or extending the existing logout) would clean up.
 
 ## Notes
 
