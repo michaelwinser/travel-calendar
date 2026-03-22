@@ -77,6 +77,22 @@ This is probably a significant effort, but the current approach of shell-script 
 
 Semantic version tags also give consumers stable dependency points and make `go get -u` safer.
 
+### 6. E2E shell script testing needs a way to create sessions without a browser
+
+**Context:** The Go test harness works great for API-level tests — it creates sessions directly via `testSessions.Create()`. But for shell script e2e tests (testing the actual CLI binary against a running server, simulating real user workflows), there's no way to authenticate without a browser.
+
+The current auth flow is browser-only: `travel login` opens a browser → Google OAuth → session stored in keychain. None of that works in an automated script.
+
+**What's needed:** A way for e2e test scripts to obtain a valid session. Options in order of preference:
+
+1. **Dev auth mode in appbase** — e.g., `AUTH_MODE=dev` that accepts a fixed test token or auto-creates a session for a configured email. Clean, no raw SQL, works across SQLite and Firestore. Could be restricted to `APP_ENV=local`.
+
+2. **`ab test-session` command** — A CLI command that creates a session and prints the cookie value. Consumer apps call it in their test scripts. Keeps the test helper in appbase rather than every consumer reimplementing it.
+
+3. **Direct SQLite seeding** — The e2e script inserts a row into the `sessions` table via `sqlite3`. Pragmatic but couples the test to the SQLite schema, won't work with Firestore, and breaks if the session table structure changes.
+
+This is not blocking (option 3 works for now) but a proper solution would make appbase-based apps much easier to test end-to-end.
+
 ## Notes
 
 (none yet)
