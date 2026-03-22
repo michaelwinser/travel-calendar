@@ -1,0 +1,37 @@
+parse_history_store.go
+  dffce09a7b9e3db1 1-68
+server.go
+  dffce09a7b9e3db1 6,20-21,97-101,174-255
+openapi.yaml
+  dffce09a7b9e3db1 146-169,247-249,290-350
+usecases_test.go
+  dffce09a7b9e3db1 36-41,368-423
+parser_test.go
+  dffce09a7b9e3db1 1-151
+docs/prd/quick-add.md
+  dffce09a7b9e3db1 1-196
+main.go
+  dffce09a7b9e3db1 39-41,54,65
+parser.go
+  dffce09a7b9e3db1 1-451
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "ece325c82d64afe2987c17e44f6257bbdca3231e",
+  "prompts": {
+    "dffce09a7b9e3db1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "584907b7-c048-4180-92e6-eaa5a0119c1f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 1141,
+      "total_deletions": 32,
+      "accepted_lines": 1114,
+      "overriden_lines": 0
+    }
+  }
+}
