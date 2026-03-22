@@ -191,6 +191,74 @@ func TestUseCases(t *testing.T) {
 		c.AssertStatus(getResp, 404)
 	})
 
+	// --- Update ---
+
+	h.Run("UC-0012", "Update activity title", func(c *harness.Client) {
+		login(c)
+		createResp := c.POST("/api/activities", `{
+			"title": "Old Title",
+			"type": "stay",
+			"startDate": "2026-08-01",
+			"location": "NYC"
+		}`)
+		c.AssertStatus(createResp, 201)
+		id := createResp.JSON()["id"].(string)
+
+		updateResp := c.PUT("/api/activities/"+id, `{"title": "New Title"}`)
+		c.AssertStatus(updateResp, 200)
+		c.AssertJSONHas(updateResp, "title", "New Title")
+		// Unchanged fields should be preserved
+		c.AssertJSONHas(updateResp, "location", "NYC")
+		c.AssertJSONHas(updateResp, "type", "stay")
+	})
+
+	h.Run("UC-0013", "Update activity dates and location", func(c *harness.Client) {
+		login(c)
+		createResp := c.POST("/api/activities", `{
+			"title": "Moveable Trip",
+			"type": "travel",
+			"startDate": "2026-09-01",
+			"endDate": "2026-09-05",
+			"location": "London"
+		}`)
+		c.AssertStatus(createResp, 201)
+		id := createResp.JSON()["id"].(string)
+
+		updateResp := c.PUT("/api/activities/"+id, `{
+			"startDate": "2026-09-10",
+			"endDate": "2026-09-15",
+			"location": "Paris"
+		}`)
+		c.AssertStatus(updateResp, 200)
+		c.AssertJSONHas(updateResp, "startDate", "2026-09-10")
+		c.AssertJSONHas(updateResp, "endDate", "2026-09-15")
+		c.AssertJSONHas(updateResp, "location", "Paris")
+		// Title unchanged
+		c.AssertJSONHas(updateResp, "title", "Moveable Trip")
+	})
+
+	h.Run("UC-0014", "Update nonexistent activity returns 404", func(c *harness.Client) {
+		login(c)
+		resp := c.PUT("/api/activities/nonexistent-id", `{"title": "Nope"}`)
+		c.AssertStatus(resp, 404)
+	})
+
+	h.Run("UC-0015", "Update with invalid dates fails", func(c *harness.Client) {
+		login(c)
+		createResp := c.POST("/api/activities", `{
+			"title": "Date Validator",
+			"type": "stay",
+			"startDate": "2026-08-10",
+			"endDate": "2026-08-15"
+		}`)
+		c.AssertStatus(createResp, 201)
+		id := createResp.JSON()["id"].(string)
+
+		// Move end before start
+		resp := c.PUT("/api/activities/"+id, `{"endDate": "2026-08-05"}`)
+		c.AssertStatus(resp, 400)
+	})
+
 	// --- Filtering ---
 
 	h.Run("UC-0010", "List with month filter", func(c *harness.Client) {

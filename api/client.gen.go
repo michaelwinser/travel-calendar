@@ -106,6 +106,11 @@ type ClientInterface interface {
 
 	// GetActivity request
 	GetActivity(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateActivityWithBody request with any body
+	UpdateActivityWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateActivity(ctx context.Context, id string, body UpdateActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ListActivities(ctx context.Context, params *ListActivitiesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -170,6 +175,30 @@ func (c *Client) DeleteActivity(ctx context.Context, id string, reqEditors ...Re
 
 func (c *Client) GetActivity(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetActivityRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateActivityWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateActivityRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateActivity(ctx context.Context, id string, body UpdateActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateActivityRequest(c.Server, id, body)
 	if err != nil {
 		return nil, err
 	}
@@ -403,6 +432,53 @@ func NewGetActivityRequest(server string, id string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewUpdateActivityRequest calls the generic UpdateActivity builder with application/json body
+func NewUpdateActivityRequest(server string, id string, body UpdateActivityJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateActivityRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewUpdateActivityRequestWithBody generates requests for UpdateActivity with any type of body
+func NewUpdateActivityRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/activities/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -462,6 +538,11 @@ type ClientWithResponsesInterface interface {
 
 	// GetActivityWithResponse request
 	GetActivityWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetActivityResponse, error)
+
+	// UpdateActivityWithBodyWithResponse request with any body
+	UpdateActivityWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateActivityResponse, error)
+
+	UpdateActivityWithResponse(ctx context.Context, id string, body UpdateActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateActivityResponse, error)
 }
 
 type ListActivitiesResponse struct {
@@ -582,6 +663,31 @@ func (r GetActivityResponse) StatusCode() int {
 	return 0
 }
 
+type UpdateActivityResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *Activity
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateActivityResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateActivityResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 // ListActivitiesWithResponse request returning *ListActivitiesResponse
 func (c *ClientWithResponses) ListActivitiesWithResponse(ctx context.Context, params *ListActivitiesParams, reqEditors ...RequestEditorFn) (*ListActivitiesResponse, error) {
 	rsp, err := c.ListActivities(ctx, params, reqEditors...)
@@ -633,6 +739,23 @@ func (c *ClientWithResponses) GetActivityWithResponse(ctx context.Context, id st
 		return nil, err
 	}
 	return ParseGetActivityResponse(rsp)
+}
+
+// UpdateActivityWithBodyWithResponse request with arbitrary body returning *UpdateActivityResponse
+func (c *ClientWithResponses) UpdateActivityWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateActivityResponse, error) {
+	rsp, err := c.UpdateActivityWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateActivityResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateActivityWithResponse(ctx context.Context, id string, body UpdateActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateActivityResponse, error) {
+	rsp, err := c.UpdateActivity(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateActivityResponse(rsp)
 }
 
 // ParseListActivitiesResponse parses an HTTP response from a ListActivitiesWithResponse call
@@ -801,6 +924,53 @@ func ParseGetActivityResponse(rsp *http.Response) (*GetActivityResponse, error) 
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateActivityResponse parses an HTTP response from a UpdateActivityWithResponse call
+func ParseUpdateActivityResponse(rsp *http.Response) (*UpdateActivityResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateActivityResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Activity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest Unauthorized

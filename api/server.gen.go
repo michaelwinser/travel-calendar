@@ -100,6 +100,33 @@ func (e CreateActivityRequestType) Valid() bool {
 	}
 }
 
+// Defines values for UpdateActivityRequestType.
+const (
+	Commitment UpdateActivityRequestType = "commitment"
+	Conference UpdateActivityRequestType = "conference"
+	Stay       UpdateActivityRequestType = "stay"
+	Travel     UpdateActivityRequestType = "travel"
+	Vacation   UpdateActivityRequestType = "vacation"
+)
+
+// Valid indicates whether the value is a known member of the UpdateActivityRequestType enum.
+func (e UpdateActivityRequestType) Valid() bool {
+	switch e {
+	case Commitment:
+		return true
+	case Conference:
+		return true
+	case Stay:
+		return true
+	case Travel:
+		return true
+	case Vacation:
+		return true
+	default:
+		return false
+	}
+}
+
 // Activity defines model for Activity.
 type Activity struct {
 	CreatedAt time.Time          `json:"createdAt"`
@@ -156,6 +183,19 @@ type OkResponse struct {
 	Ok *string `json:"ok,omitempty"`
 }
 
+// UpdateActivityRequest All fields optional — only provided fields are updated
+type UpdateActivityRequest struct {
+	EndDate   *openapi_types.Date        `json:"endDate,omitempty"`
+	Location  *string                    `json:"location,omitempty"`
+	Notes     *string                    `json:"notes,omitempty"`
+	StartDate *openapi_types.Date        `json:"startDate,omitempty"`
+	Title     *string                    `json:"title,omitempty"`
+	Type      *UpdateActivityRequestType `json:"type,omitempty"`
+}
+
+// UpdateActivityRequestType defines model for UpdateActivityRequest.Type.
+type UpdateActivityRequestType string
+
 // BadRequest defines model for BadRequest.
 type BadRequest = ErrorResponse
 
@@ -180,6 +220,9 @@ type ListActivitiesParams struct {
 // CreateActivityJSONRequestBody defines body for CreateActivity for application/json ContentType.
 type CreateActivityJSONRequestBody = CreateActivityRequest
 
+// UpdateActivityJSONRequestBody defines body for UpdateActivity for application/json ContentType.
+type UpdateActivityJSONRequestBody = UpdateActivityRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// List activities for the authenticated user
@@ -197,6 +240,9 @@ type ServerInterface interface {
 	// Get a single activity by ID
 	// (GET /api/activities/{id})
 	GetActivity(w http.ResponseWriter, r *http.Request, id string)
+	// Update an activity
+	// (PUT /api/activities/{id})
+	UpdateActivity(w http.ResponseWriter, r *http.Request, id string)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -230,6 +276,12 @@ func (_ Unimplemented) DeleteActivity(w http.ResponseWriter, r *http.Request, id
 // Get a single activity by ID
 // (GET /api/activities/{id})
 func (_ Unimplemented) GetActivity(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Update an activity
+// (PUT /api/activities/{id})
+func (_ Unimplemented) UpdateActivity(w http.ResponseWriter, r *http.Request, id string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -404,6 +456,37 @@ func (siw *ServerInterfaceWrapper) GetActivity(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// UpdateActivity operation middleware
+func (siw *ServerInterfaceWrapper) UpdateActivity(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateActivity(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -532,6 +615,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/activities/{id}", wrapper.GetActivity)
 	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/api/activities/{id}", wrapper.UpdateActivity)
+	})
 
 	return r
 }
@@ -539,26 +625,27 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/9RYTW/cNhD9KwQbIAkge9eJT3tzvE1qNEkDNz0YjhvQ0mjFWPwIObKhGvrvxVBafVha",
-	"r+Mmi+ZkSSRn3sx7M5z1LY+NskaDRs8Xt9yBt0Z7CC+vRHIKXwvwSG+x0Qg6PAprcxkLlEbPvnij6ZuP",
-	"M1CCnp44SPmC/zLrTM/qVT/71TnjThsnvKqqiCfgYyctGeMLfqKvRS4T5hrHVcTfG3xtCp3sDsQpeFO4",
-	"GJg2yNLgu4r4X1oUmBkn/4EdYnlvkJFf0EgeIOG0pzlO1o9ilNcSS3q2zlhwKGv+Ygd04ChATI1TAvmC",
-	"JwJhD6UCHnEsLfAF9+ikXlGMoJOlQBgdmNorQxZGn3NTJ2JyURussY1W6ozTEuhC8cU5V0IXIucRXxmz",
-	"yuFzLHLQiXA84r70CIpfTKDyKBw+OAaUmMMknvpDhwaduAZC41GUPCL2U3CgY7J7LZqY6btSEhUJYwpe",
-	"4cGdTCWuijhpXjoS1zklt928htmY68fYMdZmMOrx3iEwl18gDuV0HFbXqukV+FA8PSUMBbmEVBQ5eoaG",
-	"tUCYTJlREkmf0fa0P1Yjj+NWSf0W9AozvjiIdsT0HTo3EjjFEC0cZxBfjVkRNW3Nm0RQfluHaftDGyoX",
-	"zonwnjw0l5nwx0anuYxxrIiPrggC6MAxoxlm0jOyx7wVmqkiR2lzYGvufefn0pgchL6rjKGXD04q4cr2",
-	"PEuNY5gBS0TJnv1mVMCgTQ/Gc76Nlybe1mvUz/Aw7Cmmht17XEO0PF3rI1N/XG22Y64eZIQqBOLCSSz/",
-	"JPLrwx68bxIqKY+xMVeSgtZCBTFY+3m9p1OIlb9DWd9HUqdmTMdaVszmQmupV0zohMVNtlgCCHFLUxqu",
-	"c42sri1wvm1qJB/6xo6b9s6OPpxQoYGrYfP5/sH+nFJkLGhhJV/wl/vz/Zc84lZgFoKcCStnw+JYQZAq",
-	"5TFwS12Xv5Uej/oMW+GEAiREi/O7Mb6WOYJjlyVTRmPGnp2dnZ3tvXtHugq5/FqAK7tUhl086l39ViCC",
-	"o61/f/qU3B5We/TnRfVkSpkb3Idm0freWy6fR6zwkLAbiRl7iubpBjipM2qAZkuZb0QAOtnsn7xsQoDm",
-	"m/xfRMMB9MV8/k2D1n/sh+Phi+TCTL+z0anD+cEmJy382WBa7Jdm0FlblOcXFLUvFPW2tcdeI103ucEI",
-	"SOl3hMQaPyHy4Q3P644HHl+ZpPxug+v0GFENGyy6AqoRqQffDUTH5Zi7GmCyTmZZMzffzlzvZ88PJruG",
-	"yATTcNPDWUV3+9kspnFgdkt1U21sbmFmaIbBe/tamNjQsGB1UNnrOqbG2pVxU65DXndZ2PdpoJuWJkQQ",
-	"Iq3DdOCL/MdTGnzdZGJQxWECEsxbiGUq4zAWTfJ8K5OqvmtzqEezIcXL8L1X2nd4niAv/JLYTN0uqerN",
-	"OFNchdiSRzJEhw63H2r/mfBwSmtcjBhczzyXJTtZks/JOnwD+LMydF9D/UjX0KCZ/o9IegNIBSb1KocR",
-	"T1VV/RsAAP//NGrPI+kSAAA=",
+	"H4sIAAAAAAAC/+xY3W7bRhN9lcV+AZIAtCUnvtKdY31JjSZp4CYXhuMGa+5Q2pjc3ewObbAGgT5En7BP",
+	"UsySokhrZTmurbZAryxyf+bMnDkzQ1/z1BTWaNDo+eSaO/DWaA/h4ZWQx/CtBI/0lBqNoMNPYW2uUoHK",
+	"6NFXbzS98+kcCkG/njjI+IT/b7S8etSs+tH/nTPuuDXC67pOuASfOmXpMj7hR/pS5Eoy1xquE/7e4GtT",
+	"ark9EMfgTelSYNogy4LtOuGftChxbpz6FbaI5b1BRnZBI1kAyWlPe5xuP0hRXSqs6Ld1xoJD1fCXOqAD",
+	"BwFiZlwhkE+4FAg7qArgCcfKAp9wj07pGfkIWk4FwsqB2F4VorDyOjdNIKKL2mCDbWWliTgtgS4LPjnl",
+	"hdClyHnCZ8bMcviSihy0FI4n3FceoeBnEVQehcM7+4AKc4jiaV4s0aATl0BoPIqKJ8R+Bg50SvdeitZn",
+	"el8UCgtKjBi80oM7igWuTjjlvHKUXKcU3G7zAmZ7Xd/HJWNdBJMe70sE5vwrpEFOh2F1kTU9gQ+Tp5cJ",
+	"w4ScQibKHD1DwzogTGXMFAopP5PNYb9vjtyP20Lpt6BnOOeTvWRLTN+gcy2BMYZo4XAO6cUqK6KhrX1S",
+	"CIXfVGG6+tC5yoVzIjzLu8ZyLvyh0VmuUlzNiI+uDAmwBMeMZjhXntF9zFuhWVHmqGwObMG9X9o5NyYH",
+	"oW9mxtDKB6cK4aruPMuMYzgHJkXFnv1gioBBmx6M53wTL62/ndWkH+Gh2zGmhtV7VUO0HNf6ylU/Xay/",
+	"x1zc8ZJPVsa1PQzlQZ6zTEEuPTPhncjZH7/9zozOK2aduVQS5GKHcMDKcC9Je22R+E/zEUYIP6SlU1j9",
+	"THJsfPTgfRsIRXSkxlwoMqRFEeRp7ZfFnqVmrfoRqmZCUDozEVZb2pnNhdZKz5jQkqVt/jIJCGknnCwM",
+	"WBpZ4zk437UZEjS9Y4dtw2UHH44oDOAa2Hy8u7c7pjAaC1pYxSf85e549yXlh8B5cHIkrBoNy9UMQi5S",
+	"AoV4Uh/kb5XHg77mrHCiACREk9ObPr5WOYJj5xUrjMY5e3ZycnKy8+4dKT3E8lsJrlqGMuziSW8YswIR",
+	"HG395fNneb1f79CfF/WTWK1YYz7kZGd7Zzp9nrDSg2RXCufsKZqna+BkzhQDNBsSei0C0HK9fbKyDgGa",
+	"77J/lgw/CV6Mx981+v7FDrU6DlO6MNPvNXRqf7y3zkgHfzSY3/vSDHnWifL0jLz2ZUHdZmGx19oWbWcw",
+	"lFP4HSGxxkeSfDhz8aYHgcdXRlYP9ikRH+zqYctDV0K9Qureg4FYcrnKXQNQLoJZNcyNNzPX+xB9ZLIb",
+	"iEwwDVc9nHVys56NUhrQRtekm3ptcQtTXDue31rXwgyNhoVbB8pe6JgK61LGrVyHvG5T2LflwHJ+jSRB",
+	"8LRx04Ev88enNNi6mouBisNMKpi3kKpMpWFQjfJ8rWTd9NocmiFkSPE0vO9J+wbPEfLCt9166rZJVW/q",
+	"jHEVfJP3ZIgO7W8+1P175+6UNrgYMbiYec4rdjQlm1EdvgH8tzJ0W0H9SG1oUEz/QSS9ASSBKT3LIcKT",
+	"LSM8Db9fHo2qh++98Q+vO/Xe7aRKA/Dv6L2Pl2GNT/0yQJ7XfwYAAP//igIRadQWAAA=",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

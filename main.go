@@ -107,6 +107,20 @@ func main() {
 	}
 	cli.AddCommand(checkCmd)
 
+	updateCmd := &cobra.Command{
+		Use:   "update [id-prefix]",
+		Short: "Update an activity (via API)",
+		Args:  cobra.ExactArgs(1),
+		RunE:  updateActivity,
+	}
+	updateCmd.Flags().String("title", "", "New title")
+	updateCmd.Flags().String("from", "", "New start date (YYYY-MM-DD)")
+	updateCmd.Flags().String("to", "", "New end date (YYYY-MM-DD)")
+	updateCmd.Flags().String("loc", "", "New location")
+	updateCmd.Flags().String("type", "", "New activity type")
+	updateCmd.Flags().String("notes", "", "New notes")
+	cli.AddCommand(updateCmd)
+
 	delCmd := &cobra.Command{
 		Use:   "delete [id-prefix]",
 		Short: "Delete an activity by ID prefix (via API)",
@@ -289,21 +303,13 @@ func checkDate(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func deleteActivity(cmd *cobra.Command, args []string) error {
-	client, err := apiClient(cmd)
-	if err != nil {
-		return err
-	}
-
-	prefix := args[0]
-
-	// List all to find by prefix
+func resolveByPrefix(client *api.ClientWithResponses, prefix string) (*api.Activity, error) {
 	resp, err := client.ListActivitiesWithResponse(context.Background(), &api.ListActivitiesParams{})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if resp.StatusCode() != http.StatusOK {
-		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
 	}
 
 	var matches []api.Activity
@@ -314,17 +320,87 @@ func deleteActivity(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(matches) == 0 {
-		return fmt.Errorf("no activity found matching %q", prefix)
+		return nil, fmt.Errorf("no activity found matching %q", prefix)
 	}
 	if len(matches) > 1 {
 		fmt.Fprintf(os.Stderr, "Ambiguous prefix %q matches %d activities:\n", prefix, len(matches))
 		for _, a := range matches {
 			fmt.Fprintf(os.Stderr, "  %s  %s\n", a.Id[:8], a.Title)
 		}
-		return fmt.Errorf("provide a longer prefix")
+		return nil, fmt.Errorf("provide a longer prefix")
+	}
+	return &matches[0], nil
+}
+
+func updateActivity(cmd *cobra.Command, args []string) error {
+	client, err := apiClient(cmd)
+	if err != nil {
+		return err
 	}
 
-	a := matches[0]
+	a, err := resolveByPrefix(client, args[0])
+	if err != nil {
+		return err
+	}
+
+	req := api.UpdateActivityRequest{}
+	if v, _ := cmd.Flags().GetString("title"); v != "" {
+		req.Title = &v
+	}
+	if v, _ := cmd.Flags().GetString("type"); v != "" {
+		t := api.UpdateActivityRequestType(v)
+		req.Type = &t
+	}
+	if v, _ := cmd.Flags().GetString("from"); v != "" {
+		d, perr := time.Parse("2006-01-02", v)
+		if perr != nil {
+			return fmt.Errorf("invalid start date %q (expected YYYY-MM-DD)", v)
+		}
+		req.StartDate = &openapi_types.Date{Time: d}
+	}
+	if v, _ := cmd.Flags().GetString("to"); v != "" {
+		d, perr := time.Parse("2006-01-02", v)
+		if perr != nil {
+			return fmt.Errorf("invalid end date %q (expected YYYY-MM-DD)", v)
+		}
+		req.EndDate = &openapi_types.Date{Time: d}
+	}
+	if v, _ := cmd.Flags().GetString("loc"); v != "" {
+		req.Location = &v
+	}
+	if v, _ := cmd.Flags().GetString("notes"); v != "" {
+		req.Notes = &v
+	}
+
+	resp, err := client.UpdateActivityWithResponse(context.Background(), a.Id, req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+	}
+
+	updated := resp.JSON200
+	loc := ""
+	if updated.Location != nil {
+		loc = *updated.Location
+	}
+	fmt.Printf("Updated: %s (%s)\n", updated.Title, updated.Id[:8])
+	fmt.Printf("  %s → %s  [%s]  %s\n", updated.StartDate.Format("2006-01-02"), updated.EndDate.Format("2006-01-02"), updated.Type, loc)
+	return nil
+}
+
+func deleteActivity(cmd *cobra.Command, args []string) error {
+	client, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+
+	a, err := resolveByPrefix(client, args[0])
+	if err != nil {
+		return err
+	}
+
 	delResp, err := client.DeleteActivityWithResponse(context.Background(), a.Id)
 	if err != nil {
 		return err

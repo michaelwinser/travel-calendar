@@ -89,6 +89,37 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+    put:
+      operationId: updateActivity
+      summary: Update an activity
+      security:
+        - session: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateActivityRequest'
+      responses:
+        '200':
+          description: Updated activity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Activity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
     delete:
       operationId: deleteActivity
       summary: Delete an activity by ID
@@ -185,6 +216,27 @@ components:
           type: string
           format: date
           description: Defaults to startDate if omitted
+        location:
+          type: string
+        notes:
+          type: string
+
+    UpdateActivityRequest:
+      type: object
+      description: All fields optional — only provided fields are updated
+      properties:
+        title:
+          type: string
+          minLength: 1
+        type:
+          type: string
+          enum: [travel, stay, conference, vacation, commitment]
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
         location:
           type: string
         notes:

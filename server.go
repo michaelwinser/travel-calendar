@@ -114,6 +114,56 @@ func (s *ActivityServer) GetActivity(w http.ResponseWriter, r *http.Request, id 
 	server.RespondJSON(w, http.StatusOK, entityToAPI(*a))
 }
 
+func (s *ActivityServer) UpdateActivity(w http.ResponseWriter, r *http.Request, id string) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	a, err := s.store.Get(id)
+	if err != nil {
+		server.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if a == nil || a.UserID != userID {
+		server.RespondError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	var req api.UpdateActivityRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		server.RespondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// Apply only provided fields
+	if req.Title != nil {
+		a.Title = *req.Title
+	}
+	if req.Type != nil {
+		a.Type = string(*req.Type)
+	}
+	if req.StartDate != nil {
+		a.StartDate = req.StartDate.Format("2006-01-02")
+	}
+	if req.EndDate != nil {
+		a.EndDate = req.EndDate.Format("2006-01-02")
+	}
+	if req.Location != nil {
+		a.Location = *req.Location
+	}
+	if req.Notes != nil {
+		a.Notes = *req.Notes
+	}
+
+	if err := s.store.Update(a); err != nil {
+		server.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	server.RespondJSON(w, http.StatusOK, entityToAPI(*a))
+}
+
 func (s *ActivityServer) DeleteActivity(w http.ResponseWriter, r *http.Request, id string) {
 	userID := requireUser(w, r)
 	if userID == "" {
