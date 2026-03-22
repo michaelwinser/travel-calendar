@@ -44,14 +44,8 @@
       }
     ]
   },
-  "contextFiles": [
-    "CLAUDE.md",
-    "PROJECT_MAP.md"
-  ],
   "permissions": {
     "allow": [
-      "Bash(./tc:*)",
-      "Bash(./tc *)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
@@ -67,6 +61,7 @@
       "Bash(git rebase:*)",
       "Bash(git remote:*)",
       "Bash(git show:*)",
+      "Bash(git tag:*)",
       "Bash(gh issue:*)",
       "Bash(gh pr:*)",
       "Bash(gh label:*)",
@@ -76,6 +71,7 @@
       "Bash(mkdir:*)",
       "Bash(cp:*)",
       "Bash(mv:*)",
+      "Bash(rm:*)",
       "Bash(cat:*)",
       "Bash(head:*)",
       "Bash(tail:*)",
@@ -84,26 +80,19 @@
       "Bash(uniq:*)",
       "Bash(diff:*)",
       "Bash(jq:*)",
-      "Bash(node:*)",
-      "Bash(pnpm:*)",
-      "Bash(npm:*)",
-      "Bash(npx:*)",
       "Bash(go:*)",
       "Bash(grep:*)",
       "Bash(tree:*)",
       "Bash(realpath:*)",
       "Bash(dirname:*)",
       "Bash(basename:*)",
-      "Bash(./tests/e2e/*)",
-      "mcp__travel-calendar__*",
-      "Edit(/Users/michaelw/claude/projects/travel-calendar/**)"
+      "Bash(STORE_TYPE=*)",
+      "Bash(SQLITE_DB_PATH=*)",
+      "Bash(GONOSUMCHECK=*)"
     ],
     "deny": [
       "Bash(rm -rf /:*)",
       "Bash(rm -rf ~:*)",
-      "Bash(docker:*)",
-      "Bash(docker-compose:*)",
-      "Bash(curl:*)",
       "Read(.env)",
       "Read(.env.*)",
       "Read(./secrets/**)"

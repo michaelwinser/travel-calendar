@@ -1,0 +1,6 @@
+{
+  "name": "travel-calendar",
+  "gcpProject": "",
+  "region": "us-central1",
+  "urls": ["http://localhost:3000"]
+}

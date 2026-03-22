@@ -1,313 +1,81 @@
-# Travel Calendar - Agent Instructions
+# Travel Calendar v2
 
-This document is the constitution for AI agents working on this codebase. Read this file completely before making any changes.
+A high-velocity planning tool for frequent travelers, built on [appbase](https://github.com/michaelwinser/appbase).
 
----
+## Architecture
 
-## Part 1: Universal Principles
-
-These principles apply to ALL agents. Every agent inherits and must follow these rules.
-
-### Project Philosophy
-
-This codebase is designed for **AI-assisted development** with strong component boundaries. Every component has:
-1. Clear architectural principles
-2. Automated tests enforcing those principles
-3. Local documentation the agent must read before changes
-
-### Component Architecture
+Single Go module. CLI and web server in one binary.
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           COMPONENTS                                     │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  ┌──────────────────────┐    ┌──────────────┐                          │
-│  │       backend        │    │   frontend   │                          │
-│  │        (Go)          │    │              │                          │
-│  │  REST API + MCP      │◄──►│   SvelteKit  │                          │
-│  │  Entities            │    │   MVC        │                          │
-│  │  Services            │    │   Components │                          │
-│  └──────────────────────┘    └──────────────┘                          │
-│         ▲                           │                                   │
-│         │                           │                                   │
-│  ┌──────┴───────┐                   │                                   │
-│  │    cli       │                   │                                   │
-│  │   (Go)       │                   │                                   │
-│  │   Cobra      │                   │                                   │
-│  └──────────────┘                   │                                   │
-│         │                           │                                   │
-│         └───────────────────────────┘                                   │
-│                             │                                           │
-│                    ┌────────▼────────┐                                 │
-│                    │     shared      │                                 │
-│                    │                 │                                 │
-│                    │  Types only     │                                 │
-│                    │  (generated)    │                                 │
-│                    └─────────────────┘                                 │
-│                             ▲                                           │
-│                    ┌────────┴────────┐                                 │
-│                    │      api        │                                 │
-│                    │  OpenAPI Spec   │                                 │
-│                    │  (source of     │                                 │
-│                    │   truth)        │                                 │
-│                    └─────────────────┘                                 │
-│                                                                          │
-└─────────────────────────────────────────────────────────────────────────┘
+travel-calendar/
+├── main.go          # CLI commands and server setup (uses appbase)
+├── store.go         # Activity entity and store (uses appbase/store)
+├── app.json         # Project identity (appbase convention)
+├── go.mod
+├── docs/
+│   ├── prd/kinetic-ledger.md        # Product requirements
+│   ├── kinetic-ledger-design.md     # Technical design & CLI spec
+│   ├── kinetic-ledger-*.png         # UI mockups
+│   └── appbase-feedback.md          # Issues/feedback for appbase module
+├── blog/            # Development session logs
+└── .claude/         # Agent configuration
 ```
 
-### Component Boundaries (STRICTLY ENFORCED)
+### Key Dependency: appbase
 
-| Component | Owns | Never Contains |
-|-----------|------|----------------|
-| `api` | OpenAPI specification | Implementation code |
-| `backend` | REST API, MCP server, database, business logic (Go) | UI code, frontend imports |
-| `frontend` | UI components, reactive stores, routing | Direct DB access, business logic |
-| `cli` | Command-line interface (Go) | UI code, business logic |
-| `shared` | TypeScript types (generated from OpenAPI) | Logic, runtime code, manual type definitions |
+This app is built on `github.com/michaelwinser/appbase`. Read `../appbase/CLAUDE.md` for module docs.
 
-### Git Workflow
+**Rules:**
+- Do NOT modify appbase from this repo. If you need something new, log it in `docs/appbase-feedback.md`
+- Domain entities and store are ours; appbase provides connections, auth, CLI base, server scaffolding
+- Use `store.Collection[T]` for persistence — no raw SQL schema management
+- Use `appbase.UserID(r)` for auth in HTTP handlers
 
-```
-╔══════════════════════════════════════════════════════════════════════════╗
-║  ⚠️  MANDATORY: ALL COMMITS MUST GO THROUGH THE COMMIT AGENT            ║
-║                                                                          ║
-║  NEVER run `git commit` or `git push` directly.                          ║
-║  ALWAYS spawn the Commit Agent: Task(subagent_type="Commit")            ║
-║                                                                          ║
-║  This is NOT optional. A PreToolUse hook will remind you if you forget. ║
-╚══════════════════════════════════════════════════════════════════════════╝
-```
+### Data Model
 
-**Why this matters:** The Commit Agent ensures the full workflow runs:
-1. Pre-commit tests (`./tc test-precommit`)
-2. Code Review Agent reviews all changes
-3. Tools Agent analyzes session for permission optimizations
-4. Session Summary Agent updates progress tracking
+**Activity** is the primary entity: a span of time with a purpose and location.
 
-**If you skip the Commit Agent, these steps are skipped**, degrading project quality and losing session history.
+- Types: `travel`, `stay`, `conference`, `vacation`, `commitment`
+- Location: plain string for now (formalized entity deferred)
+- Conflicts: computed at query time, not stored
 
-**Commit message format**: `type(component): description (#issue)`
-- Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
-- Component: `api`, `backend`, `frontend`, `cli`, `shared`, `infra`
-
-**Other rules:**
-- Every commit references an issue when applicable
-- No direct commits to main - all changes via PR
-- PR title matches commit format
-
-### Code Changes
-
-1. **Read before write**: Always read the relevant ARCHITECTURE.md before changes
-2. **Tests first for bugs**: Bug fixes require a failing test first
-3. **No cross-component imports** except from `shared`
-4. **Run component tests** after changes
-
-### Locality of Knowledge
-
-When working on a file, check for:
-1. **Product roadmap** - `docs/roadmap.md` for current phase and priorities
-2. **Component ARCHITECTURE.md** - overall patterns
-3. **Directory README.md** - specific conventions for that directory
-4. **Adjacent test files** - `*_test.go` or `*.test.ts` shows expected behavior
-5. **Type definitions** - in `shared/` (generated from OpenAPI) for the entity you're touching
-6. **OpenAPI spec** - `packages/api/openapi.yaml` for API contracts
-
-### Pushback Protocol
-
-Before executing requests, evaluate them against project principles. See `.claude/reviewer.md` for full criteria.
-
-**Always pushback when**:
-- Request would violate component boundaries
-- Request bundles unrelated changes
-- Request uses incorrect terminology (check PROJECT_MAP.md lexicon)
-- Request adds complexity without clear benefit
-- Request introduces new patterns without justification
-
-**Pushback phrases**:
-- "Before we proceed, let me check this against our principles..."
-- "I notice this would touch multiple components. Should we create a plan first?"
-- "This is doable, but I want to flag a potential concern..."
-- "Our lexicon uses '{X}' instead of '{Y}'. Should I use the standard term?"
-
-**Don't just execute**. Think critically. The user benefits from honest evaluation.
-
-### Automated Enforcement
-
-The following are automatically checked:
-
-| Check | Enforces | Runs |
-|-------|----------|------|
-| `lint:boundaries` | No cross-component imports | Pre-commit |
-| `lint:types` | Shared types have no logic | Pre-commit |
-| `test:unit` | Component contracts | Pre-commit |
-| `test:e2e` | Use case journeys | CI |
-| `lint:commits` | Commit message format | Pre-commit |
-
-### Docker Operations
-
-**All Docker operations MUST go through the `./tc` script.**
-
-Raw `docker` and `docker-compose` commands are denied in `.claude/settings.json`. This ensures:
-- All Docker operations are auditable through `tc`
-- Consistent interface across all agents
-- No sandbox/permission issues with Docker socket
+### Running
 
 ```bash
-# Use these:
-./tc build                      # Build containers
-./tc start                      # Start services
-./tc stop                       # Stop services
-./tc health                     # Check service health
-./tc curl <service:port/path>   # HTTP requests inside container
-./tc logs [service]             # View service logs
-./tc test backend               # Run backend Go tests
-./tc test frontend              # Run frontend tests
-./tc generate                   # Regenerate code from OpenAPI
+# Server
+go run . serve
 
-# NOT these (will be denied):
-docker compose up       # DENIED
-docker build .          # DENIED
-curl localhost:3000     # DENIED (use ./tc curl backend:3000)
+# CLI
+go run . add "Trip Name" --from 2026-04-01 --to 2026-04-05 --loc Paris --type travel
+go run . list [--month 2026-04]
+go run . check 2026-04-03
+go run . delete <id-prefix>
+
+# Build
+go build -o travel-calendar .
+
+# Test
+go test ./...
 ```
 
-### Protected Files
+Environment: `STORE_TYPE=sqlite` (default), `SQLITE_DB_PATH=data/app.db` (default).
 
-The following files have special ownership rules:
+## Git Workflow
 
-| File | Owner | Rule |
-|------|-------|------|
-| `tc` | Infra Agent ONLY | Must get user approval before ANY modifications |
-| `Dockerfile.*` | Infra Agent | Standard infra review process |
-| `docker-compose.yml` | Infra Agent | Standard infra review process |
-| `.claude/settings.json` | Infra Agent | Standard infra review process |
+**Commit message format**: `type: description`
+- Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 
-**The `tc` script is critical infrastructure.** Only the Infra Agent may modify it, and ONLY after presenting proposed changes to the user and receiving explicit approval.
+Use the Commit Agent for all commits when available.
 
----
+## Design Documents
 
-## Part 2: Agent Selection & Routing
+- **PRD**: `docs/prd/kinetic-ledger.md` — vision, use cases, features
+- **Technical Design**: `docs/kinetic-ledger-design.md` — data model, CLI spec, acceptance criteria
+- **Mockups**: `docs/kinetic-ledger-*.png` — UI wireframes
 
-### Task Decomposition Protocol
+## Principles
 
-**BEFORE writing any code**, determine which components are affected:
-
-1. **Single component** → Read the agent file, then proceed
-2. **Multiple components** → Read `.claude/agents/cross-component.md`, create a plan document at `docs/plans/{issue-number}.md`, get approval before proceeding
-
-### Agent Selection Matrix
-
-| Task Type | Agent File | Scope |
-|-----------|------------|-------|
-| OpenAPI specification | `.claude/agents/cross-component.md` | `packages/api/` |
-| Backend API, entities, services, MCP (Go) | `.claude/agents/backend.md` | `packages/backend/` |
-| Frontend UI, stores, routes | `.claude/agents/frontend.md` | `packages/frontend/` |
-| CLI commands (Go) | `.claude/agents/cross-component.md` | `packages/cli/` |
-| TypeScript types (generated) | `.claude/agents/shared.md` | `packages/shared/` |
-| Multi-component changes | `.claude/agents/cross-component.md` | Multiple packages |
-| Docker, containers, CI/CD | `.claude/agents/infra.md` | Infrastructure |
-| End-to-end tests | `.claude/agents/e2e-test.md` | `tests/e2e/` |
-| **Pre-commit review** | `.claude/agents/code-review.md` | All changes |
-| **Git commits and pushes** | `.claude/agents/commit.md` | All git operations |
-| **Tool usage & permissions** | `.claude/agents/tools.md` | Session analysis, tc/settings optimization |
-| **Session summaries** | `.claude/agents/session-summary.md` | Progress tracking, blog entries |
-| **PRDs & product roadmap** | `.claude/agents/product-management.md` | `docs/prd/*.md`, `docs/PRD.md`, feature definitions |
-
-### Agent Quick Reference
-
-Each agent has detailed checklists. Here are the key rules:
-
-#### Backend Agent (Go)
-- **Read first**: `packages/backend/ARCHITECTURE.md`
-- **Test**: `./tc test backend`
-- **Forbidden**: UI code, frontend imports, direct DB queries in handlers
-- **MCP**: Tool definitions auto-generated from OpenAPI `x-mcp` extensions; handlers in `internal/mcp/`
-
-#### Frontend Agent
-- **Read first**: `packages/frontend/ARCHITECTURE.md`
-- **Test**: `./tc test frontend`
-- **Forbidden**: Direct API calls in components, ID-based lookups, business logic
-
-#### CLI Agent (Go)
-- **Read first**: `packages/cli/ARCHITECTURE.md`
-- **Build**: `cd packages/cli && go build -o travel ./cmd/travel`
-- **Forbidden**: Direct API calls (use generated client), business logic
-
-#### Shared Agent
-- **Read first**: `packages/shared/ARCHITECTURE.md`
-- **Regenerate**: `./tc generate` (or `./tc generate shared` for TypeScript only)
-- **Forbidden**: Editing api.ts directly, runtime code, manual type definitions
-
-#### Cross-Component Agent
-- **Action**: Create plan at `docs/plans/{issue-number}.md`
-- **Order**: api → shared → backend → cli → frontend → e2e tests
-- **Requirement**: Get explicit user approval before implementing
-
-#### Infra Agent
-- **Owns**: `tc` script, Dockerfiles, docker-compose.yml, `.claude/settings.json`
-- **Rule**: ONLY agent that can modify `tc`; must get user approval first
-- **Test**: `./tc build && ./tc start && ./tc health`
-- **Verify**: All health checks pass before committing
-
-#### E2E Test Agent
-- **Source**: PRDs in `docs/prd/` with `[UC-XXX]` identifiers
-- **Output**: Shell scripts in `tests/e2e/uc-{number}-{description}.sh`
-- **Test**: Run the script directly
-
-#### Code Review Agent
-- **When**: Before committing, after completing work, or on request
-- **Does**: Identifies changed components, runs tests, checks CLAUDE.md compliance
-- **Spawns**: Component agents to review their specific areas
-- **Output**: Review report with APPROVED, NEEDS FIXES, or NEEDS DISCUSSION
-- **On failure**: Prompts user for guidance on how to proceed
-
-#### Commit Agent
-- **Exclusive authority**: ONLY agent allowed to run `git commit` or `git push`
-- **Mandatory steps**: Run `./tc test-precommit`, invoke Code Review Agent
-- **Workflow**: Pre-commit checks → Code Review → Stage → Commit → Tools Review → (Push if requested)
-- **Forbidden**: Committing without Code Review approval, force-push to main/master
-
-#### Tools Agent
-- **When**: After commits, on request, or when permission patterns emerge
-- **Does**: Analyzes tool usage, identifies permission prompt patterns, proposes optimizations
-- **Proposes**: Additions to `tc` script, changes to `.claude/settings.json` permissions
-- **Goals**: User confidence, minimize prompts, identify workflow gaps
-- **Works with**: Infra Agent (implements approved changes)
-
-#### Session Summary Agent
-- **When**: Proactively invoked - see triggers below
-- **Does**: Maintains running summary in `blog/.current.md`, detects session boundaries
-- **Output**: Dated blog entries in `blog/YYYY-MM-DD-slug.md` when sessions conclude
-- **Files**: `blog/.current.md` (working file, gitignored), `blog/*.md` (finalized entries)
-
-**Proactive invocation triggers** (Claude should invoke without being asked):
-1. After commits (via Commit Agent workflow)
-2. After completing a significant feature or fix
-3. When user says "done", "wrap up", "that's all", or similar
-4. Before conversation compaction (if detected)
-5. When switching to a substantially different topic
-
-#### Product Management Agent
-- **When**: New feature requests, scope clarification, feature completion review, roadmap planning
-- **Does**: Creates/maintains PRDs, defines use cases with acceptance criteria, identifies MVP scope
-- **Output**: PRDs in `docs/prd/*.md`, roadmap updates, UX/UI design guidance
-- **Collaborates with**: Stakeholder (Claude end-user) for requirements, implementation agents for handoff
-- **Evaluates**: Feature completion against acceptance criteria
-
----
-
-## Reference Files
-
-| File | Purpose | When to Read |
-|------|---------|--------------|
-| `CLAUDE.md` | This file - universal principles | Always (start here) |
-| `docs/roadmap.md` | Current priorities, phase status | Before starting work |
-| `PROJECT_MAP.md` | Component overview, lexicon | Understanding codebase |
-| `.claude/agents/*.md` | Detailed agent checklists | Before component work |
-| `.claude/agents/commit.md` | Commit workflow (exclusive authority) | Before any commit |
-| `.claude/agents/code-review.md` | Pre-commit review process | Before committing |
-| `.claude/agents/tools.md` | Tool usage analysis and optimization | After commits, on request |
-| `.claude/agents/session-summary.md` | Progress tracking and blog entries | After commits, session end |
-| `.claude/agents/product-management.md` | PRD ownership, MVP scoping, UX guidance | Feature planning, completion review |
-| `.claude/reviewer.md` | Pushback/review criteria | Evaluating requests |
-| `packages/*/ARCHITECTURE.md` | Component-specific patterns | Before component changes |
+1. **Model first** — Get the data model right before building UI. The CLI validates the model.
+2. **appbase handles infrastructure** — Auth, sessions, database, deployment. We handle domain logic.
+3. **Read before write** — Check adjacent test files and design docs before changes.
+4. **Log appbase friction** — If appbase is missing something or has a rough edge, add it to `docs/appbase-feedback.md`.
