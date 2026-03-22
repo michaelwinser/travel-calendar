@@ -1,0 +1,25 @@
+tests/e2e/smoke-test.sh
+  dffce09a7b9e3db1 1-184
+docs/appbase-feedback.md
+  dffce09a7b9e3db1 29,31-35,98-133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "9ffa5262dc82ea21ddfa96b8f98763d47ad24189",
+  "prompts": {
+    "dffce09a7b9e3db1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "584907b7-c048-4180-92e6-eaa5a0119c1f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 228,
+      "total_deletions": 5,
+      "accepted_lines": 226,
+      "overriden_lines": 0
+    }
+  }
+}
