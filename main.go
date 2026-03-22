@@ -42,7 +42,7 @@ var (
 
 func setup() error {
 	var err error
-	app, err = appbase.New(appbase.Config{Name: appName})
+	app, err = appbase.New(appbase.Config{Name: appName, Quiet: !appcli.IsServeCommand})
 	if err != nil {
 		return err
 	}
