@@ -1,0 +1,25 @@
+docs/appbase-feedback.md
+  dffce09a7b9e3db1 80-95
+tests/e2e/scenario-travel-planning.sh
+  dffce09a7b9e3db1 1-288
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "3a40cf03db5ea6ef9bbee125d95d555f68212c63",
+  "prompts": {
+    "dffce09a7b9e3db1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "584907b7-c048-4180-92e6-eaa5a0119c1f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 305,
+      "total_deletions": 1,
+      "accepted_lines": 304,
+      "overriden_lines": 0
+    }
+  }
+}
