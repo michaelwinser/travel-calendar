@@ -66,6 +66,17 @@ esac
 
 This is probably a significant effort, but the current approach of shell-script sourcing and cross-module gymnastics won't scale as more apps are built on appbase.
 
+### 5. Tag releases and register with Go module proxy
+
+**Context:** Consumer apps currently need `GONOSUMCHECK` and `GONOSUMDB` env var overrides to `go get` appbase, because the module isn't indexed by the Go module proxy (proxy.golang.org). This is fragile and non-standard.
+
+**Fix:**
+1. Tag a release: `git tag v0.1.0 && git push origin v0.1.0`
+2. Trigger proxy indexing: `GOPROXY=https://proxy.golang.org go get github.com/michaelwinser/appbase@v0.1.0`
+3. After that, all consumers can `go get` normally with no env var overrides
+
+Semantic version tags also give consumers stable dependency points and make `go get -u` safer.
+
 ## Notes
 
 (none yet)
