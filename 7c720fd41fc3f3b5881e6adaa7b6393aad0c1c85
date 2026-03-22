@@ -1,0 +1,29 @@
+server.go
+  dffce09a7b9e3db1 117-166
+usecases_test.go
+  dffce09a7b9e3db1 194-261
+openapi.yaml
+  dffce09a7b9e3db1 92-122,224-244
+main.go
+  dffce09a7b9e3db1 110-123,306,309,312,323,330-357,359-401
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "7c720fd41fc3f3b5881e6adaa7b6393aad0c1c85",
+  "prompts": {
+    "dffce09a7b9e3db1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "584907b7-c048-4180-92e6-eaa5a0119c1f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 260,
+      "total_deletions": 14,
+      "accepted_lines": 260,
+      "overriden_lines": 0
+    }
+  }
+}
