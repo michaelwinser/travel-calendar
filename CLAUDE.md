@@ -25,6 +25,7 @@ travel-calendar/
 │   ├── kinetic-ledger-design.md     # Technical design & CLI spec
 │   ├── kinetic-ledger-*.png         # UI mockups
 │   └── appbase-feedback.md          # Issues/feedback for appbase module
+├── tc                              # Project command script (build, test, serve, codegen, deploy)
 ├── blog/            # Development session logs
 └── .claude/         # Agent configuration
 ```
@@ -32,10 +33,11 @@ travel-calendar/
 ### API-First Workflow
 
 1. Define endpoints in `openapi.yaml`
-2. Regenerate: `/Users/michaelw/go/bin/oapi-codegen -config oapi-codegen.yaml openapi.yaml && /Users/michaelw/go/bin/oapi-codegen -config oapi-codegen-client.yaml openapi.yaml`
+2. Regenerate: `./tc codegen`
 3. Implement new methods in `server.go` (compiler will tell you what's missing)
 4. Add CLI commands in `main.go` using the generated client
 5. Never hand-write route registrations or request/response types
+6. Verify: `./tc lint-api`
 
 ### Key Dependency: appbase
 
@@ -59,21 +61,24 @@ This app is built on `github.com/michaelwinser/appbase`. Read `../appbase/CLAUDE
 ### Running
 
 ```bash
-# Server
-go run . serve
+# Project commands (use ./tc for everything)
+./tc serve               # Start the server (loads secrets, creates data dir)
+./tc build               # Build the travel binary
+./tc test                # Run all tests
+./tc codegen             # Regenerate API code from openapi.yaml
+./tc lint                # Run go vet
+./tc lint-api            # Verify codegen is up to date
+./tc ci                  # Full CI pipeline
+./tc secret import ...   # Import Google OAuth credentials
+./tc provision email     # Full GCP setup
+./tc deploy              # Deploy to Cloud Run
 
 # CLI (requires a running server + login)
-go run . login --server http://localhost:3000
-go run . add "Trip Name" --from 2026-04-01 --to 2026-04-05 --loc Paris --type travel
-go run . list [--month 2026-04]
-go run . check 2026-04-03
-go run . delete <id-prefix>
-
-# Build
-go build -o travel-calendar .
-
-# Test
-go test ./...
+./travel login --server http://localhost:3000
+./travel add "Trip Name" --from 2026-04-01 --to 2026-04-05 --loc Paris --type travel
+./travel list [--month 2026-04]
+./travel check 2026-04-03
+./travel delete <id-prefix>
 ```
 
 Config: `app.yaml` (loaded by appbase). Env var overrides still work (`STORE_TYPE`, `PORT`, etc).
