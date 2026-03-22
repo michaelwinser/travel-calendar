@@ -1,0 +1,25 @@
+docs/appbase-feedback.md
+  dffce09a7b9e3db1 27-34
+tc
+  dffce09a7b9e3db1 39-51,55-59,211-213
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "de190c6a7e5be85a5c92e0c50224022a2469f1b2",
+  "prompts": {
+    "dffce09a7b9e3db1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "584907b7-c048-4180-92e6-eaa5a0119c1f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 50,
+      "total_deletions": 25,
+      "accepted_lines": 30,
+      "overriden_lines": 0
+    }
+  }
+}
