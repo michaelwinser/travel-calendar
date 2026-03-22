@@ -15,8 +15,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PORT=3199
 DB_PATH="$PROJECT_DIR/data/e2e-test.db"
 BASE_URL="http://localhost:$PORT"
-SESSION_ID="e2e-test-session-$(date +%s)"
-COOKIE="app_session=$SESSION_ID"
+APPBASE="${APPBASE:-$(go env GOPATH)/bin/appbase}"
 SERVER_PID=""
 
 # Colors
@@ -105,10 +104,10 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
     sleep 0.5
 done
 
-step "Seeding test session in SQLite..."
-EXPIRES=$(date -u -v+1H "+%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -d "+1 hour" "+%Y-%m-%dT%H:%M:%SZ")
-NOW=$(date -u "+%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u "+%Y-%m-%dT%H:%M:%SZ")
-sqlite3 "$DB_PATH" "INSERT INTO sessions (id, user_id, email, expires_at, created_at) VALUES ('$SESSION_ID', 'e2e-user', 'e2e@test.com', '$EXPIRES', '$NOW');"
+step "Creating test session..."
+SESSION_ID=$(STORE_TYPE=sqlite SQLITE_DB_PATH="$DB_PATH" \
+    "$APPBASE" test-session --db "$DB_PATH" --email e2e@test.com)
+COOKIE="app_session=$SESSION_ID"
 
 # ============================================
 # Scenario: Planning a month of travel
