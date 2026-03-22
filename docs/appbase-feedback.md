@@ -24,6 +24,14 @@ Resolved in appbase commit `1b72cb3` (2026-03-21). The `todo-api` example provid
 
 **Suggestion:** Suppress or reduce log verbosity for non-serve commands.
 
+### 3. Consumer apps can't `go run ../appbase/cmd/secret` — cross-module restriction
+
+**Context:** The scaffold-app skill's `./tc` template uses `go run "$APPBASE_DIR/cmd/secret"` for secret management and `_load_secrets`. This fails with "directory outside main module or its selected dependencies" because Go won't build source from a different module.
+
+**Workaround in travel-calendar:** Build and install the binary once (`go build -o ~/go/bin/appbase-secret ./cmd/secret` from within appbase), then call the installed binary from `./tc`. The `_ensure_secret_bin` helper handles this automatically.
+
+**Suggestion:** Either the scaffold-app template should use this install-on-first-use pattern, or appbase should provide an `./ab install-tools` command that installs CLI utilities to GOPATH/bin.
+
 ## Notes
 
 (none yet)

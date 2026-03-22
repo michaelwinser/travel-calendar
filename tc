@@ -36,11 +36,27 @@ if [ -f "$APPBASE_DIR/deploy/deploy.sh" ]; then
     . "$APPBASE_DIR/deploy/deploy.sh"
 fi
 
+# Ensure the appbase secret binary is installed. Sets SECRET_BIN.
+_ensure_secret_bin() {
+    SECRET_BIN="$(go env GOPATH)/bin/appbase-secret"
+    if [ ! -x "$SECRET_BIN" ]; then
+        if [ -d "$APPBASE_DIR/cmd/secret" ]; then
+            info "Installing appbase-secret..."
+            (cd "$APPBASE_DIR" && go build -o "$SECRET_BIN" ./cmd/secret)
+        else
+            error "appbase not found at $APPBASE_DIR — needed for secret management"
+        fi
+    fi
+}
+
 # Load secrets from OS keychain (primary) or .env (CI fallback)
 _load_secrets() {
     project="$(app_name)"
-    exports=$(go run "$APPBASE_DIR/cmd/secret" env "$project" 2>/dev/null || true)
-    if [ -n "$exports" ]; then eval "$exports"; return; fi
+    _ensure_secret_bin 2>/dev/null || true
+    if [ -n "$SECRET_BIN" ] && [ -x "$SECRET_BIN" ]; then
+        exports=$("$SECRET_BIN" env "$project" 2>/dev/null || true)
+        if [ -n "$exports" ]; then eval "$exports"; return; fi
+    fi
     if [ -f "$SCRIPT_DIR/.env" ]; then set -a; . "$SCRIPT_DIR/.env"; set +a; fi
 }
 
@@ -188,12 +204,13 @@ cmd_ci() {
 }
 
 cmd_secret() {
-    project="$(app_name)"
     if [ -z "$1" ]; then
         echo "Usage: ./tc secret <set|get|delete|list|import> [args...]"
         exit 1
     fi
-    go run "$APPBASE_DIR/cmd/secret" "$1" "$project" ${2:+"$2"} ${3:+"$3"}
+    _ensure_secret_bin
+    project="$(app_name)"
+    "$SECRET_BIN" "$1" "$project" ${2:+"$2"} ${3:+"$3"}
 }
 
 cmd_provision() {
