@@ -1,21 +1,25 @@
 // travel-calendar v2: a high-velocity planning tool for frequent travelers.
 //
-// Built on appbase. Run as server or use CLI commands.
+// Built on appbase with API-first architecture. The OpenAPI spec (openapi.yaml)
+// is the source of truth. Server and client code are generated.
 //
 // Server:
 //
 //	go run . serve
 //
-// CLI:
+// CLI (talks to server via HTTP):
 //
+//	go run . login --server http://localhost:3000
 //	go run . add "European Summit" --from 2026-04-01 --to 2026-04-05 --loc Brussels --type conference
-//	go run . list
+//	go run . list [--month 2026-04]
 //	go run . check 2026-04-03
-//	go run . delete <id>
+//	go run . delete <id-prefix>
 package main
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -25,18 +29,20 @@ import (
 
 	"github.com/michaelwinser/appbase"
 	appcli "github.com/michaelwinser/appbase/cli"
+	"github.com/michaelwinser/travel-calendar/api"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+const appName = "travel-calendar"
 
 var (
 	app        *appbase.App
 	activities *ActivityStore
 )
 
-const cliUser = "cli-user"
-
 func setup() error {
 	var err error
-	app, err = appbase.New(appbase.Config{Name: "travel-calendar"})
+	app, err = appbase.New(appbase.Config{Name: appName})
 	if err != nil {
 		return err
 	}
@@ -51,100 +57,180 @@ func main() {
 	cli := appcli.New("travel", "Travel calendar — plan trips, detect conflicts, stay sane", setup)
 
 	cli.SetServeFunc(func() error {
-		// Web UI will be added later. For now, just the API.
+		activityServer := &ActivityServer{store: activities}
+		api.HandlerFromMux(activityServer, app.Server().Router())
+
 		r := app.Router()
-		_ = r // routes will be registered here
+		r.Get("/", app.LoginPage(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/html")
+			w.Write([]byte(`<!DOCTYPE html>
+<html><head><title>Travel Calendar</title></head>
+<body style="font-family:system-ui;max-width:800px;margin:2rem auto;padding:0 1rem">
+<h1>Travel Calendar</h1>
+<p>Signed in as ` + appbase.Email(r) + `. <a href="/api/activities">/api/activities</a></p>
+<form method="POST" action="/api/auth/logout"><button>Sign out</button></form>
+</body></html>`))
+		}))
+
 		return app.Serve()
 	})
 
-	// --- add ---
-	addCmd := cli.Command("add", "Add an activity", addActivity)
-	addCmd.Args = cobra.MinimumNArgs(1)
+	// --- CLI commands: all go through the HTTP API ---
+
+	addCmd := &cobra.Command{
+		Use:   "add [title]",
+		Short: "Add an activity (via API)",
+		Args:  cobra.MinimumNArgs(1),
+		RunE:  addActivity,
+	}
 	addCmd.Flags().String("from", "", "Start date (YYYY-MM-DD, required)")
 	addCmd.Flags().String("to", "", "End date (YYYY-MM-DD, defaults to --from)")
 	addCmd.Flags().String("loc", "", "Location (e.g. Brussels, Home)")
-	addCmd.Flags().String("type", TypeStay, fmt.Sprintf("Activity type (%s)", strings.Join(ValidTypes, ", ")))
+	addCmd.Flags().String("type", "stay", fmt.Sprintf("Activity type (%s)", strings.Join(ValidTypes, ", ")))
 	addCmd.Flags().String("notes", "", "Optional notes")
 	addCmd.MarkFlagRequired("from")
 	cli.AddCommand(addCmd)
 
-	// --- list ---
-	listCmd := cli.Command("list", "List activities", listActivities)
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List activities (via API)",
+		RunE:  listActivities,
+	}
 	listCmd.Flags().String("month", "", "Filter by month (e.g. 2026-04)")
 	cli.AddCommand(listCmd)
 
-	// --- check ---
-	checkCmd := cli.Command("check", "Check what's on a specific date", checkDate)
-	checkCmd.Args = cobra.ExactArgs(1)
+	checkCmd := &cobra.Command{
+		Use:   "check [date]",
+		Short: "Check what's on a specific date (via API)",
+		Args:  cobra.ExactArgs(1),
+		RunE:  checkDate,
+	}
 	cli.AddCommand(checkCmd)
 
-	// --- delete ---
-	delCmd := cli.Command("delete", "Delete an activity by ID (prefix match)", deleteActivity)
-	delCmd.Args = cobra.ExactArgs(1)
+	delCmd := &cobra.Command{
+		Use:   "delete [id-prefix]",
+		Short: "Delete an activity by ID prefix (via API)",
+		Args:  cobra.ExactArgs(1),
+		RunE:  deleteActivity,
+	}
 	cli.AddCommand(delCmd)
 
 	cli.Execute()
 }
 
+// --- CLI command implementations ---
+
+func apiClient(cmd *cobra.Command) (*api.ClientWithResponses, error) {
+	serverFlag, _ := cmd.Flags().GetString("server")
+	serverURL := appcli.ResolveServerURL(serverFlag, appName)
+
+	httpClient, err := appcli.AuthenticatedClient(appName)
+	if err != nil {
+		return nil, fmt.Errorf("not logged in — run: travel login --server %s", serverURL)
+	}
+
+	return api.NewClientWithResponses(serverURL, api.WithHTTPClient(httpClient))
+}
+
 func addActivity(cmd *cobra.Command, args []string) error {
+	client, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+
 	title := strings.Join(args, " ")
 	from, _ := cmd.Flags().GetString("from")
 	to, _ := cmd.Flags().GetString("to")
-	if to == "" {
-		to = from
-	}
 	loc, _ := cmd.Flags().GetString("loc")
 	actType, _ := cmd.Flags().GetString("type")
 	notes, _ := cmd.Flags().GetString("notes")
 
-	a, err := activities.Create(cliUser, title, actType, from, to, loc, notes)
+	startDate, perr := time.Parse("2006-01-02", from)
+	if perr != nil {
+		return fmt.Errorf("invalid start date %q (expected YYYY-MM-DD)", from)
+	}
+
+	req := api.CreateActivityRequest{
+		Title:     title,
+		Type:      api.CreateActivityRequestType(actType),
+		StartDate: openapi_types.Date{Time: startDate},
+	}
+	if to != "" {
+		endDate, perr := time.Parse("2006-01-02", to)
+		if perr != nil {
+			return fmt.Errorf("invalid end date %q (expected YYYY-MM-DD)", to)
+		}
+		req.EndDate = &openapi_types.Date{Time: endDate}
+	}
+	if loc != "" {
+		req.Location = &loc
+	}
+	if notes != "" {
+		req.Notes = &notes
+	}
+
+	resp, err := client.CreateActivityWithResponse(context.Background(), req)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Created: %s (%s)\n", a.Title, a.ID[:8])
-	fmt.Printf("  %s → %s  [%s]  %s\n", a.StartDate, a.EndDate, a.Type, a.Location)
-
-	// Check for conflicts on these dates
-	overlapping, err := activities.ListRange(cliUser, from, to)
-	if err != nil {
-		return nil // non-fatal
+	if resp.StatusCode() != http.StatusCreated {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
 	}
-	conflicts := 0
-	for _, o := range overlapping {
-		if o.ID == a.ID {
-			continue
+
+	a := resp.JSON201
+	fmt.Printf("Created: %s (%s)\n", a.Title, a.Id[:8])
+	endStr := a.EndDate.Format("2006-01-02")
+	startStr := a.StartDate.Format("2006-01-02")
+	locStr := ""
+	if a.Location != nil {
+		locStr = *a.Location
+	}
+	fmt.Printf("  %s → %s  [%s]  %s\n", startStr, endStr, a.Type, locStr)
+
+	// Check for conflicts
+	checkResp, err := client.CheckDateWithResponse(context.Background(), a.StartDate)
+	if err == nil && checkResp.StatusCode() == http.StatusOK && checkResp.JSON200 != nil {
+		check := checkResp.JSON200
+		conflicts := 0
+		for _, o := range check.Activities {
+			if o.Id == a.Id {
+				continue
+			}
+			if conflicts == 0 {
+				fmt.Println("\n  Overlapping activities:")
+			}
+			conflicts++
+			oLoc := ""
+			if o.Location != nil {
+				oLoc = *o.Location
+			}
+			fmt.Printf("    - %s (%s to %s) [%s] %s\n", o.Title, o.StartDate.Format("2006-01-02"), o.EndDate.Format("2006-01-02"), o.Type, oLoc)
 		}
-		if conflicts == 0 {
-			fmt.Println("\n  ⚠ Overlapping activities:")
-		}
-		conflicts++
-		fmt.Printf("    • %s (%s → %s) [%s]\n", o.Title, o.StartDate, o.EndDate, o.Type)
 	}
 	return nil
 }
 
 func listActivities(cmd *cobra.Command, args []string) error {
-	month, _ := cmd.Flags().GetString("month")
-
-	var items []Activity
-	var err error
-
-	if month != "" {
-		// Parse month as YYYY-MM
-		t, perr := time.Parse("2006-01", month)
-		if perr != nil {
-			return fmt.Errorf("invalid month %q (expected YYYY-MM)", month)
-		}
-		from := t.Format("2006-01-02")
-		to := t.AddDate(0, 1, -1).Format("2006-01-02")
-		items, err = activities.ListRange(cliUser, from, to)
-	} else {
-		items, err = activities.List(cliUser)
-	}
+	client, err := apiClient(cmd)
 	if err != nil {
 		return err
 	}
 
+	month, _ := cmd.Flags().GetString("month")
+	params := &api.ListActivitiesParams{}
+	if month != "" {
+		params.Month = &month
+	}
+
+	resp, err := client.ListActivitiesWithResponse(context.Background(), params)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+	}
+
+	items := *resp.JSON200
 	if len(items) == 0 {
 		fmt.Println("No activities. Add one with: travel add \"Trip\" --from 2026-04-01 --loc Paris")
 		return nil
@@ -153,76 +239,76 @@ func listActivities(cmd *cobra.Command, args []string) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(w, "ID\tDATES\tTYPE\tLOCATION\tTITLE\n")
 	for _, a := range items {
-		dates := a.StartDate
-		if a.EndDate != a.StartDate {
-			dates = a.StartDate + " → " + a.EndDate
+		dates := a.StartDate.Format("2006-01-02")
+		endStr := a.EndDate.Format("2006-01-02")
+		if endStr != dates {
+			dates = dates + " -> " + endStr
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", a.ID[:8], dates, a.Type, a.Location, a.Title)
+		loc := ""
+		if a.Location != nil {
+			loc = *a.Location
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", a.Id[:8], dates, a.Type, loc, a.Title)
 	}
 	w.Flush()
 	return nil
 }
 
 func checkDate(cmd *cobra.Command, args []string) error {
-	date := args[0]
-	if _, err := time.Parse("2006-01-02", date); err != nil {
-		return fmt.Errorf("invalid date %q (expected YYYY-MM-DD)", date)
-	}
-
-	items, err := activities.ForDate(cliUser, date)
+	client, err := apiClient(cmd)
 	if err != nil {
 		return err
 	}
 
-	if len(items) == 0 {
-		fmt.Printf("%s: Home (no activities)\n", date)
-		return nil
+	dateStr := args[0]
+	d, perr := time.Parse("2006-01-02", dateStr)
+	if perr != nil {
+		return fmt.Errorf("invalid date %q (expected YYYY-MM-DD)", dateStr)
 	}
 
-	// Determine location from primary activity
-	loc := "Home"
-	for _, a := range items {
-		if a.Location != "" {
-			loc = a.Location
-			break
+	resp, err := client.CheckDateWithResponse(context.Background(), openapi_types.Date{Time: d})
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+	}
+
+	check := resp.JSON200
+	fmt.Printf("%s: %s\n", check.Date.Format("2006-01-02"), check.Location)
+	for _, a := range check.Activities {
+		loc := ""
+		if a.Location != nil {
+			loc = "  @ " + *a.Location
 		}
+		fmt.Printf("  - %s [%s]%s\n", a.Title, a.Type, loc)
 	}
-
-	fmt.Printf("%s: %s\n", date, loc)
-	for _, a := range items {
-		fmt.Printf("  • %s [%s]", a.Title, a.Type)
-		if a.Location != "" {
-			fmt.Printf("  @ %s", a.Location)
-		}
-		fmt.Println()
+	if check.HasConflict {
+		fmt.Println("\n  Location conflict: activities in multiple locations on this date")
 	}
-
-	// Flag conflicts: multiple activities with different locations
-	locations := map[string]bool{}
-	for _, a := range items {
-		if a.Location != "" {
-			locations[a.Location] = true
-		}
-	}
-	if len(locations) > 1 {
-		fmt.Println("\n  ⚠ Location conflict: activities in multiple locations on this date")
-	}
-
 	return nil
 }
 
 func deleteActivity(cmd *cobra.Command, args []string) error {
-	prefix := args[0]
-
-	// Find by prefix match
-	all, err := activities.List(cliUser)
+	client, err := apiClient(cmd)
 	if err != nil {
 		return err
 	}
 
-	var matches []Activity
-	for _, a := range all {
-		if strings.HasPrefix(a.ID, prefix) {
+	prefix := args[0]
+
+	// List all to find by prefix
+	resp, err := client.ListActivitiesWithResponse(context.Background(), &api.ListActivitiesParams{})
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+	}
+
+	var matches []api.Activity
+	for _, a := range *resp.JSON200 {
+		if strings.HasPrefix(a.Id, prefix) {
 			matches = append(matches, a)
 		}
 	}
@@ -233,15 +319,20 @@ func deleteActivity(cmd *cobra.Command, args []string) error {
 	if len(matches) > 1 {
 		fmt.Fprintf(os.Stderr, "Ambiguous prefix %q matches %d activities:\n", prefix, len(matches))
 		for _, a := range matches {
-			fmt.Fprintf(os.Stderr, "  %s  %s\n", a.ID[:8], a.Title)
+			fmt.Fprintf(os.Stderr, "  %s  %s\n", a.Id[:8], a.Title)
 		}
 		return fmt.Errorf("provide a longer prefix")
 	}
 
 	a := matches[0]
-	if err := activities.Delete(a.ID); err != nil {
+	delResp, err := client.DeleteActivityWithResponse(context.Background(), a.Id)
+	if err != nil {
 		return err
 	}
-	fmt.Printf("Deleted: %s (%s → %s) [%s]\n", a.Title, a.StartDate, a.EndDate, a.Type)
+	if delResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", delResp.StatusCode(), string(delResp.Body))
+	}
+
+	fmt.Printf("Deleted: %s (%s to %s) [%s]\n", a.Title, a.StartDate.Format("2006-01-02"), a.EndDate.Format("2006-01-02"), a.Type)
 	return nil
 }

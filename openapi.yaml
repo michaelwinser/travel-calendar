@@ -1,0 +1,247 @@
+openapi: 3.0.3
+info:
+  title: Travel Calendar API
+  description: Activity planning and conflict detection for frequent travelers
+  version: 0.1.0
+
+paths:
+  /api/activities:
+    get:
+      operationId: listActivities
+      summary: List activities for the authenticated user
+      security:
+        - session: []
+      parameters:
+        - name: month
+          in: query
+          description: Filter by month (YYYY-MM)
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}$'
+        - name: from
+          in: query
+          description: Filter start (YYYY-MM-DD), used with 'to'
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          description: Filter end (YYYY-MM-DD), used with 'from'
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: List of activities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Activity'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      operationId: createActivity
+      summary: Create a new activity
+      security:
+        - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateActivityRequest'
+      responses:
+        '201':
+          description: Created activity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Activity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/activities/{id}:
+    get:
+      operationId: getActivity
+      summary: Get a single activity by ID
+      security:
+        - session: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The activity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Activity'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      operationId: deleteActivity
+      summary: Delete an activity by ID
+      security:
+        - session: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/activities/check/{date}:
+    get:
+      operationId: checkDate
+      summary: Check what activities span a specific date
+      security:
+        - session: []
+      parameters:
+        - name: date
+          in: path
+          required: true
+          description: Date to check (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Date check result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DateCheck'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  schemas:
+    Activity:
+      type: object
+      required: [id, userId, title, type, startDate, endDate, source, createdAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        title:
+          type: string
+        type:
+          type: string
+          enum: [travel, stay, conference, vacation, commitment]
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        location:
+          type: string
+        notes:
+          type: string
+        source:
+          type: string
+          enum: [manual, google_calendar, system]
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateActivityRequest:
+      type: object
+      required: [title, type, startDate]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        type:
+          type: string
+          enum: [travel, stay, conference, vacation, commitment]
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+          description: Defaults to startDate if omitted
+        location:
+          type: string
+        notes:
+          type: string
+
+    DateCheck:
+      type: object
+      required: [date, location, activities, hasConflict]
+      properties:
+        date:
+          type: string
+          format: date
+        location:
+          type: string
+          description: Primary location for the day (Home if no activities)
+        activities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Activity'
+        hasConflict:
+          type: boolean
+          description: True if activities on this date span multiple locations
+
+    OkResponse:
+      type: object
+      properties:
+        ok:
+          type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Not authenticated
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: app_session

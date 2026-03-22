@@ -1,0 +1,17 @@
+name: travel-calendar
+port: 3000
+
+store:
+  type: sqlite
+  path: data/app.db
+
+environments:
+  local:
+    url: http://localhost:3000
+
+  production:
+    store:
+      type: firestore
+    auth:
+      client_id: ${secret:google-client-id}
+      client_secret: ${secret:google-client-secret}

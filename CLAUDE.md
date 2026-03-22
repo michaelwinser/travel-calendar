@@ -4,13 +4,21 @@ A high-velocity planning tool for frequent travelers, built on [appbase](https:/
 
 ## Architecture
 
-Single Go module. CLI and web server in one binary.
+API-first, single Go module. OpenAPI spec is the source of truth. CLI talks to the server via HTTP.
 
 ```
 travel-calendar/
-├── main.go          # CLI commands and server setup (uses appbase)
-├── store.go         # Activity entity and store (uses appbase/store)
-├── app.json         # Project identity (appbase convention)
+├── openapi.yaml                # API contract (source of truth)
+├── oapi-codegen.yaml           # Server codegen config
+├── oapi-codegen-client.yaml    # Client codegen config
+├── api/
+│   ├── server.gen.go           # Generated: ServerInterface + types (DO NOT EDIT)
+│   └── client.gen.go           # Generated: HTTP client (DO NOT EDIT)
+├── main.go                     # CLI commands (uses generated client) + server wiring
+├── server.go                   # Implements api.ServerInterface
+├── store.go                    # Activity entity + ActivityStore (uses appbase/store)
+├── app.yaml                    # App config (appbase convention)
+├── app.json                    # Deploy config (read by shell scripts)
 ├── go.mod
 ├── docs/
 │   ├── prd/kinetic-ledger.md        # Product requirements
@@ -21,6 +29,14 @@ travel-calendar/
 └── .claude/         # Agent configuration
 ```
 
+### API-First Workflow
+
+1. Define endpoints in `openapi.yaml`
+2. Regenerate: `/Users/michaelw/go/bin/oapi-codegen -config oapi-codegen.yaml openapi.yaml && /Users/michaelw/go/bin/oapi-codegen -config oapi-codegen-client.yaml openapi.yaml`
+3. Implement new methods in `server.go` (compiler will tell you what's missing)
+4. Add CLI commands in `main.go` using the generated client
+5. Never hand-write route registrations or request/response types
+
 ### Key Dependency: appbase
 
 This app is built on `github.com/michaelwinser/appbase`. Read `../appbase/CLAUDE.md` for module docs.
@@ -30,6 +46,7 @@ This app is built on `github.com/michaelwinser/appbase`. Read `../appbase/CLAUDE
 - Domain entities and store are ours; appbase provides connections, auth, CLI base, server scaffolding
 - Use `store.Collection[T]` for persistence — no raw SQL schema management
 - Use `appbase.UserID(r)` for auth in HTTP handlers
+- CLI commands MUST go through the API, never access the store directly
 
 ### Data Model
 
@@ -45,7 +62,8 @@ This app is built on `github.com/michaelwinser/appbase`. Read `../appbase/CLAUDE
 # Server
 go run . serve
 
-# CLI
+# CLI (requires a running server + login)
+go run . login --server http://localhost:3000
 go run . add "Trip Name" --from 2026-04-01 --to 2026-04-05 --loc Paris --type travel
 go run . list [--month 2026-04]
 go run . check 2026-04-03
@@ -58,7 +76,7 @@ go build -o travel-calendar .
 go test ./...
 ```
 
-Environment: `STORE_TYPE=sqlite` (default), `SQLITE_DB_PATH=data/app.db` (default).
+Config: `app.yaml` (loaded by appbase). Env var overrides still work (`STORE_TYPE`, `PORT`, etc).
 
 ## Git Workflow
 
@@ -75,7 +93,8 @@ Use the Commit Agent for all commits when available.
 
 ## Principles
 
-1. **Model first** — Get the data model right before building UI. The CLI validates the model.
-2. **appbase handles infrastructure** — Auth, sessions, database, deployment. We handle domain logic.
-3. **Read before write** — Check adjacent test files and design docs before changes.
-4. **Log appbase friction** — If appbase is missing something or has a rough edge, add it to `docs/appbase-feedback.md`.
+1. **API first** — OpenAPI spec is the contract. Generated code enforces it. CLI tests the API.
+2. **Model first** — Get the data model right before building UI.
+3. **appbase handles infrastructure** — Auth, sessions, database, deployment. We handle domain logic.
+4. **Read before write** — Check adjacent test files and design docs before changes.
+5. **Log appbase friction** — If appbase is missing something or has a rough edge, add it to `docs/appbase-feedback.md`.
