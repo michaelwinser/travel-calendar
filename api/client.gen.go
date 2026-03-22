@@ -101,6 +101,11 @@ type ClientInterface interface {
 	// CheckDate request
 	CheckDate(ctx context.Context, date openapi_types.Date, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ParseActivityWithBody request with any body
+	ParseActivityWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ParseActivity(ctx context.Context, body ParseActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DeleteActivity request
 	DeleteActivity(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -151,6 +156,30 @@ func (c *Client) CreateActivity(ctx context.Context, body CreateActivityJSONRequ
 
 func (c *Client) CheckDate(ctx context.Context, date openapi_types.Date, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCheckDateRequest(c.Server, date)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ParseActivityWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewParseActivityRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ParseActivity(ctx context.Context, body ParseActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewParseActivityRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -364,6 +393,46 @@ func NewCheckDateRequest(server string, date openapi_types.Date) (*http.Request,
 	return req, nil
 }
 
+// NewParseActivityRequest calls the generic ParseActivity builder with application/json body
+func NewParseActivityRequest(server string, body ParseActivityJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewParseActivityRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewParseActivityRequestWithBody generates requests for ParseActivity with any type of body
+func NewParseActivityRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/activities/parse")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewDeleteActivityRequest generates requests for DeleteActivity
 func NewDeleteActivityRequest(server string, id string) (*http.Request, error) {
 	var err error
@@ -533,6 +602,11 @@ type ClientWithResponsesInterface interface {
 	// CheckDateWithResponse request
 	CheckDateWithResponse(ctx context.Context, date openapi_types.Date, reqEditors ...RequestEditorFn) (*CheckDateResponse, error)
 
+	// ParseActivityWithBodyWithResponse request with any body
+	ParseActivityWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ParseActivityResponse, error)
+
+	ParseActivityWithResponse(ctx context.Context, body ParseActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*ParseActivityResponse, error)
+
 	// DeleteActivityWithResponse request
 	DeleteActivityWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteActivityResponse, error)
 
@@ -609,6 +683,30 @@ func (r CheckDateResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r CheckDateResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ParseActivityResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ParseResult
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+}
+
+// Status returns HTTPResponse.Status
+func (r ParseActivityResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ParseActivityResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -721,6 +819,23 @@ func (c *ClientWithResponses) CheckDateWithResponse(ctx context.Context, date op
 		return nil, err
 	}
 	return ParseCheckDateResponse(rsp)
+}
+
+// ParseActivityWithBodyWithResponse request with arbitrary body returning *ParseActivityResponse
+func (c *ClientWithResponses) ParseActivityWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ParseActivityResponse, error) {
+	rsp, err := c.ParseActivityWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseParseActivityResponse(rsp)
+}
+
+func (c *ClientWithResponses) ParseActivityWithResponse(ctx context.Context, body ParseActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*ParseActivityResponse, error) {
+	rsp, err := c.ParseActivity(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseParseActivityResponse(rsp)
 }
 
 // DeleteActivityWithResponse request returning *DeleteActivityResponse
@@ -851,6 +966,46 @@ func ParseCheckDateResponse(rsp *http.Response) (*CheckDateResponse, error) {
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseParseActivityResponse parses an HTTP response from a ParseActivityWithResponse call
+func ParseParseActivityResponse(rsp *http.Response) (*ParseActivityResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ParseActivityResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ParseResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest Unauthorized

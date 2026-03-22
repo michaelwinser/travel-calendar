@@ -36,8 +36,9 @@ import (
 const appName = "travel-calendar"
 
 var (
-	app        *appbase.App
-	activities *ActivityStore
+	app          *appbase.App
+	activities   *ActivityStore
+	parseHistory *ParseHistoryStore
 )
 
 func setup() error {
@@ -50,6 +51,10 @@ func setup() error {
 	if err != nil {
 		return err
 	}
+	parseHistory, err = NewParseHistoryStore(app.DB())
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -57,7 +62,7 @@ func main() {
 	cli := appcli.New("travel", "Travel calendar — plan trips, detect conflicts, stay sane", setup)
 
 	cli.SetServeFunc(func() error {
-		activityServer := &ActivityServer{store: activities}
+		activityServer := &ActivityServer{store: activities, parseHistory: parseHistory}
 		api.HandlerFromMux(activityServer, app.Server().Router())
 
 		r := app.Router()

@@ -1,0 +1,151 @@
+package main
+
+import (
+	"testing"
+	"time"
+)
+
+// Reference date for all parser tests: March 22, 2026
+var testToday = time.Date(2026, 3, 22, 0, 0, 0, 0, time.UTC)
+
+func TestParse_UC2001_SimpleEventWithLocation(t *testing.T) {
+	r := Parse("FOSDEM Jan 22 - Feb 3 in Brussels", testToday)
+	assertTitle(t, r, "FOSDEM")
+	assertStartDate(t, r, "2027-01-22") // Jan is past → next year
+	assertEndDate(t, r, "2027-02-03")
+	assertLocation(t, r, "Brussels")
+}
+
+func TestParse_UC2002_FlightWithRoute(t *testing.T) {
+	r := Parse("Flight UA 19 on Mar 20 from MXP to EWR", testToday)
+	assertTitle(t, r, "Flight UA 19")
+	assertStartDate(t, r, "2027-03-20") // Mar 20 is before Mar 22 → next year
+	assertType(t, r, TypeTravel)
+	assertLocation(t, r, "MXP → EWR")
+}
+
+func TestParse_UC2003_SingleDayWithLocationKeyword(t *testing.T) {
+	r := Parse("Dentist on Apr 5 at Home", testToday)
+	assertTitle(t, r, "Dentist")
+	assertStartDate(t, r, "2026-04-05") // Apr is ahead → this year
+	assertEndDate(t, r, "2026-04-05")
+	assertType(t, r, TypeCommitment)
+	assertLocation(t, r, "Home")
+}
+
+func TestParse_UC2004_DateRangeWithFromTo(t *testing.T) {
+	r := Parse("Team offsite from Mar 10 to Mar 14 in NYC", testToday)
+	assertTitle(t, r, "Team offsite")
+	assertStartDate(t, r, "2027-03-10") // Mar 10 is past → next year
+	assertEndDate(t, r, "2027-03-14")
+	assertLocation(t, r, "NYC")
+}
+
+func TestParse_UC2005_ExplicitYear(t *testing.T) {
+	r := Parse("Christmas vacation Dec 20 2026 - Jan 3 2027", testToday)
+	assertTitle(t, r, "Christmas vacation")
+	assertStartDate(t, r, "2026-12-20")
+	assertEndDate(t, r, "2027-01-03")
+	assertType(t, r, TypeVacation)
+}
+
+func TestParse_UC2006_MinimalInput(t *testing.T) {
+	r := Parse("meeting tomorrow", testToday)
+	assertTitle(t, r, "meeting tomorrow")
+	assertType(t, r, TypeCommitment) // "meeting" keyword
+	if r.StartDate != nil {
+		t.Errorf("expected no start date, got %s", r.StartDate.Format("2006-01-02"))
+	}
+	// "tomorrow" should be in unparsed
+	found := false
+	for _, u := range r.Unparsed {
+		if u == "tomorrow" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected 'tomorrow' in unparsed, got %v", r.Unparsed)
+	}
+}
+
+func TestParse_UC2007_YearInferencePastMonth(t *testing.T) {
+	r := Parse("Jan 15", testToday)
+	assertStartDate(t, r, "2027-01-15")
+}
+
+func TestParse_UC2008_YearInferenceFutureMonth(t *testing.T) {
+	r := Parse("Apr 10", testToday)
+	assertStartDate(t, r, "2026-04-10")
+}
+
+func TestParse_UC2009_UnparsableInput(t *testing.T) {
+	r := Parse("stuff and things", testToday)
+	assertTitle(t, r, "stuff and things")
+	if r.StartDate != nil {
+		t.Errorf("expected no start date, got %s", r.StartDate.Format("2006-01-02"))
+	}
+	if r.Location != "" {
+		t.Errorf("expected no location, got %q", r.Location)
+	}
+	if r.Confidence["title"] != ConfHigh {
+		t.Errorf("expected title confidence high, got %q", r.Confidence["title"])
+	}
+	if r.Confidence["type"] != ConfLow {
+		t.Errorf("expected type confidence low, got %q", r.Confidence["type"])
+	}
+}
+
+func TestParse_UC2010_FromToAsLocations(t *testing.T) {
+	r := Parse("Train from London to Paris on May 5", testToday)
+	assertTitle(t, r, "Train")
+	assertType(t, r, TypeTravel)
+	assertStartDate(t, r, "2026-05-05")
+	assertLocation(t, r, "London → Paris")
+}
+
+// --- Helpers ---
+
+func assertTitle(t *testing.T, r ParsedResult, expected string) {
+	t.Helper()
+	if r.Title != expected {
+		t.Errorf("title: expected %q, got %q", expected, r.Title)
+	}
+}
+
+func assertType(t *testing.T, r ParsedResult, expected string) {
+	t.Helper()
+	if r.Type != expected {
+		t.Errorf("type: expected %q, got %q", expected, r.Type)
+	}
+}
+
+func assertStartDate(t *testing.T, r ParsedResult, expected string) {
+	t.Helper()
+	if r.StartDate == nil {
+		t.Errorf("startDate: expected %s, got nil", expected)
+		return
+	}
+	got := r.StartDate.Format("2006-01-02")
+	if got != expected {
+		t.Errorf("startDate: expected %s, got %s", expected, got)
+	}
+}
+
+func assertEndDate(t *testing.T, r ParsedResult, expected string) {
+	t.Helper()
+	if r.EndDate == nil {
+		t.Errorf("endDate: expected %s, got nil", expected)
+		return
+	}
+	got := r.EndDate.Format("2006-01-02")
+	if got != expected {
+		t.Errorf("endDate: expected %s, got %s", expected, got)
+	}
+}
+
+func assertLocation(t *testing.T, r ParsedResult, expected string) {
+	t.Helper()
+	if r.Location != expected {
+		t.Errorf("location: expected %q, got %q", expected, r.Location)
+	}
+}

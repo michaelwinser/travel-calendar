@@ -33,7 +33,12 @@ func setupTestApp(t *testing.T) http.Handler {
 		t.Fatal(err)
 	}
 
-	activityServer := &ActivityServer{store: store}
+	ph, err := NewParseHistoryStore(a.DB())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	activityServer := &ActivityServer{store: store, parseHistory: ph}
 	api.HandlerFromMux(activityServer, a.Server().Router())
 
 	testSessions = a.Sessions()
@@ -358,6 +363,62 @@ func TestUseCases(t *testing.T) {
 		if len(acts) != 2 {
 			t.Fatalf("expected 2 activities on conflict date, got %d", len(acts))
 		}
+	})
+
+	// --- Quick Add: Parse endpoint ---
+
+	h.Run("UC-2001-api", "Parse freeform text via API", func(c *harness.Client) {
+		login(c)
+		resp := c.POST("/api/activities/parse", `{"text": "FOSDEM Jan 22 - Feb 3 in Brussels"}`)
+		c.AssertStatus(resp, 200)
+
+		data := resp.JSON()
+		activity := data["activity"].(map[string]interface{})
+		if activity["title"] != "FOSDEM" {
+			t.Errorf("expected title FOSDEM, got %v", activity["title"])
+		}
+		if activity["location"] != "Brussels" {
+			t.Errorf("expected location Brussels, got %v", activity["location"])
+		}
+		// Should have a parse history ID
+		if data["id"] == nil || data["id"] == "" {
+			t.Error("expected non-empty parse history ID")
+		}
+	})
+
+	h.Run("UC-2001-api-create", "Create activity from parse result with history link", func(c *harness.Client) {
+		login(c)
+		// Parse
+		parseResp := c.POST("/api/activities/parse", `{"text": "Dentist on Apr 5 at Home"}`)
+		c.AssertStatus(parseResp, 200)
+		parseID := parseResp.JSON()["id"].(string)
+
+		// Create with parseHistoryId
+		createResp := c.POST("/api/activities", `{
+			"title": "Dentist",
+			"type": "commitment",
+			"startDate": "2026-04-05",
+			"location": "Home",
+			"parseHistoryId": "`+parseID+`"
+		}`)
+		c.AssertStatus(createResp, 201)
+	})
+
+	h.Run("UC-2009-api", "Parse unparsable input returns best effort", func(c *harness.Client) {
+		login(c)
+		resp := c.POST("/api/activities/parse", `{"text": "stuff and things"}`)
+		c.AssertStatus(resp, 200)
+		data := resp.JSON()
+		activity := data["activity"].(map[string]interface{})
+		if activity["title"] != "stuff and things" {
+			t.Errorf("expected title 'stuff and things', got %v", activity["title"])
+		}
+	})
+
+	h.Run("UC-2000-api", "Parse with empty text returns 400", func(c *harness.Client) {
+		login(c)
+		resp := c.POST("/api/activities/parse", `{"text": ""}`)
+		c.AssertStatus(resp, 400)
 	})
 
 	// --- Health ---

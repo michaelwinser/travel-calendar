@@ -100,27 +100,159 @@ func (e CreateActivityRequestType) Valid() bool {
 	}
 }
 
+// Defines values for ParseConfidenceEndDate.
+const (
+	ParseConfidenceEndDateHigh   ParseConfidenceEndDate = "high"
+	ParseConfidenceEndDateLow    ParseConfidenceEndDate = "low"
+	ParseConfidenceEndDateMedium ParseConfidenceEndDate = "medium"
+)
+
+// Valid indicates whether the value is a known member of the ParseConfidenceEndDate enum.
+func (e ParseConfidenceEndDate) Valid() bool {
+	switch e {
+	case ParseConfidenceEndDateHigh:
+		return true
+	case ParseConfidenceEndDateLow:
+		return true
+	case ParseConfidenceEndDateMedium:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ParseConfidenceLocation.
+const (
+	ParseConfidenceLocationHigh   ParseConfidenceLocation = "high"
+	ParseConfidenceLocationLow    ParseConfidenceLocation = "low"
+	ParseConfidenceLocationMedium ParseConfidenceLocation = "medium"
+)
+
+// Valid indicates whether the value is a known member of the ParseConfidenceLocation enum.
+func (e ParseConfidenceLocation) Valid() bool {
+	switch e {
+	case ParseConfidenceLocationHigh:
+		return true
+	case ParseConfidenceLocationLow:
+		return true
+	case ParseConfidenceLocationMedium:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ParseConfidenceStartDate.
+const (
+	ParseConfidenceStartDateHigh   ParseConfidenceStartDate = "high"
+	ParseConfidenceStartDateLow    ParseConfidenceStartDate = "low"
+	ParseConfidenceStartDateMedium ParseConfidenceStartDate = "medium"
+)
+
+// Valid indicates whether the value is a known member of the ParseConfidenceStartDate enum.
+func (e ParseConfidenceStartDate) Valid() bool {
+	switch e {
+	case ParseConfidenceStartDateHigh:
+		return true
+	case ParseConfidenceStartDateLow:
+		return true
+	case ParseConfidenceStartDateMedium:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ParseConfidenceTitle.
+const (
+	ParseConfidenceTitleHigh   ParseConfidenceTitle = "high"
+	ParseConfidenceTitleLow    ParseConfidenceTitle = "low"
+	ParseConfidenceTitleMedium ParseConfidenceTitle = "medium"
+)
+
+// Valid indicates whether the value is a known member of the ParseConfidenceTitle enum.
+func (e ParseConfidenceTitle) Valid() bool {
+	switch e {
+	case ParseConfidenceTitleHigh:
+		return true
+	case ParseConfidenceTitleLow:
+		return true
+	case ParseConfidenceTitleMedium:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ParseConfidenceType.
+const (
+	High   ParseConfidenceType = "high"
+	Low    ParseConfidenceType = "low"
+	Medium ParseConfidenceType = "medium"
+)
+
+// Valid indicates whether the value is a known member of the ParseConfidenceType enum.
+func (e ParseConfidenceType) Valid() bool {
+	switch e {
+	case High:
+		return true
+	case Low:
+		return true
+	case Medium:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ParsedActivityType.
+const (
+	ParsedActivityTypeCommitment ParsedActivityType = "commitment"
+	ParsedActivityTypeConference ParsedActivityType = "conference"
+	ParsedActivityTypeStay       ParsedActivityType = "stay"
+	ParsedActivityTypeTravel     ParsedActivityType = "travel"
+	ParsedActivityTypeVacation   ParsedActivityType = "vacation"
+)
+
+// Valid indicates whether the value is a known member of the ParsedActivityType enum.
+func (e ParsedActivityType) Valid() bool {
+	switch e {
+	case ParsedActivityTypeCommitment:
+		return true
+	case ParsedActivityTypeConference:
+		return true
+	case ParsedActivityTypeStay:
+		return true
+	case ParsedActivityTypeTravel:
+		return true
+	case ParsedActivityTypeVacation:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateActivityRequestType.
 const (
-	Commitment UpdateActivityRequestType = "commitment"
-	Conference UpdateActivityRequestType = "conference"
-	Stay       UpdateActivityRequestType = "stay"
-	Travel     UpdateActivityRequestType = "travel"
-	Vacation   UpdateActivityRequestType = "vacation"
+	UpdateActivityRequestTypeCommitment UpdateActivityRequestType = "commitment"
+	UpdateActivityRequestTypeConference UpdateActivityRequestType = "conference"
+	UpdateActivityRequestTypeStay       UpdateActivityRequestType = "stay"
+	UpdateActivityRequestTypeTravel     UpdateActivityRequestType = "travel"
+	UpdateActivityRequestTypeVacation   UpdateActivityRequestType = "vacation"
 )
 
 // Valid indicates whether the value is a known member of the UpdateActivityRequestType enum.
 func (e UpdateActivityRequestType) Valid() bool {
 	switch e {
-	case Commitment:
+	case UpdateActivityRequestTypeCommitment:
 		return true
-	case Conference:
+	case UpdateActivityRequestTypeConference:
 		return true
-	case Stay:
+	case UpdateActivityRequestTypeStay:
 		return true
-	case Travel:
+	case UpdateActivityRequestTypeTravel:
 		return true
-	case Vacation:
+	case UpdateActivityRequestTypeVacation:
 		return true
 	default:
 		return false
@@ -150,12 +282,15 @@ type ActivityType string
 // CreateActivityRequest defines model for CreateActivityRequest.
 type CreateActivityRequest struct {
 	// EndDate Defaults to startDate if omitted
-	EndDate   *openapi_types.Date       `json:"endDate,omitempty"`
-	Location  *string                   `json:"location,omitempty"`
-	Notes     *string                   `json:"notes,omitempty"`
-	StartDate openapi_types.Date        `json:"startDate"`
-	Title     string                    `json:"title"`
-	Type      CreateActivityRequestType `json:"type"`
+	EndDate  *openapi_types.Date `json:"endDate,omitempty"`
+	Location *string             `json:"location,omitempty"`
+	Notes    *string             `json:"notes,omitempty"`
+
+	// ParseHistoryId Optional ID from a prior parse, to link creation to parse history
+	ParseHistoryId *string                   `json:"parseHistoryId,omitempty"`
+	StartDate      openapi_types.Date        `json:"startDate"`
+	Title          string                    `json:"title"`
+	Type           CreateActivityRequestType `json:"type"`
 }
 
 // CreateActivityRequestType defines model for CreateActivityRequest.Type.
@@ -182,6 +317,59 @@ type ErrorResponse struct {
 type OkResponse struct {
 	Ok *string `json:"ok,omitempty"`
 }
+
+// ParseConfidence defines model for ParseConfidence.
+type ParseConfidence struct {
+	EndDate   *ParseConfidenceEndDate   `json:"endDate,omitempty"`
+	Location  *ParseConfidenceLocation  `json:"location,omitempty"`
+	StartDate *ParseConfidenceStartDate `json:"startDate,omitempty"`
+	Title     *ParseConfidenceTitle     `json:"title,omitempty"`
+	Type      *ParseConfidenceType      `json:"type,omitempty"`
+}
+
+// ParseConfidenceEndDate defines model for ParseConfidence.EndDate.
+type ParseConfidenceEndDate string
+
+// ParseConfidenceLocation defines model for ParseConfidence.Location.
+type ParseConfidenceLocation string
+
+// ParseConfidenceStartDate defines model for ParseConfidence.StartDate.
+type ParseConfidenceStartDate string
+
+// ParseConfidenceTitle defines model for ParseConfidence.Title.
+type ParseConfidenceTitle string
+
+// ParseConfidenceType defines model for ParseConfidence.Type.
+type ParseConfidenceType string
+
+// ParseRequest defines model for ParseRequest.
+type ParseRequest struct {
+	Text string `json:"text"`
+}
+
+// ParseResult defines model for ParseResult.
+type ParseResult struct {
+	// Activity All fields optional — parser fills what it can
+	Activity   ParsedActivity  `json:"activity"`
+	Confidence ParseConfidence `json:"confidence"`
+
+	// Id Parse history ID, pass back as parseHistoryId when creating
+	Id       string `json:"id"`
+	Unparsed string `json:"unparsed"`
+}
+
+// ParsedActivity All fields optional — parser fills what it can
+type ParsedActivity struct {
+	EndDate   *openapi_types.Date `json:"endDate,omitempty"`
+	Location  *string             `json:"location,omitempty"`
+	Notes     *string             `json:"notes,omitempty"`
+	StartDate *openapi_types.Date `json:"startDate,omitempty"`
+	Title     *string             `json:"title,omitempty"`
+	Type      *ParsedActivityType `json:"type,omitempty"`
+}
+
+// ParsedActivityType defines model for ParsedActivity.Type.
+type ParsedActivityType string
 
 // UpdateActivityRequest All fields optional — only provided fields are updated
 type UpdateActivityRequest struct {
@@ -220,6 +408,9 @@ type ListActivitiesParams struct {
 // CreateActivityJSONRequestBody defines body for CreateActivity for application/json ContentType.
 type CreateActivityJSONRequestBody = CreateActivityRequest
 
+// ParseActivityJSONRequestBody defines body for ParseActivity for application/json ContentType.
+type ParseActivityJSONRequestBody = ParseRequest
+
 // UpdateActivityJSONRequestBody defines body for UpdateActivity for application/json ContentType.
 type UpdateActivityJSONRequestBody = UpdateActivityRequest
 
@@ -234,6 +425,9 @@ type ServerInterface interface {
 	// Check what activities span a specific date
 	// (GET /api/activities/check/{date})
 	CheckDate(w http.ResponseWriter, r *http.Request, date openapi_types.Date)
+	// Parse freeform text into a proposed activity
+	// (POST /api/activities/parse)
+	ParseActivity(w http.ResponseWriter, r *http.Request)
 	// Delete an activity by ID
 	// (DELETE /api/activities/{id})
 	DeleteActivity(w http.ResponseWriter, r *http.Request, id string)
@@ -264,6 +458,12 @@ func (_ Unimplemented) CreateActivity(w http.ResponseWriter, r *http.Request) {
 // Check what activities span a specific date
 // (GET /api/activities/check/{date})
 func (_ Unimplemented) CheckDate(w http.ResponseWriter, r *http.Request, date openapi_types.Date) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Parse freeform text into a proposed activity
+// (POST /api/activities/parse)
+func (_ Unimplemented) ParseActivity(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -385,6 +585,26 @@ func (siw *ServerInterfaceWrapper) CheckDate(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CheckDate(w, r, date)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ParseActivity operation middleware
+func (siw *ServerInterfaceWrapper) ParseActivity(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ParseActivity(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -610,6 +830,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/api/activities/check/{date}", wrapper.CheckDate)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/activities/parse", wrapper.ParseActivity)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/api/activities/{id}", wrapper.DeleteActivity)
 	})
 	r.Group(func(r chi.Router) {
@@ -625,27 +848,32 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"H4sIAAAAAAAC/9RZ227cNhD9lQEbIAkge+3ET/vm2E1iNDekyYPhuAEtjVaMJVIhR3a3xgL9iH5hv6QY",
+	"UquVdiXvOrWd5CleSeRczjnDGeZKxKYojUZNToyvhEVXGu3Q/3gmk/f4tUJH/Cs2mlD7P2VZ5iqWpIwe",
+	"fXFG8zMXZ1hI/uuBxVSMxS+jxdaj8NaNfrXW2Pe1ETGbzSKRoIutKnkzMRZH+kLmKgFbG55F4o2h56bS",
+	"yf058R6dqWyMoA1B6m3PIvFRy4oyY9VfeI++vDEEbBc1sQVMBH9TL+fd92NSF4qm/HdpTYmWVMAvtsgL",
+	"9r2LqbGFJDEWiSTcIlWgiARNSxRj4cgqPeEYUSeHknBlQd+3ymdh5XFuQiJ6X2pDwbeVNyHj/Ap1VYjx",
+	"iSikrmQuIjExZpLj51jmqBNpRSTc1BEW4rTHK0fS0sYxkKIce/0JDxbekJUXyN44klMRMfopWtQx73sh",
+	"65j5eVEoKpgYfe5VDu1RX+JmkWDOK8vkOuHkNh/P3ay3a8e4QKzJYNTCfeGBOfuCsZfTgX87Z01L4F3y",
+	"tJjQJeQhprLKyQEZaBwBlYIpFDE/o/Vp/0aOlNI6fKkcGTsNSey69tb/IXM4OoTUmgIklFYZC35hxB7n",
+	"Sp+DT5Aymh/4V5CFTcXtEapQ+hXqCWVivBvdE72WODTImj5a8IuDDOPzVSrIwJX6lyIs3Lqy1hSlJlQh",
+	"rZX+d7JpLjPpDoxOcxXTKtYfbOVZt3AOGNBMOeD9wJVSQ1HlpMocYU44t7BzZkyOUi/TsWvlnVWFtNNm",
+	"PaTGAmUIiZzCo5em8D5o03LjsViHSx1vYzVqZ7gbdh9S3SNjVbj8ur/ArGz19nx4H3O+4SbvWEHssUo8",
+	"X68rJXO6Z2qSiUgUmKiq8Lm47C2XbWRuurYj3JsubnR844VLwt5s3WBeB+sz4Z+0ts4sFwReczpsylU5",
+	"Dcp/uk7zfpOkrfy4Q4q1a1scatqLJTm2izUcHUZQSufgTMbnIB10zwe4zFDXtV5P+gpMpf2KTY/jJhGd",
+	"yFrbDKY2aTdp3ZD28xxShXniwMyPr3///ifEYiFVee7gMpMEiiCWXC0G1XVX5+4P3VP1SedjmfT3OJvl",
+	"3uh8CqU1FyrBZP6FtAiV3zf5iTD4Tm3IEiLsP8aVVTT9nRUfYnToXJ0IxXDExpwrNqRl4TuGsvw8/2bR",
+	"RpTqN5yGSUnp1PSgWsMOZS61VnoCUicQ10cqJEgYN2d56gdNTRAiR+uadpt7DH4GB/XgAfvvjjgNaIPb",
+	"Ymd7d3uH02hK1LJUYiyebu9sP2V+SMp8kCNZqlG3g5qg5yITyOeTW1nxSjnab7cBpbSyQGKPxifLMT5X",
+	"OaGFsykURlMGj46Pj4+3Xr/m5sPn8muFvp2tU+m/ElFrKC0lEVr+9I9Pn5KrvdkW//Nk9qCvfRkw7znZ",
+	"2N46PHwcQeUwgUtFGTwk83DAHW7OO96sIfSgB6iTYftsZcgDMjeyfxp1r0ae7Ozc6ArgfzbNq9cCTBcw",
+	"7faXV+3t7A4Zadwfde4x2tL0PGtEeXLKUbuq4AZ4brHVbc874c7lBKff+lHNuB6Sd2dPEc5YdPTMJNNb",
+	"u1LpH3Bn3SOdbIWzFVB3b82JBZar2AUHE5AtvPcCoa5HrnUhd8dgBxdBgsbLlp+zaLmejWKeGUdXrJvZ",
+	"YHHzg2V9TXFtXfN3CWTA79pR9lzHXFgXMq7l2sX1PoV9HQcWI3UPCXykIUwbGu+7htTb8p1kS8V+TJbg",
+	"SoxVqmI/O/fi7PtRf3D0Ktu3uXcs7M5AtJGed27bdgBqFc0wmAQgw+nDDaJxLZXXfeQPKPbgfGoRWS3A",
+	"UyIoTcZfny1F0cuNK5XMQh+WY2hQu+Q49M9b7FiqAT3C9gPXsKzvU8atS5I+HfvYkm/EiBftrV/U/BfI",
+	"5qAGv4DVPSfgGY/MbLO3Rr9A+lkRuu6w/cAtSueg/YFAeoHExVfpSY49OJVVD07d2fbOoLr98t0/lN9z",
+	"Hb+OKsHB79GX3R3DQkztMsCRz/4LAAD//xuvXuX4HQAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

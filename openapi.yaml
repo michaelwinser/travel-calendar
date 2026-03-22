@@ -143,6 +143,30 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /api/activities/parse:
+    post:
+      operationId: parseActivity
+      summary: Parse freeform text into a proposed activity
+      security:
+        - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParseRequest'
+      responses:
+        '200':
+          description: Parse result with proposed activity fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParseResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /api/activities/check/{date}:
     get:
       operationId: checkDate
@@ -220,6 +244,9 @@ components:
           type: string
         notes:
           type: string
+        parseHistoryId:
+          type: string
+          description: Optional ID from a prior parse, to link creation to parse history
 
     UpdateActivityRequest:
       type: object
@@ -259,6 +286,67 @@ components:
         hasConflict:
           type: boolean
           description: True if activities on this date span multiple locations
+
+    ParseRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+
+    ParseResult:
+      type: object
+      required: [id, activity, confidence, unparsed]
+      properties:
+        id:
+          type: string
+          description: Parse history ID, pass back as parseHistoryId when creating
+        activity:
+          $ref: '#/components/schemas/ParsedActivity'
+        confidence:
+          $ref: '#/components/schemas/ParseConfidence'
+        unparsed:
+          type: string
+
+    ParsedActivity:
+      type: object
+      description: All fields optional — parser fills what it can
+      properties:
+        title:
+          type: string
+        type:
+          type: string
+          enum: [travel, stay, conference, vacation, commitment]
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        location:
+          type: string
+        notes:
+          type: string
+
+    ParseConfidence:
+      type: object
+      properties:
+        title:
+          type: string
+          enum: [high, medium, low]
+        type:
+          type: string
+          enum: [high, medium, low]
+        startDate:
+          type: string
+          enum: [high, medium, low]
+        endDate:
+          type: string
+          enum: [high, medium, low]
+        location:
+          type: string
+          enum: [high, medium, low]
 
     OkResponse:
       type: object

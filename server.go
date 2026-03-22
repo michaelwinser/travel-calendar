@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/michaelwinser/appbase"
@@ -16,7 +17,8 @@ var _ api.ServerInterface = (*ActivityServer)(nil)
 
 // ActivityServer implements the generated ServerInterface.
 type ActivityServer struct {
-	store *ActivityStore
+	store        *ActivityStore
+	parseHistory *ParseHistoryStore
 }
 
 func (s *ActivityServer) ListActivities(w http.ResponseWriter, r *http.Request, params api.ListActivitiesParams) {
@@ -92,6 +94,11 @@ func (s *ActivityServer) CreateActivity(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Link to parse history if provided
+	if req.ParseHistoryId != nil && *req.ParseHistoryId != "" && s.parseHistory != nil {
+		s.parseHistory.MarkAccepted(*req.ParseHistoryId, a.ID)
+	}
+
 	server.RespondJSON(w, http.StatusCreated, entityToAPI(*a))
 }
 
@@ -162,6 +169,88 @@ func (s *ActivityServer) UpdateActivity(w http.ResponseWriter, r *http.Request, 
 	}
 
 	server.RespondJSON(w, http.StatusOK, entityToAPI(*a))
+}
+
+func (s *ActivityServer) ParseActivity(w http.ResponseWriter, r *http.Request) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	var req api.ParseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Text == "" {
+		server.RespondError(w, http.StatusBadRequest, "text is required")
+		return
+	}
+
+	result := Parse(req.Text, time.Now())
+
+	// Build API response
+	parsed := api.ParsedActivity{}
+	if result.Title != "" {
+		parsed.Title = &result.Title
+	}
+	if result.Type != "" {
+		t := api.ParsedActivityType(result.Type)
+		parsed.Type = &t
+	}
+	if result.StartDate != nil {
+		parsed.StartDate = &openapi_types.Date{Time: *result.StartDate}
+	}
+	if result.EndDate != nil {
+		parsed.EndDate = &openapi_types.Date{Time: *result.EndDate}
+	}
+	if result.Location != "" {
+		parsed.Location = &result.Location
+	}
+
+	confidence := api.ParseConfidence{}
+	if v, ok := result.Confidence["title"]; ok {
+		c := api.ParseConfidenceTitle(v)
+		confidence.Title = &c
+	}
+	if v, ok := result.Confidence["type"]; ok {
+		c := api.ParseConfidenceType(v)
+		confidence.Type = &c
+	}
+	if v, ok := result.Confidence["startDate"]; ok {
+		c := api.ParseConfidenceStartDate(v)
+		confidence.StartDate = &c
+	}
+	if v, ok := result.Confidence["endDate"]; ok {
+		c := api.ParseConfidenceEndDate(v)
+		confidence.EndDate = &c
+	}
+	if v, ok := result.Confidence["location"]; ok {
+		c := api.ParseConfidenceLocation(v)
+		confidence.Location = &c
+	}
+
+	unparsed := strings.Join(result.Unparsed, " ")
+
+	// Save to parse history
+	apiResult := api.ParseResult{
+		Activity:   parsed,
+		Confidence: confidence,
+		Unparsed:   unparsed,
+	}
+	resultJSON, _ := json.Marshal(apiResult)
+	todayStr := time.Now().Format("2006-01-02")
+	historyID := ""
+	if s.parseHistory != nil {
+		h, err := s.parseHistory.Create(userID, req.Text, todayStr, string(resultJSON))
+		if err == nil {
+			historyID = h.ID
+		}
+	}
+	apiResult.Id = historyID
+
+	server.RespondJSON(w, http.StatusOK, api.ParseResult{
+		Id:         historyID,
+		Activity:   parsed,
+		Confidence: confidence,
+		Unparsed:   unparsed,
+	})
 }
 
 func (s *ActivityServer) DeleteActivity(w http.ResponseWriter, r *http.Request, id string) {
