@@ -1,0 +1,23 @@
+frontend/src/App.svelte
+  b0f886ff0414f142 29-33,38,41,45-63,65-102,105-107,322
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "b3e3776ef9a57221395333c914e9836a98cddc2d",
+  "prompts": {
+    "b0f886ff0414f142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "40c9da77-12ca-4865-a9f1-4575816a6d33",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 69,
+      "total_deletions": 5,
+      "accepted_lines": 69,
+      "overriden_lines": 0
+    }
+  }
+}
