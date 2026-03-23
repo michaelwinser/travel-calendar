@@ -16,6 +16,7 @@
   import AgendaView from './components/AgendaView.svelte';
   import MonthView from './components/MonthView.svelte';
   import DayView from './components/DayView.svelte';
+  import YearView from './components/YearView.svelte';
   import ActivityForm from './components/ActivityForm.svelte';
 
   type View = 'month' | 'year' | 'day' | 'agenda';
@@ -35,6 +36,7 @@
   // View refs for Today button
   let monthView = $state<MonthView>();
   let dayView = $state<DayView>();
+  let yearView = $state<YearView>();
 
   onMount(async () => {
     try {
@@ -136,6 +138,11 @@
     editingActivity = activity;
   }
 
+  function handleSwitchToMonth(date: string) {
+    // TODO: pass focusDate to month view (#42)
+    currentView = 'month';
+  }
+
   function handleDayClick(date: string) {
     prefillDates = { startDate: date, endDate: date };
   }
@@ -152,7 +159,7 @@
   ];
 </script>
 
-<main class:wide={currentView === 'month'}>
+<main class:wide={currentView === 'month' || currentView === 'year'}>
   <header>
     <h1>Travel Calendar</h1>
     {#if auth.loggedIn}
@@ -193,10 +200,11 @@
         >{v.label}</button>
       {/each}
       <div class="tab-spacer"></div>
-      {#if currentView === 'month' || currentView === 'day'}
+      {#if currentView === 'month' || currentView === 'day' || currentView === 'year'}
         <button class="today-btn" onclick={() => {
           monthView?.scrollToToday();
           dayView?.scrollToToday();
+          yearView?.scrollToToday();
         }}>Today</button>
       {/if}
     </nav>
@@ -212,6 +220,12 @@
         onedit={handleEdit}
         ondayclick={handleDayClick}
         ondragselect={handleDragSelect}
+      />
+    {:else if currentView === 'year'}
+      <YearView
+        bind:this={yearView}
+        {activities}
+        onswitchtomonth={handleSwitchToMonth}
       />
     {:else if currentView === 'day'}
       <DayView

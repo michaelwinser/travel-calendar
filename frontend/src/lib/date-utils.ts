@@ -225,6 +225,47 @@ export function getDaySegmentsForWeek(
   return { segments, overflowPerDay };
 }
 
+/** Generate month data for the year view. Each month has its days and metadata. */
+export interface YearMonth {
+  year: number;
+  month: number;          // 0-11
+  label: string;          // "Jan 2026"
+  days: string[];         // YYYY-MM-DD for each day in the month
+  firstDayOffset: number; // 0=Sun, 1=Mon, etc. — day-of-week of the 1st
+}
+
+export function getMonthsForRange(startDate: string, endDate: string): YearMonth[] {
+  const months: YearMonth[] = [];
+  const start = stringToDate(startDate);
+  const end = stringToDate(endDate);
+
+  let year = start.getFullYear();
+  let month = start.getMonth();
+
+  while (true) {
+    const firstDay = new Date(year, month, 1);
+    if (firstDay > end) break;
+
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const days: string[] = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      days.push(dateToString(new Date(year, month, d)));
+    }
+
+    months.push({
+      year,
+      month,
+      label: firstDay.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+      days,
+      firstDayOffset: firstDay.getDay(),
+    });
+
+    month++;
+    if (month > 11) { month = 0; year++; }
+  }
+  return months;
+}
+
 /** Get min/max date strings, or null if either is null. */
 export function minDate(a: string, b: string): string {
   return a < b ? a : b;
