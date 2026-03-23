@@ -2,8 +2,8 @@
   import { onMount, tick } from 'svelte';
   import { ACTIVITY_COLORS, type Activity } from '../lib/api';
   import {
-    today, addDays, getMonthsForRange, hasConflict,
-    type YearMonth,
+    today, addDays, getMonthsForRange, getYearBarsForMonth,
+    type YearMonth, type YearBar,
   } from '../lib/date-utils';
 
   interface Props {
@@ -13,27 +13,21 @@
 
   let { activities, onswitchtomonth }: Props = $props();
 
+  const MAX_BAR_LANES = 3;
+
   // Show 6 months back, 12 months forward
   let rangeStart = $state(addDays(today(), -180));
   let rangeEnd = $state(addDays(today(), 365));
 
   let months = $derived(getMonthsForRange(rangeStart, rangeEnd));
 
-  // Build activity lookup: date → activities
-  let dateActivities = $derived.by(() => {
-    const map = new Map<string, Activity[]>();
-    for (const a of activities) {
-      let d = a.startDate < rangeStart ? rangeStart : a.startDate;
-      const end = a.endDate > rangeEnd ? rangeEnd : a.endDate;
-      while (d <= end) {
-        const list = map.get(d);
-        if (list) list.push(a);
-        else map.set(d, [a]);
-        d = addDays(d, 1);
-      }
-    }
-    return map;
-  });
+  // Compute bars per month
+  let monthData = $derived(
+    months.map(m => ({
+      month: m,
+      bars: getYearBarsForMonth(activities, m, ACTIVITY_COLORS, MAX_BAR_LANES),
+    }))
+  );
 
   let scrollEl: HTMLElement;
 
@@ -44,7 +38,6 @@
 
   export function scrollToToday() {
     const todayStr = today();
-    // Find the month containing today
     const el = scrollEl?.querySelector(`[data-month-contains="${todayStr.slice(0, 7)}"]`);
     if (el) {
       el.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -72,19 +65,6 @@
   function isToday(dateStr: string): boolean {
     return dateStr === today();
   }
-
-  function dayColor(dateStr: string): string | null {
-    const acts = dateActivities.get(dateStr);
-    if (!acts || acts.length === 0) return null;
-    // Use the first activity's color (or blend if multiple — for now, first wins)
-    return ACTIVITY_COLORS[acts[0].type] ?? null;
-  }
-
-  function dayHasConflict(dateStr: string): boolean {
-    const acts = dateActivities.get(dateStr);
-    if (!acts || acts.length < 2) return false;
-    return hasConflict(dateStr, activities);
-  }
 </script>
 
 <div
@@ -92,7 +72,7 @@
   bind:this={scrollEl}
   onscroll={handleScroll}
 >
-  {#each months as m (m.label)}
+  {#each monthData as { month: m, bars } (m.label)}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div
@@ -100,21 +80,39 @@
       data-month-contains="{m.year}-{String(m.month + 1).padStart(2, '0')}"
       onclick={() => onswitchtomonth(m.days[0])}
     >
+      <!-- Month label -->
       <div class="month-name">
-        <span class="month-name-text">{m.label}</span>
+        <span class="month-name-month">{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m.month]}</span>
+        <span class="month-name-year">{m.year}</span>
       </div>
-      <div class="day-grid">
+
+      <!-- Day grid: numbers + bar lanes -->
+      <div class="day-grid" style="--cols: {m.days.length}">
+        <!-- Day numbers -->
         {#each m.days as dateStr, di}
-          {@const color = dayColor(dateStr)}
-          {@const conflict = dayHasConflict(dateStr)}
           <div
-            class="year-day"
-            class:has-activity={color !== null}
+            class="day-num"
             class:today={isToday(dateStr)}
-            class:conflict={conflict}
-            style={color ? `background: ${color};` : ''}
-            title={dateStr}
-          ></div>
+            class:weekend={new Date(m.year, m.month, di + 1).getDay() === 0 || new Date(m.year, m.month, di + 1).getDay() === 6}
+            style="grid-column: {di + 1}; grid-row: 1;"
+          >
+            {di + 1}
+          </div>
+        {/each}
+
+        <!-- Activity bars -->
+        {#each bars as bar}
+          <div
+            class="year-bar"
+            style="
+              grid-column: {bar.startDay + 1} / span {bar.spanDays};
+              grid-row: {bar.lane + 2};
+              background: {bar.color};
+            "
+            title="{bar.activity.title}{bar.activity.location ? ' — ' + bar.activity.location : ''}"
+          >
+            <span class="year-bar-label">{bar.activity.title}</span>
+          </div>
         {/each}
       </div>
     </div>
@@ -132,62 +130,110 @@
 
   .month-row {
     display: flex;
-    align-items: center;
-    border-bottom: 1px solid #f0f0f0;
+    align-items: flex-start;
+    border-bottom: 1px solid #eee;
     padding: 0.5rem 0;
     cursor: pointer;
+    min-height: 40px;
   }
 
   .month-row:hover {
-    background: rgba(59, 130, 246, 0.03);
+    background: rgba(59, 130, 246, 0.02);
   }
 
   .month-name {
-    width: 90px;
+    width: 56px;
     flex-shrink: 0;
-    padding: 0 0.75rem;
+    padding: 0 0.5rem;
+    text-align: right;
+    line-height: 1.2;
   }
 
-  .month-name-text {
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: #555;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
+  .month-name-month {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #444;
+  }
+
+  .month-name-year {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 500;
+    color: #aaa;
   }
 
   .day-grid {
     flex: 1;
+    display: grid;
+    grid-template-columns: repeat(var(--cols), 1fr);
+    /* Row 1 = day numbers, rows 2+ = bar lanes */
+    grid-auto-rows: auto;
+    gap: 0 0;
+    padding-right: 0.25rem;
+  }
+
+  .day-num {
+    text-align: center;
+    font-size: 0.6rem;
+    color: #999;
+    padding: 0 0 2px;
+    line-height: 1.4;
+  }
+
+  .day-num.today {
+    color: white;
+    font-weight: 700;
+  }
+
+  .day-num.today::before {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #3b82f6;
+    z-index: -1;
+  }
+
+  /* Use a background approach instead of pseudo-element for today */
+  .day-num.today {
+    background: #3b82f6;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  .day-num.weekend {
+    color: #ccc;
+  }
+
+  .year-bar {
+    height: 14px;
     display: flex;
-    gap: 1px;
-    padding-right: 0.5rem;
-  }
-
-  .year-day {
-    flex: 1;
-    height: 22px;
-    border-radius: 2px;
-    background: #f5f5f5;
-    transition: transform 0.1s;
-  }
-
-  .year-day.has-activity {
+    align-items: center;
+    padding: 0 3px;
+    border-radius: 3px;
+    margin: 1px 1px;
+    overflow: hidden;
     opacity: 0.85;
   }
 
-  .year-day.has-activity:hover {
+  .year-bar:hover {
     opacity: 1;
-    transform: scaleY(1.3);
   }
 
-  .year-day.today {
-    outline: 2px solid #3b82f6;
-    outline-offset: -1px;
-    z-index: 1;
-  }
-
-  .year-day.conflict {
-    background: #ef4444 !important;
-    opacity: 0.9;
+  .year-bar-label {
+    font-size: 0.55rem;
+    color: white;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 </style>

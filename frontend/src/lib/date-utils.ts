@@ -266,6 +266,72 @@ export function getMonthsForRange(startDate: string, endDate: string): YearMonth
   return months;
 }
 
+/** Activity bar for the year view — spans day columns within a month row. */
+export interface YearBar {
+  activity: Activity;
+  startDay: number;   // 0-based day index within the month
+  spanDays: number;
+  lane: number;
+  color: string;
+}
+
+/** Compute activity bars for a month in the year view with lane assignment. */
+export function getYearBarsForMonth(
+  activities: Activity[],
+  month: YearMonth,
+  colorMap: Record<string, string>,
+  maxLanes: number,
+): YearBar[] {
+  const monthStart = month.days[0];
+  const monthEnd = month.days[month.days.length - 1];
+
+  const overlapping = activities
+    .filter(a => a.endDate >= monthStart && a.startDate <= monthEnd)
+    .sort((a, b) => {
+      if (a.startDate !== b.startDate) return a.startDate < b.startDate ? -1 : 1;
+      // Longer first
+      return (b.endDate > a.endDate ? 1 : b.endDate < a.endDate ? -1 : 0);
+    });
+
+  const bars: YearBar[] = [];
+  const lanes: boolean[][] = [];
+
+  for (const activity of overlapping) {
+    const effectiveStart = activity.startDate > monthStart ? activity.startDate : monthStart;
+    const effectiveEnd = activity.endDate < monthEnd ? activity.endDate : monthEnd;
+
+    const startDay = month.days.indexOf(effectiveStart);
+    const endDay = month.days.indexOf(effectiveEnd);
+    if (startDay === -1 || endDay === -1) continue;
+
+    const spanDays = endDay - startDay + 1;
+
+    // Lane assignment
+    let lane = 0;
+    while (lane < maxLanes) {
+      if (!lanes[lane]) lanes[lane] = Array(month.days.length).fill(false);
+      const conflict = lanes[lane].slice(startDay, startDay + spanDays).some(Boolean);
+      if (!conflict) break;
+      lane++;
+    }
+    if (lane >= maxLanes) continue; // skip if no room
+
+    for (let d = startDay; d < startDay + spanDays; d++) {
+      lanes[lane][d] = true;
+    }
+
+    bars.push({
+      activity,
+      startDay,
+      spanDays,
+      lane,
+      color: colorMap[activity.type] ?? '#999',
+    });
+  }
+
+  return bars;
+}
+
 /** Get min/max date strings, or null if either is null. */
 export function minDate(a: string, b: string): string {
   return a < b ? a : b;
