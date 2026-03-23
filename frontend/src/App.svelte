@@ -15,6 +15,7 @@
   import QuickAdd from './components/QuickAdd.svelte';
   import AgendaView from './components/AgendaView.svelte';
   import MonthView from './components/MonthView.svelte';
+  import DayView from './components/DayView.svelte';
   import ActivityForm from './components/ActivityForm.svelte';
 
   type View = 'month' | 'year' | 'day' | 'agenda';
@@ -31,8 +32,9 @@
   // Click-to-add / drag-to-add state
   let prefillDates = $state<{ startDate: string; endDate: string } | null>(null);
 
-  // MonthView ref for Today button
+  // View refs for Today button
   let monthView = $state<MonthView>();
+  let dayView = $state<DayView>();
 
   onMount(async () => {
     try {
@@ -191,8 +193,11 @@
         >{v.label}</button>
       {/each}
       <div class="tab-spacer"></div>
-      {#if currentView === 'month'}
-        <button class="today-btn" onclick={() => monthView?.scrollToToday()}>Today</button>
+      {#if currentView === 'month' || currentView === 'day'}
+        <button class="today-btn" onclick={() => {
+          monthView?.scrollToToday();
+          dayView?.scrollToToday();
+        }}>Today</button>
       {/if}
     </nav>
 
@@ -207,6 +212,13 @@
         onedit={handleEdit}
         ondayclick={handleDayClick}
         ondragselect={handleDragSelect}
+      />
+    {:else if currentView === 'day'}
+      <DayView
+        bind:this={dayView}
+        {activities}
+        onedit={handleEdit}
+        ondayclick={handleDayClick}
       />
     {:else if currentView === 'agenda'}
       <AgendaView {activities} onedit={handleEdit} />
@@ -247,7 +259,6 @@
     max-width: 800px;
     margin: 0 auto;
     padding: 1.5rem 1rem;
-    transition: max-width 0.2s ease;
   }
 
   main.wide {
