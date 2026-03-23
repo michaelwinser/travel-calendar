@@ -15,9 +15,10 @@
     ondayclick: (date: string) => void;
     ondragselect: (startDate: string, endDate: string) => void;
     onswitchtomonth: (date: string) => void;
+    onfocusdate?: (date: string) => void;
   }
 
-  let { activities, initialDate, onedit, ondayclick, ondragselect, onswitchtomonth }: Props = $props();
+  let { activities, initialDate, onedit, ondayclick, ondragselect, onswitchtomonth, onfocusdate }: Props = $props();
 
   const MAX_BAR_LANES = 3;
 
@@ -79,6 +80,8 @@
     scrollToDate(today());
   }
 
+  let scrollDebounce: ReturnType<typeof setTimeout> | undefined;
+
   function handleScroll() {
     if (!scrollEl) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollEl;
@@ -94,6 +97,23 @@
 
     if (scrollHeight - scrollTop - clientHeight < 200) {
       rangeEnd = addDays(rangeEnd, 180);
+    }
+
+    if (onfocusdate) {
+      clearTimeout(scrollDebounce);
+      scrollDebounce = setTimeout(() => reportTopDate(), 500);
+    }
+  }
+
+  function reportTopDate() {
+    if (!scrollEl || !onfocusdate) return;
+    const containerTop = scrollEl.getBoundingClientRect().top;
+    const rows = scrollEl.querySelectorAll('[data-month-contains]');
+    for (const el of rows) {
+      if (el.getBoundingClientRect().top >= containerTop) {
+        const month = el.getAttribute('data-month-contains');
+        if (month) { onfocusdate(month + '-01'); return; }
+      }
     }
   }
 

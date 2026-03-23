@@ -306,8 +306,12 @@
     }
   }
 
+  function handleFocusDate(date: string) {
+    focusDate = date;
+  }
+
   function handleSwitchToMonth(date: string) {
-    // TODO: pass focusDate to month view (#42)
+    focusDate = date;
     currentView = 'month';
   }
 
@@ -412,6 +416,7 @@
         onedit={handleEdit}
         ondayclick={handleDayClick}
         ondragselect={handleDragSelect}
+        onfocusdate={handleFocusDate}
       />
     {:else if currentView === 'year'}
       <YearView
@@ -422,6 +427,7 @@
         ondayclick={handleDayClick}
         ondragselect={handleDragSelect}
         onswitchtomonth={handleSwitchToMonth}
+        onfocusdate={handleFocusDate}
       />
     {:else if currentView === 'day'}
       <DayView
@@ -431,6 +437,7 @@
         onedit={handleEdit}
         ondayclick={handleDayClick}
         ondragselect={handleDragSelect}
+        onfocusdate={handleFocusDate}
       />
     {:else if currentView === 'agenda'}
       <AgendaView {activities} onedit={handleEdit} />

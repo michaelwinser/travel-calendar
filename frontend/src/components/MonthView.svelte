@@ -16,9 +16,10 @@
     onedit: (activity: Activity) => void;
     ondayclick: (date: string) => void;
     ondragselect: (startDate: string, endDate: string) => void;
+    onfocusdate?: (date: string) => void;
   }
 
-  let { activities, initialDate, onedit, ondayclick, ondragselect }: Props = $props();
+  let { activities, initialDate, onedit, ondayclick, ondragselect, onfocusdate }: Props = $props();
 
   const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const MAX_BARS = 3;
@@ -91,6 +92,8 @@
     scrollToDate(today());
   }
 
+  let scrollDebounce: ReturnType<typeof setTimeout> | undefined;
+
   function handleScroll() {
     if (!scrollEl) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollEl;
@@ -106,6 +109,24 @@
 
     if (scrollHeight - scrollTop - clientHeight < 200) {
       rangeEnd = addDays(rangeEnd, 90);
+    }
+
+    // Report top-visible date (debounced)
+    if (onfocusdate) {
+      clearTimeout(scrollDebounce);
+      scrollDebounce = setTimeout(() => reportTopDate(), 500);
+    }
+  }
+
+  function reportTopDate() {
+    if (!scrollEl || !onfocusdate) return;
+    const containerTop = scrollEl.getBoundingClientRect().top;
+    const dateCells = scrollEl.querySelectorAll('[data-date]');
+    for (const el of dateCells) {
+      if (el.getBoundingClientRect().top >= containerTop) {
+        const date = el.getAttribute('data-date');
+        if (date) { onfocusdate(date); return; }
+      }
     }
   }
 
