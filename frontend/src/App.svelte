@@ -12,12 +12,11 @@
     type ActivityType,
     type AuthStatus,
   } from './lib/api';
-  import QuickAdd from './components/QuickAdd.svelte';
   import AgendaView from './components/AgendaView.svelte';
   import MonthView from './components/MonthView.svelte';
   import DayView from './components/DayView.svelte';
   import YearView from './components/YearView.svelte';
-  import ActivityForm from './components/ActivityForm.svelte';
+  import ActivityModal from './components/ActivityModal.svelte';
 
   type View = 'month' | 'year' | 'day' | 'agenda';
 
@@ -27,11 +26,12 @@
   let loading = $state(true);
   let error = $state('');
 
-  // Edit modal state
-  let editingActivity = $state<Activity | null>(null);
-
-  // Click-to-add / drag-to-add state
-  let prefillDates = $state<{ startDate: string; endDate: string } | null>(null);
+  // Unified modal state
+  let modalOpen = $state(false);
+  let modalMode = $state<'create' | 'edit'>('create');
+  let modalFocusText = $state(false);
+  let modalActivity = $state<Activity | null>(null); // for edit
+  let modalPrefill = $state<{ startDate?: string; endDate?: string }>({});
 
   // View refs for Today button
   let monthView = $state<MonthView>();
@@ -49,6 +49,19 @@
     }
     loading = false;
   });
+
+  // Global keyboard shortcut: 'n' opens quick add
+  function handleGlobalKeydown(e: KeyboardEvent) {
+    // Don't trigger if typing in an input/textarea or modal is open
+    if (modalOpen) return;
+    const tag = (e.target as HTMLElement)?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+    if (e.key === 'n') {
+      e.preventDefault();
+      openQuickAdd();
+    }
+  }
 
   async function refreshActivities() {
     activities = await listActivities();
@@ -69,7 +82,49 @@
     activities = [];
   }
 
-  async function handleCreate(data: {
+  // --- Modal entry points ---
+
+  function openQuickAdd() {
+    modalMode = 'create';
+    modalActivity = null;
+    modalPrefill = {};
+    modalFocusText = true;
+    modalOpen = true;
+  }
+
+  function handleDayClick(date: string) {
+    modalMode = 'create';
+    modalActivity = null;
+    modalPrefill = { startDate: date, endDate: date };
+    modalFocusText = false;
+    modalOpen = true;
+  }
+
+  function handleDragSelect(startDate: string, endDate: string) {
+    modalMode = 'create';
+    modalActivity = null;
+    modalPrefill = { startDate, endDate };
+    modalFocusText = false;
+    modalOpen = true;
+  }
+
+  function handleEdit(activity: Activity) {
+    modalMode = 'edit';
+    modalActivity = activity;
+    modalPrefill = {};
+    modalFocusText = false;
+    modalOpen = true;
+  }
+
+  function closeModal() {
+    modalOpen = false;
+    modalActivity = null;
+    modalPrefill = {};
+  }
+
+  // --- CRUD ---
+
+  async function handleModalSubmit(data: {
     title: string;
     type: ActivityType;
     startDate: string;
@@ -79,54 +134,39 @@
     parseHistoryId?: string;
   }) {
     try {
-      await createActivity({
-        title: data.title,
-        type: data.type,
-        startDate: data.startDate,
-        endDate: data.endDate !== data.startDate ? data.endDate : undefined,
-        location: data.location || undefined,
-        notes: data.notes || undefined,
-        parseHistoryId: data.parseHistoryId,
-      });
-      prefillDates = null;
+      if (modalMode === 'create') {
+        await createActivity({
+          title: data.title,
+          type: data.type,
+          startDate: data.startDate,
+          endDate: data.endDate !== data.startDate ? data.endDate : undefined,
+          location: data.location || undefined,
+          notes: data.notes || undefined,
+          parseHistoryId: data.parseHistoryId,
+        });
+      } else if (modalActivity) {
+        await updateActivity(modalActivity.id, {
+          title: data.title,
+          type: data.type,
+          startDate: data.startDate,
+          endDate: data.endDate,
+          location: data.location || undefined,
+          notes: data.notes || undefined,
+        });
+      }
+      closeModal();
       await refreshActivities();
       error = '';
     } catch (e: any) {
-      error = e.message || 'Failed to create activity';
-    }
-  }
-
-  async function handleUpdate(data: {
-    title: string;
-    type: ActivityType;
-    startDate: string;
-    endDate: string;
-    location: string;
-    notes: string;
-  }) {
-    if (!editingActivity) return;
-    try {
-      await updateActivity(editingActivity.id, {
-        title: data.title,
-        type: data.type,
-        startDate: data.startDate,
-        endDate: data.endDate,
-        location: data.location || undefined,
-        notes: data.notes || undefined,
-      });
-      editingActivity = null;
-      await refreshActivities();
-      error = '';
-    } catch (e: any) {
-      error = e.message || 'Failed to update activity';
+      error = e.message || 'Failed to save activity';
     }
   }
 
   async function handleDelete() {
-    if (!editingActivity) return;
+    if (!modalActivity) return;
     try {
-      await deleteActivity(editingActivity.id);
-      editingActivity = null;
+      await deleteActivity(modalActivity.id);
+      closeModal();
       await refreshActivities();
       error = '';
     } catch (e: any) {
@@ -134,21 +174,9 @@
     }
   }
 
-  function handleEdit(activity: Activity) {
-    editingActivity = activity;
-  }
-
   function handleSwitchToMonth(date: string) {
     // TODO: pass focusDate to month view (#42)
     currentView = 'month';
-  }
-
-  function handleDayClick(date: string) {
-    prefillDates = { startDate: date, endDate: date };
-  }
-
-  function handleDragSelect(startDate: string, endDate: string) {
-    prefillDates = { startDate, endDate };
   }
 
   const views: { id: View; label: string }[] = [
@@ -158,6 +186,8 @@
     { id: 'agenda', label: 'Agenda' },
   ];
 </script>
+
+<svelte:window onkeydown={handleGlobalKeydown} />
 
 <main class:wide={currentView === 'month' || currentView === 'year'}>
   <header>
@@ -178,19 +208,6 @@
       <button onclick={handleLogin}>Sign in with Google</button>
     </div>
   {:else}
-    <QuickAdd oncreate={handleCreate} />
-
-    <!-- Prefill form (click-to-add / drag-to-add) -->
-    {#if prefillDates}
-      <ActivityForm
-        mode="create"
-        startDate={prefillDates.startDate}
-        endDate={prefillDates.endDate}
-        onsubmit={handleCreate}
-        oncancel={() => prefillDates = null}
-      />
-    {/if}
-
     <nav class="view-tabs">
       {#each views as v}
         <button
@@ -200,6 +217,7 @@
         >{v.label}</button>
       {/each}
       <div class="tab-spacer"></div>
+      <button class="add-btn" onclick={openQuickAdd} title="New activity (n)">+ Add</button>
       {#if currentView === 'month' || currentView === 'day' || currentView === 'year'}
         <button class="today-btn" onclick={() => {
           monthView?.scrollToToday();
@@ -240,26 +258,23 @@
       />
     {:else if currentView === 'agenda'}
       <AgendaView {activities} onedit={handleEdit} />
-    {:else}
-      <p class="muted">
-        {currentView.charAt(0).toUpperCase() + currentView.slice(1)} view coming soon.
-      </p>
     {/if}
   {/if}
 
-  <!-- Edit modal -->
-  {#if editingActivity}
-    <ActivityForm
-      mode="edit"
-      title={editingActivity.title}
-      type={editingActivity.type}
-      startDate={editingActivity.startDate}
-      endDate={editingActivity.endDate}
-      location={editingActivity.location ?? ''}
-      notes={editingActivity.notes ?? ''}
-      onsubmit={handleUpdate}
-      oncancel={() => editingActivity = null}
-      ondelete={handleDelete}
+  <!-- Unified activity modal -->
+  {#if modalOpen}
+    <ActivityModal
+      mode={modalMode}
+      title={modalMode === 'edit' ? modalActivity?.title : undefined}
+      type={modalMode === 'edit' ? modalActivity?.type : undefined}
+      startDate={modalMode === 'edit' ? modalActivity?.startDate : modalPrefill.startDate}
+      endDate={modalMode === 'edit' ? modalActivity?.endDate : modalPrefill.endDate}
+      location={modalMode === 'edit' ? (modalActivity?.location ?? '') : undefined}
+      notes={modalMode === 'edit' ? (modalActivity?.notes ?? '') : undefined}
+      focusText={modalFocusText}
+      onsubmit={handleModalSubmit}
+      oncancel={closeModal}
+      ondelete={modalMode === 'edit' ? handleDelete : undefined}
     />
   {/if}
 </main>
@@ -356,6 +371,23 @@
   }
 
   .tab-spacer { flex: 1; }
+
+  .add-btn {
+    padding: 0.3rem 0.75rem;
+    border: 1px solid #333;
+    border-radius: 6px;
+    background: #333;
+    color: white;
+    font-size: 0.8rem;
+    cursor: pointer;
+    margin-bottom: 2px;
+    margin-right: 0.5rem;
+  }
+
+  .add-btn:hover {
+    background: #555;
+    border-color: #555;
+  }
 
   .today-btn {
     padding: 0.3rem 0.75rem;
