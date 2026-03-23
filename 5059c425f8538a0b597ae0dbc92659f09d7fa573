@@ -1,0 +1,23 @@
+frontend/src/components/Tooltip.svelte
+  b0f886ff0414f142 73,77,81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "5059c425f8538a0b597ae0dbc92659f09d7fa573",
+  "prompts": {
+    "b0f886ff0414f142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "40c9da77-12ca-4865-a9f1-4575816a6d33",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 3,
+      "total_deletions": 3,
+      "accepted_lines": 3,
+      "overriden_lines": 0
+    }
+  }
+}
