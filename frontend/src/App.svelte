@@ -23,24 +23,88 @@
 
   let auth = $state<AuthStatus>({ loggedIn: false });
   let activities = $state<Activity[]>([]);
-  let currentView = $state<View>('month');
   let loading = $state(true);
   let error = $state('');
+
+  // Parse initial state from URL
+  const { view: initialView, date: initialDate } = parseURL(window.location.pathname);
+  let currentView = $state<View>(initialView);
+  let focusDate = $state(initialDate);
 
   // Unified modal state
   let modalOpen = $state(false);
   let modalMode = $state<'create' | 'edit'>('create');
   let modalFocusText = $state(false);
-  let modalActivity = $state<Activity | null>(null); // for edit
+  let modalActivity = $state<Activity | null>(null);
   let modalPrefill = $state<{ startDate?: string; endDate?: string }>({});
 
-  // View refs and focus date
+  // View refs
   let monthView = $state<MonthView>();
   let dayView = $state<DayView>();
   let yearView = $state<YearView>();
-  let focusDate = $state(today());
+
+  // --- URL routing ---
+
+  function parseURL(path: string): { view: View; date: string } {
+    const parts = path.split('/').filter(Boolean);
+    const viewMap: Record<string, View> = { month: 'month', year: 'year', day: 'day', agenda: 'agenda' };
+    const view = viewMap[parts[0]] ?? 'month';
+    const date = parts[1] ?? today();
+    // For month URLs like /month/2026-10, expand to first of month
+    const normalizedDate = date.length === 7 ? date + '-01' : date;
+    return { view, date: normalizedDate };
+  }
+
+  function buildURL(view: View, date: string): string {
+    if (view === 'agenda') return '/agenda';
+    // Month: /month/2026-10, Year: /year/2026-10, Day: /day/2026-10-05
+    if (view === 'month' || view === 'year') return `/${view}/${date.slice(0, 7)}`;
+    return `/${view}/${date}`;
+  }
+
+  function pushURL() {
+    const url = buildURL(currentView, focusDate);
+    if (window.location.pathname !== url) {
+      history.pushState({ view: currentView, date: focusDate }, '', url);
+    }
+  }
+
+  function replaceURL() {
+    const url = buildURL(currentView, focusDate);
+    if (window.location.pathname !== url) {
+      history.replaceState({ view: currentView, date: focusDate }, '', url);
+    }
+  }
+
+  function handlePopState(e: PopStateEvent) {
+    if (e.state?.view && e.state?.date) {
+      currentView = e.state.view;
+      focusDate = e.state.date;
+    } else {
+      const { view, date } = parseURL(window.location.pathname);
+      currentView = view;
+      focusDate = date;
+    }
+  }
+
+  // Push URL on view switch (use $effect to track changes)
+  let prevView = currentView;
+  let prevFocusDate = focusDate;
+  $effect(() => {
+    if (currentView !== prevView) {
+      prevView = currentView;
+      prevFocusDate = focusDate;
+      pushURL();
+    } else if (focusDate !== prevFocusDate) {
+      prevFocusDate = focusDate;
+      replaceURL();
+    }
+  });
 
   onMount(async () => {
+    // Set initial history state
+    history.replaceState({ view: currentView, date: focusDate }, '', buildURL(currentView, focusDate));
+
     try {
       auth = await getAuthStatus();
       if (auth.loggedIn) {
@@ -255,7 +319,7 @@
   ];
 </script>
 
-<svelte:window onkeydown={handleGlobalKeydown} />
+<svelte:window onkeydown={handleGlobalKeydown} onpopstate={handlePopState} />
 
 <main class:wide={currentView === 'month' || currentView === 'year'}>
   <header>
