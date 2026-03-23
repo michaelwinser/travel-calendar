@@ -142,10 +142,11 @@
     <div
       class="month-row"
       data-month-contains="{m.year}-{String(m.month + 1).padStart(2, '0')}"
-      onclick={() => onswitchtomonth(m.days[0])}
     >
-      <!-- Month label -->
-      <div class="month-name">
+      <!-- Month label (click to switch to month view) -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <div class="month-name" onclick={() => onswitchtomonth(m.days[0])}>
         <span class="month-name-month">{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m.month]}</span>
         <span class="month-name-year">{m.year}</span>
       </div>
@@ -160,7 +161,7 @@
             class:today={isToday(dateStr)}
             class:weekend={new Date(m.year, m.month, di + 1).getDay() === 0 || new Date(m.year, m.month, di + 1).getDay() === 6}
             class:drag-selected={isInDragRange(dateStr)}
-            style="grid-column: {di + 1}; grid-row: 1;"
+            style="grid-column: {di + 1}; grid-row: 1 / -1;"
             onmousedown={(e) => handleDayMouseDown(dateStr, e)}
             onmouseenter={() => handleDayMouseEnter(dateStr)}
           >
@@ -205,12 +206,7 @@
     align-items: flex-start;
     border-bottom: 1px solid #eee;
     padding: 0.5rem 0;
-    cursor: pointer;
     min-height: 40px;
-  }
-
-  .month-row:hover {
-    background: rgba(59, 130, 246, 0.02);
   }
 
   .month-name {
@@ -219,6 +215,11 @@
     padding: 0 0.5rem;
     text-align: right;
     line-height: 1.2;
+    cursor: pointer;
+  }
+
+  .month-name:hover {
+    color: #3b82f6;
   }
 
   .month-name-month {
@@ -248,9 +249,10 @@
     text-align: center;
     font-size: 0.6rem;
     color: #999;
-    padding: 0 0 2px;
+    padding-top: 0;
     line-height: 1.4;
     cursor: crosshair;
+    z-index: 0;
   }
 
   .day-num.today {
@@ -290,6 +292,8 @@
     overflow: hidden;
     opacity: 0.85;
     cursor: pointer;
+    z-index: 1;
+    position: relative;
   }
 
   .year-bar:hover {
