@@ -1,0 +1,23 @@
+frontend/src/components/YearView.svelte
+  b0f886ff0414f142 146-149,164,218-222,252,255,295-296
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "a2573a9854401141c407064479c95afb1d8ddfa8",
+  "prompts": {
+    "b0f886ff0414f142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "40c9da77-12ca-4865-a9f1-4575816a6d33",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 14,
+      "total_deletions": 10,
+      "accepted_lines": 14,
+      "overriden_lines": 0
+    }
+  }
+}
