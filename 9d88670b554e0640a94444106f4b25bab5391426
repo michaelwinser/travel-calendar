@@ -1,0 +1,27 @@
+frontend/src/components/YearView.svelte
+  b0f886ff0414f142 60,64,66-71
+frontend/src/components/MonthView.svelte
+  b0f886ff0414f142 78,80-86
+frontend/src/components/DayView.svelte
+  b0f886ff0414f142 77,79-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "9d88670b554e0640a94444106f4b25bab5391426",
+  "prompts": {
+    "b0f886ff0414f142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "40c9da77-12ca-4865-a9f1-4575816a6d33",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 23,
+      "total_deletions": 1,
+      "accepted_lines": 23,
+      "overriden_lines": 0
+    }
+  }
+}
