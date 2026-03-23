@@ -70,15 +70,15 @@
   }
 
   .tooltip-dates {
-    color: #d1d5db;
+    color: #e5e7eb;
   }
 
   .tooltip-location {
-    color: #9ca3af;
+    color: #d1d5db;
   }
 
   .tooltip-type {
-    color: #6b7280;
+    color: #9ca3af;
     text-transform: capitalize;
     font-size: 0.65rem;
   }
