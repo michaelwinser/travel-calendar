@@ -57,11 +57,18 @@
   });
 
   export function scrollToDate(dateStr: string) {
-    const monthKey = dateStr.slice(0, 7); // YYYY-MM
+    const monthKey = dateStr.slice(0, 7);
     const el = scrollEl?.querySelector(`[data-month-contains="${monthKey}"]`);
     if (el) {
       el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return;
     }
+    rangeStart = addDays(dateStr, -180);
+    rangeEnd = addDays(dateStr, 365);
+    tick().then(() => {
+      const el2 = scrollEl?.querySelector(`[data-month-contains="${monthKey}"]`);
+      if (el2) el2.scrollIntoView({ block: 'center' });
+    });
   }
 
   export function scrollToToday() {

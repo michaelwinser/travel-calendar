@@ -74,7 +74,14 @@
     const el = scrollEl?.querySelector(`[data-date="${dateStr}"]`);
     if (el) {
       el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return;
     }
+    rangeStart = addDays(dateStr, -60);
+    rangeEnd = addDays(dateStr, 120);
+    tick().then(() => {
+      const el2 = scrollEl?.querySelector(`[data-date="${dateStr}"]`);
+      if (el2) el2.scrollIntoView({ block: 'center' });
+    });
   }
 
   export function scrollToToday() {

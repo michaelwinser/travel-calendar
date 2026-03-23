@@ -75,7 +75,15 @@
     const el = scrollEl?.querySelector(`[data-date="${dateStr}"]`);
     if (el) {
       el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return;
     }
+    // Date outside current range — recenter and retry
+    rangeStart = addDays(dateStr, -90);
+    rangeEnd = addDays(dateStr, 180);
+    tick().then(() => {
+      const el2 = scrollEl?.querySelector(`[data-date="${dateStr}"]`);
+      if (el2) el2.scrollIntoView({ block: 'center' });
+    });
   }
 
   export function scrollToToday() {
