@@ -225,6 +225,9 @@
       <YearView
         bind:this={yearView}
         {activities}
+        onedit={handleEdit}
+        ondayclick={handleDayClick}
+        ondragselect={handleDragSelect}
         onswitchtomonth={handleSwitchToMonth}
       />
     {:else if currentView === 'day'}
@@ -233,6 +236,7 @@
         {activities}
         onedit={handleEdit}
         ondayclick={handleDayClick}
+        ondragselect={handleDragSelect}
       />
     {:else if currentView === 'agenda'}
       <AgendaView {activities} onedit={handleEdit} />

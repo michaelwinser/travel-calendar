@@ -3,16 +3,17 @@
   import { ACTIVITY_COLORS, type Activity } from '../lib/api';
   import {
     today, addDays, stringToDate, hasConflict,
-    monthLabel,
+    monthLabel, minDate, maxDate,
   } from '../lib/date-utils';
 
   interface Props {
     activities: Activity[];
     onedit: (activity: Activity) => void;
     ondayclick: (date: string) => void;
+    ondragselect: (startDate: string, endDate: string) => void;
   }
 
-  let { activities, onedit, ondayclick }: Props = $props();
+  let { activities, onedit, ondayclick, ondragselect }: Props = $props();
 
   const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -108,12 +109,67 @@
   function isToday(dateStr: string): boolean {
     return dateStr === today();
   }
+
+  // Drag state
+  let dragStartDate = $state<string | null>(null);
+  let dragCurrentDate = $state<string | null>(null);
+  let isDragging = $state(false);
+
+  let dragRange = $derived(
+    dragStartDate && dragCurrentDate
+      ? { start: minDate(dragStartDate, dragCurrentDate), end: maxDate(dragStartDate, dragCurrentDate) }
+      : null
+  );
+
+  function isInDragRange(dateStr: string): boolean {
+    if (!dragRange) return false;
+    return dateStr >= dragRange.start && dateStr <= dragRange.end;
+  }
+
+  function handleDayMouseDown(dateStr: string, e: MouseEvent) {
+    if (e.button !== 0) return;
+    dragStartDate = dateStr;
+    dragCurrentDate = dateStr;
+    isDragging = true;
+    e.preventDefault();
+  }
+
+  function handleDayMouseEnter(dateStr: string) {
+    if (isDragging) {
+      dragCurrentDate = dateStr;
+    }
+  }
+
+  function handleMouseUp() {
+    if (!isDragging || !dragStartDate || !dragCurrentDate) {
+      isDragging = false;
+      dragStartDate = null;
+      dragCurrentDate = null;
+      return;
+    }
+
+    const start = minDate(dragStartDate, dragCurrentDate);
+    const end = maxDate(dragStartDate, dragCurrentDate);
+
+    if (start === end) {
+      ondayclick(start);
+    } else {
+      ondragselect(start, end);
+    }
+
+    isDragging = false;
+    dragStartDate = null;
+    dragCurrentDate = null;
+  }
 </script>
 
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="day-view"
   bind:this={scrollEl}
   onscroll={handleScroll}
+  onmouseup={handleMouseUp}
+  onmouseleave={handleMouseUp}
 >
   {#each dates as dateStr (dateStr)}
     {@const info = formatDate(dateStr)}
@@ -135,8 +191,10 @@
       class:weekend={info.isWeekend}
       class:conflict={conflict}
       class:has-activities={dayActs.length > 0}
+      class:drag-selected={isInDragRange(dateStr)}
       data-date={dateStr}
-      onclick={() => { if (dayActs.length === 0) ondayclick(dateStr); }}
+      onmousedown={(e) => handleDayMouseDown(dateStr, e)}
+      onmouseenter={() => handleDayMouseEnter(dateStr)}
     >
       <div class="date-col">
         <span class="dow">{info.dow}</span>
@@ -213,6 +271,10 @@
 
   .day-row.weekend:not(.has-activities) {
     opacity: 0.6;
+  }
+
+  .day-row.drag-selected {
+    background: rgba(59, 130, 246, 0.1) !important;
   }
 
   .day-row.conflict {

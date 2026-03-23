@@ -3,15 +3,19 @@
   import { ACTIVITY_COLORS, type Activity } from '../lib/api';
   import {
     today, addDays, getMonthsForRange, getYearBarsForMonth,
+    minDate, maxDate,
     type YearMonth, type YearBar,
   } from '../lib/date-utils';
 
   interface Props {
     activities: Activity[];
+    onedit: (activity: Activity) => void;
+    ondayclick: (date: string) => void;
+    ondragselect: (startDate: string, endDate: string) => void;
     onswitchtomonth: (date: string) => void;
   }
 
-  let { activities, onswitchtomonth }: Props = $props();
+  let { activities, onedit, ondayclick, ondragselect, onswitchtomonth }: Props = $props();
 
   const MAX_BAR_LANES = 3;
 
@@ -21,13 +25,28 @@
 
   let months = $derived(getMonthsForRange(rangeStart, rangeEnd));
 
-  // Compute bars per month
   let monthData = $derived(
     months.map(m => ({
       month: m,
       bars: getYearBarsForMonth(activities, m, ACTIVITY_COLORS, MAX_BAR_LANES),
     }))
   );
+
+  // Drag state
+  let dragStartDate = $state<string | null>(null);
+  let dragCurrentDate = $state<string | null>(null);
+  let isDragging = $state(false);
+
+  let dragRange = $derived(
+    dragStartDate && dragCurrentDate
+      ? { start: minDate(dragStartDate, dragCurrentDate), end: maxDate(dragStartDate, dragCurrentDate) }
+      : null
+  );
+
+  function isInDragRange(dateStr: string): boolean {
+    if (!dragRange) return false;
+    return dateStr >= dragRange.start && dateStr <= dragRange.end;
+  }
 
   let scrollEl: HTMLElement;
 
@@ -62,15 +81,60 @@
     }
   }
 
+  function handleDayMouseDown(dateStr: string, e: MouseEvent) {
+    if (e.button !== 0) return;
+    dragStartDate = dateStr;
+    dragCurrentDate = dateStr;
+    isDragging = true;
+    e.preventDefault();
+    e.stopPropagation(); // prevent month-row click
+  }
+
+  function handleDayMouseEnter(dateStr: string) {
+    if (isDragging) {
+      dragCurrentDate = dateStr;
+    }
+  }
+
+  function handleMouseUp() {
+    if (!isDragging || !dragStartDate || !dragCurrentDate) {
+      isDragging = false;
+      dragStartDate = null;
+      dragCurrentDate = null;
+      return;
+    }
+
+    const start = minDate(dragStartDate, dragCurrentDate);
+    const end = maxDate(dragStartDate, dragCurrentDate);
+
+    if (start === end) {
+      ondayclick(start);
+    } else {
+      ondragselect(start, end);
+    }
+
+    isDragging = false;
+    dragStartDate = null;
+    dragCurrentDate = null;
+  }
+
+  function handleBarClick(activity: Activity, e: MouseEvent) {
+    e.stopPropagation();
+    onedit(activity);
+  }
+
   function isToday(dateStr: string): boolean {
     return dateStr === today();
   }
 </script>
 
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="year-view"
   bind:this={scrollEl}
   onscroll={handleScroll}
+  onmouseup={handleMouseUp}
+  onmouseleave={handleMouseUp}
 >
   {#each monthData as { month: m, bars } (m.label)}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -88,13 +152,17 @@
 
       <!-- Day grid: numbers + bar lanes -->
       <div class="day-grid" style="--cols: {m.days.length}">
-        <!-- Day numbers -->
+        <!-- Day numbers (interactive for click/drag) -->
         {#each m.days as dateStr, di}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             class="day-num"
             class:today={isToday(dateStr)}
             class:weekend={new Date(m.year, m.month, di + 1).getDay() === 0 || new Date(m.year, m.month, di + 1).getDay() === 6}
+            class:drag-selected={isInDragRange(dateStr)}
             style="grid-column: {di + 1}; grid-row: 1;"
+            onmousedown={(e) => handleDayMouseDown(dateStr, e)}
+            onmouseenter={() => handleDayMouseEnter(dateStr)}
           >
             {di + 1}
           </div>
@@ -102,6 +170,8 @@
 
         <!-- Activity bars -->
         {#each bars as bar}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
           <div
             class="year-bar"
             style="
@@ -110,6 +180,7 @@
               background: {bar.color};
             "
             title="{bar.activity.title}{bar.activity.location ? ' — ' + bar.activity.location : ''}"
+            onclick={(e) => handleBarClick(bar.activity, e)}
           >
             <span class="year-bar-label">{bar.activity.title}</span>
           </div>
@@ -126,6 +197,7 @@
     border: 1px solid #e5e7eb;
     border-radius: 8px;
     background: white;
+    user-select: none;
   }
 
   .month-row {
@@ -167,7 +239,6 @@
     flex: 1;
     display: grid;
     grid-template-columns: repeat(var(--cols), 1fr);
-    /* Row 1 = day numbers, rows 2+ = bar lanes */
     grid-auto-rows: auto;
     gap: 0 0;
     padding-right: 0.25rem;
@@ -179,25 +250,12 @@
     color: #999;
     padding: 0 0 2px;
     line-height: 1.4;
+    cursor: crosshair;
   }
 
   .day-num.today {
     color: white;
     font-weight: 700;
-  }
-
-  .day-num.today::before {
-    content: '';
-    position: absolute;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: #3b82f6;
-    z-index: -1;
-  }
-
-  /* Use a background approach instead of pseudo-element for today */
-  .day-num.today {
     background: #3b82f6;
     border-radius: 50%;
     width: 18px;
@@ -206,11 +264,20 @@
     align-items: center;
     justify-content: center;
     margin: 0 auto;
-    position: relative;
   }
 
   .day-num.weekend {
     color: #ccc;
+  }
+
+  .day-num.drag-selected {
+    background: rgba(59, 130, 246, 0.2);
+    border-radius: 2px;
+  }
+
+  .day-num:hover:not(.today) {
+    background: rgba(59, 130, 246, 0.08);
+    border-radius: 2px;
   }
 
   .year-bar {
@@ -222,10 +289,12 @@
     margin: 1px 1px;
     overflow: hidden;
     opacity: 0.85;
+    cursor: pointer;
   }
 
   .year-bar:hover {
     opacity: 1;
+    filter: brightness(1.1);
   }
 
   .year-bar-label {
