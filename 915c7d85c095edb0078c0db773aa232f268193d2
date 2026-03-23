@@ -1,0 +1,25 @@
+frontend/src/App.svelte
+  b0f886ff0414f142 18,35,37,196-200,216-222
+frontend/src/components/DayView.svelte
+  b0f886ff0414f142 1-315
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "915c7d85c095edb0078c0db773aa232f268193d2",
+  "prompts": {
+    "b0f886ff0414f142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "40c9da77-12ca-4865-a9f1-4575816a6d33",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 346,
+      "total_deletions": 20,
+      "accepted_lines": 330,
+      "overriden_lines": 0
+    }
+  }
+}
