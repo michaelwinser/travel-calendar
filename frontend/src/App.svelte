@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
+  import { today } from './lib/date-utils';
   import {
     getAuthStatus,
     getLoginURL,
@@ -33,10 +34,11 @@
   let modalActivity = $state<Activity | null>(null); // for edit
   let modalPrefill = $state<{ startDate?: string; endDate?: string }>({});
 
-  // View refs for Today button
+  // View refs and focus date
   let monthView = $state<MonthView>();
   let dayView = $state<DayView>();
   let yearView = $state<YearView>();
+  let focusDate = $state(today());
 
   onMount(async () => {
     try {
@@ -50,17 +52,76 @@
     loading = false;
   });
 
-  // Global keyboard shortcut: 'n' opens quick add
+  // Go-to-date state
+  let showGoToDate = $state(false);
+  let goToDateValue = $state('');
+  let goToDateInput: HTMLInputElement;
+
+  // Global keyboard shortcuts
   function handleGlobalKeydown(e: KeyboardEvent) {
-    // Don't trigger if typing in an input/textarea or modal is open
-    if (modalOpen) return;
+    // ESC closes go-to-date popover
+    if (showGoToDate && e.key === 'Escape') {
+      showGoToDate = false;
+      return;
+    }
+
+    // Don't trigger shortcuts if typing in an input/textarea or modal is open
+    if (modalOpen || showGoToDate) return;
     const tag = (e.target as HTMLElement)?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-    if (e.key === 'n') {
-      e.preventDefault();
-      openQuickAdd();
+    switch (e.key) {
+      case 'n':
+        e.preventDefault();
+        openQuickAdd();
+        break;
+      case '1':
+        e.preventDefault();
+        currentView = 'month';
+        break;
+      case '2':
+        e.preventDefault();
+        currentView = 'year';
+        break;
+      case '3':
+        e.preventDefault();
+        currentView = 'day';
+        break;
+      case '4':
+        e.preventDefault();
+        currentView = 'agenda';
+        break;
+      case 't':
+        e.preventDefault();
+        scrollCurrentViewToToday();
+        break;
+      case 'g':
+        e.preventDefault();
+        openGoToDate();
+        break;
     }
+  }
+
+  function scrollCurrentViewToToday() {
+    focusDate = today();
+    monthView?.scrollToToday();
+    dayView?.scrollToToday();
+    yearView?.scrollToToday();
+  }
+
+  function openGoToDate() {
+    goToDateValue = '';
+    showGoToDate = true;
+    tick().then(() => goToDateInput?.focus());
+  }
+
+  function handleGoToDateSubmit() {
+    if (!goToDateValue) return;
+    focusDate = goToDateValue;
+    showGoToDate = false;
+    monthView?.scrollToDate(goToDateValue);
+    dayView?.scrollToDate(goToDateValue);
+    yearView?.scrollToDate(goToDateValue);
   }
 
   async function refreshActivities() {
@@ -93,6 +154,7 @@
   }
 
   function handleDayClick(date: string) {
+    focusDate = date;
     modalMode = 'create';
     modalActivity = null;
     modalPrefill = { startDate: date, endDate: date };
@@ -101,6 +163,7 @@
   }
 
   function handleDragSelect(startDate: string, endDate: string) {
+    focusDate = startDate;
     modalMode = 'create';
     modalActivity = null;
     modalPrefill = { startDate, endDate };
@@ -219,13 +282,32 @@
       <div class="tab-spacer"></div>
       <button class="add-btn" onclick={openQuickAdd} title="New activity (n)">+ Add</button>
       {#if currentView === 'month' || currentView === 'day' || currentView === 'year'}
-        <button class="today-btn" onclick={() => {
-          monthView?.scrollToToday();
-          dayView?.scrollToToday();
-          yearView?.scrollToToday();
-        }}>Today</button>
+        <button class="today-btn" onclick={scrollCurrentViewToToday}>Today</button>
       {/if}
     </nav>
+
+    <!-- Go-to-date popover -->
+    {#if showGoToDate}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <div class="goto-overlay" onclick={() => showGoToDate = false}>
+        <div class="goto-popover" onclick={(e) => e.stopPropagation()}>
+          <label>
+            <span>Go to date</span>
+            <input
+              type="date"
+              bind:value={goToDateValue}
+              bind:this={goToDateInput}
+              onkeydown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); handleGoToDateSubmit(); }
+                if (e.key === 'Escape') { showGoToDate = false; }
+              }}
+            />
+          </label>
+          <button class="goto-btn" onclick={handleGoToDateSubmit} disabled={!goToDateValue}>Go</button>
+        </div>
+      </div>
+    {/if}
 
     {#if error}
       <p class="error">{error}</p>
@@ -235,6 +317,7 @@
       <MonthView
         bind:this={monthView}
         {activities}
+        initialDate={focusDate}
         onedit={handleEdit}
         ondayclick={handleDayClick}
         ondragselect={handleDragSelect}
@@ -243,6 +326,7 @@
       <YearView
         bind:this={yearView}
         {activities}
+        initialDate={focusDate}
         onedit={handleEdit}
         ondayclick={handleDayClick}
         ondragselect={handleDragSelect}
@@ -252,6 +336,7 @@
       <DayView
         bind:this={dayView}
         {activities}
+        initialDate={focusDate}
         onedit={handleEdit}
         ondayclick={handleDayClick}
         ondragselect={handleDragSelect}
@@ -404,6 +489,66 @@
     background: #f5f5f5;
     color: #333;
   }
+
+  .goto-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 20vh;
+  }
+
+  .goto-popover {
+    background: white;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+  }
+
+  .goto-popover label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .goto-popover label span {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .goto-popover input {
+    padding: 0.5rem 0.6rem;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-family: inherit;
+  }
+
+  .goto-popover input:focus {
+    outline: none;
+    border-color: #333;
+  }
+
+  .goto-btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 6px;
+    background: #333;
+    color: white;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+
+  .goto-btn:hover { background: #555; }
+  .goto-btn:disabled { opacity: 0.4; cursor: default; }
 
   .error {
     color: #dc2626;

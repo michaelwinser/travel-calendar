@@ -11,12 +11,13 @@
 
   interface Props {
     activities: Activity[];
+    initialDate?: string;
     onedit: (activity: Activity) => void;
     ondayclick: (date: string) => void;
     ondragselect: (startDate: string, endDate: string) => void;
   }
 
-  let { activities, onedit, ondayclick, ondragselect }: Props = $props();
+  let { activities, initialDate, onedit, ondayclick, ondragselect }: Props = $props();
 
   const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const MAX_BARS = 3;
@@ -67,7 +68,7 @@
 
   onMount(async () => {
     await tick();
-    scrollToDate(today());
+    scrollToDate(initialDate ?? today());
   });
 
   export function scrollToDate(dateStr: string) {

@@ -9,13 +9,14 @@
 
   interface Props {
     activities: Activity[];
+    initialDate?: string;
     onedit: (activity: Activity) => void;
     ondayclick: (date: string) => void;
     ondragselect: (startDate: string, endDate: string) => void;
     onswitchtomonth: (date: string) => void;
   }
 
-  let { activities, onedit, ondayclick, ondragselect, onswitchtomonth }: Props = $props();
+  let { activities, initialDate, onedit, ondayclick, ondragselect, onswitchtomonth }: Props = $props();
 
   const MAX_BAR_LANES = 3;
 
@@ -52,15 +53,19 @@
 
   onMount(async () => {
     await tick();
-    scrollToToday();
+    scrollToDate(initialDate ?? today());
   });
 
-  export function scrollToToday() {
-    const todayStr = today();
-    const el = scrollEl?.querySelector(`[data-month-contains="${todayStr.slice(0, 7)}"]`);
+  export function scrollToDate(dateStr: string) {
+    const monthKey = dateStr.slice(0, 7); // YYYY-MM
+    const el = scrollEl?.querySelector(`[data-month-contains="${monthKey}"]`);
     if (el) {
       el.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
+  }
+
+  export function scrollToToday() {
+    scrollToDate(today());
   }
 
   function handleScroll() {
@@ -243,6 +248,7 @@
     grid-auto-rows: auto;
     gap: 0 0;
     padding-right: 0.25rem;
+    min-height: 32px;
   }
 
   .day-num {
@@ -253,6 +259,9 @@
     line-height: 1.4;
     cursor: crosshair;
     z-index: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
 
   .day-num.today {
