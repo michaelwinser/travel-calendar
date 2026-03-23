@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { ACTIVITY_COLORS, type Activity } from '../lib/api';
+  import Tooltip from './Tooltip.svelte';
   import {
     today, addDays, stringToDate,
     getWeeksForRange, getDaySegmentsForWeek,
@@ -146,12 +147,33 @@
 
   function handleSegmentClick(activity: Activity, e: MouseEvent) {
     e.stopPropagation();
+    tooltipActivity = null;
     onedit(activity);
   }
 
   function handleMoreClick(dateStr: string, e: MouseEvent) {
     e.stopPropagation();
     ondayclick(dateStr);
+  }
+
+  // Tooltip state
+  let tooltipActivity = $state<Activity | null>(null);
+  let tooltipX = $state(0);
+  let tooltipY = $state(0);
+
+  function handleBarEnter(activity: Activity, e: MouseEvent) {
+    tooltipActivity = activity;
+    tooltipX = e.clientX;
+    tooltipY = e.clientY;
+  }
+
+  function handleBarMove(e: MouseEvent) {
+    tooltipX = e.clientX;
+    tooltipY = e.clientY;
+  }
+
+  function handleBarLeave() {
+    tooltipActivity = null;
   }
 
   function dayOfMonth(dateStr: string): number {
@@ -225,8 +247,10 @@
                   class:is-start={seg.isStart}
                   class:is-end={seg.isEnd}
                   style="background: {seg.color};"
-                  title="{seg.activity.title}{seg.activity.location ? ' — ' + seg.activity.location : ''}"
                   onclick={(e) => handleSegmentClick(seg.activity, e)}
+                  onmouseenter={(e) => handleBarEnter(seg.activity, e)}
+                  onmousemove={handleBarMove}
+                  onmouseleave={handleBarLeave}
                 >
                   {#if seg.isStart}
                     <span class="bar-label">{seg.activity.title}</span>
@@ -250,6 +274,8 @@
     </div>
   {/each}
 </div>
+
+<Tooltip activity={tooltipActivity} x={tooltipX} y={tooltipY} />
 
 <style>
   .month-view {

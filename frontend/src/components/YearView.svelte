@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { ACTIVITY_COLORS, type Activity } from '../lib/api';
+  import Tooltip from './Tooltip.svelte';
   import {
     today, addDays, getMonthsForRange, getYearBarsForMonth,
-    minDate, maxDate,
+    minDate, maxDate, hasConflict,
     type YearMonth, type YearBar,
   } from '../lib/date-utils';
 
@@ -26,10 +27,13 @@
 
   let months = $derived(getMonthsForRange(rangeStart, rangeEnd));
 
+  // Precompute bars and conflicts per month
+  // Note: client-side conflict detection is a stopgap — will migrate to backend API (#60)
   let monthData = $derived(
     months.map(m => ({
       month: m,
       bars: getYearBarsForMonth(activities, m, ACTIVITY_COLORS, MAX_BAR_LANES),
+      conflicts: new Set(m.days.filter(d => hasConflict(d, activities))),
     }))
   );
 
@@ -132,7 +136,28 @@
 
   function handleBarClick(activity: Activity, e: MouseEvent) {
     e.stopPropagation();
+    tooltipActivity = null;
     onedit(activity);
+  }
+
+  // Tooltip state
+  let tooltipActivity = $state<Activity | null>(null);
+  let tooltipX = $state(0);
+  let tooltipY = $state(0);
+
+  function handleBarEnter(activity: Activity, e: MouseEvent) {
+    tooltipActivity = activity;
+    tooltipX = e.clientX;
+    tooltipY = e.clientY;
+  }
+
+  function handleBarMove(e: MouseEvent) {
+    tooltipX = e.clientX;
+    tooltipY = e.clientY;
+  }
+
+  function handleBarLeave() {
+    tooltipActivity = null;
   }
 
   function isToday(dateStr: string): boolean {
@@ -148,7 +173,7 @@
   onmouseup={handleMouseUp}
   onmouseleave={handleMouseUp}
 >
-  {#each monthData as { month: m, bars } (m.label)}
+  {#each monthData as { month: m, bars, conflicts } (m.label)}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div
@@ -173,6 +198,7 @@
             class:today={isToday(dateStr)}
             class:weekend={new Date(m.year, m.month, di + 1).getDay() === 0 || new Date(m.year, m.month, di + 1).getDay() === 6}
             class:drag-selected={isInDragRange(dateStr)}
+            class:conflict={conflicts.has(dateStr)}
             style="grid-column: {di + 1}; grid-row: 1 / -1;"
             onmousedown={(e) => handleDayMouseDown(dateStr, e)}
             onmouseenter={() => handleDayMouseEnter(dateStr)}
@@ -192,8 +218,10 @@
               grid-row: {bar.lane + 2};
               background: {bar.color};
             "
-            title="{bar.activity.title}{bar.activity.location ? ' — ' + bar.activity.location : ''}"
             onclick={(e) => handleBarClick(bar.activity, e)}
+            onmouseenter={(e) => handleBarEnter(bar.activity, e)}
+            onmousemove={handleBarMove}
+            onmouseleave={handleBarLeave}
           >
             <span class="year-bar-label">{bar.activity.title}</span>
           </div>
@@ -202,6 +230,8 @@
     </div>
   {/each}
 </div>
+
+<Tooltip activity={tooltipActivity} x={tooltipX} y={tooltipY} />
 
 <style>
   .year-view {
@@ -286,6 +316,13 @@
 
   .day-num.weekend {
     color: #ccc;
+  }
+
+  .day-num.conflict {
+    color: #dc2626;
+    font-weight: 700;
+    background: rgba(239, 68, 68, 0.1);
+    border-radius: 2px;
   }
 
   .day-num.drag-selected {
