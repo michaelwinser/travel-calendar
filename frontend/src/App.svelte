@@ -37,6 +37,7 @@
   let modalFocusText = $state(false);
   let modalActivity = $state<Activity | null>(null);
   let modalPrefill = $state<{ startDate?: string; endDate?: string }>({});
+  let ghostDates = $state<{ startDate: string; endDate: string; type: ActivityType } | null>(null);
 
   // View refs
   let monthView = $state<MonthView>();
@@ -252,6 +253,11 @@
     modalOpen = false;
     modalActivity = null;
     modalPrefill = {};
+    ghostDates = null;
+  }
+
+  function handleModalChange(data: { title: string; type: ActivityType; startDate: string; endDate: string }) {
+    ghostDates = { startDate: data.startDate, endDate: data.endDate, type: data.type };
   }
 
   // --- CRUD ---
@@ -303,6 +309,16 @@
       error = '';
     } catch (e: any) {
       error = e.message || 'Failed to delete activity';
+    }
+  }
+
+  async function handleResize(activityId: string, startDate: string, endDate: string) {
+    try {
+      await updateActivity(activityId, { startDate, endDate });
+      await refreshActivities();
+      error = '';
+    } catch (e: any) {
+      error = e.message || 'Failed to resize activity';
     }
   }
 
@@ -412,10 +428,12 @@
       <MonthView
         bind:this={monthView}
         {activities}
+        {ghostDates}
         initialDate={focusDate}
         onedit={handleEdit}
         ondayclick={handleDayClick}
         ondragselect={handleDragSelect}
+        onresize={handleResize}
         onfocusdate={handleFocusDate}
       />
     {:else if currentView === 'year'}
@@ -458,6 +476,7 @@
       onsubmit={handleModalSubmit}
       oncancel={closeModal}
       ondelete={modalMode === 'edit' ? handleDelete : undefined}
+      onchange={handleModalChange}
     />
   {/if}
 </main>

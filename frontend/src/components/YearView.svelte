@@ -227,6 +227,18 @@
           </div>
         {/each}
 
+        <!-- Ghost bar during drag -->
+        {#if isDragging && dragRange}
+          {@const ghostStart = m.days.indexOf(dragRange.start < m.days[0] ? m.days[0] : dragRange.start)}
+          {@const ghostEnd = m.days.indexOf(dragRange.end > m.days[m.days.length - 1] ? m.days[m.days.length - 1] : dragRange.end)}
+          {#if ghostStart >= 0 && ghostEnd >= 0}
+            <div
+              class="year-bar ghost"
+              style="grid-column: {ghostStart + 1} / span {ghostEnd - ghostStart + 1}; grid-row: {(bars.length > 0 ? Math.max(...bars.map(b => b.lane)) + 2 : 2)};"
+            ></div>
+          {/if}
+        {/if}
+
         <!-- Activity bars -->
         {#each bars as bar}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -367,6 +379,12 @@
     cursor: pointer;
     z-index: 1;
     position: relative;
+  }
+
+  .year-bar.ghost {
+    background: rgba(0, 0, 0, 0.1);
+    border: 1px dashed rgba(0, 0, 0, 0.2);
+    pointer-events: none;
   }
 
   .year-bar:hover {

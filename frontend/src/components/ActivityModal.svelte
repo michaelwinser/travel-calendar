@@ -26,6 +26,7 @@
     }) => void;
     oncancel: () => void;
     ondelete?: () => void;
+    onchange?: (data: { title: string; type: ActivityType; startDate: string; endDate: string }) => void;
   }
 
   let props: Props = $props();
@@ -84,11 +85,17 @@
     return parts.join(' ');
   }
 
-  // Watch field changes to regenerate text
+  // Watch field changes to regenerate text and report to parent
   let generatedText = $derived(generateText());
   $effect(() => {
     if (!textEditing) {
       quickText = generatedText;
+    }
+  });
+
+  $effect(() => {
+    if (props.onchange && startDate) {
+      props.onchange({ title, type, startDate, endDate: endDate || startDate });
     }
   });
 

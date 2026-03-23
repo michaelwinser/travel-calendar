@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { ACTIVITY_COLORS, type Activity } from '../lib/api';
+  import { ACTIVITY_COLORS, type Activity, type ActivityType } from '../lib/api';
   import Tooltip from './Tooltip.svelte';
   import {
     today, addDays, stringToDate,
@@ -12,14 +12,16 @@
 
   interface Props {
     activities: Activity[];
+    ghostDates?: { startDate: string; endDate: string; type: ActivityType } | null;
     initialDate?: string;
     onedit: (activity: Activity) => void;
     ondayclick: (date: string) => void;
     ondragselect: (startDate: string, endDate: string) => void;
+    onresize?: (activityId: string, startDate: string, endDate: string) => void;
     onfocusdate?: (date: string) => void;
   }
 
-  let { activities, initialDate, onedit, ondayclick, ondragselect, onfocusdate }: Props = $props();
+  let { activities, ghostDates, initialDate, onedit, ondayclick, ondragselect, onresize, onfocusdate }: Props = $props();
 
   const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const MAX_BARS = 3;
@@ -139,12 +141,19 @@
   }
 
   function handleDayMouseEnter(dateStr: string) {
-    if (isDragging) {
+    if (resizing) {
+      handleResizeMove(dateStr);
+    } else if (isDragging) {
       dragCurrentDate = dateStr;
     }
   }
 
   function handleMouseUp() {
+    if (resizing) {
+      handleResizeUp();
+      return;
+    }
+
     if (!isDragging || !dragStartDate || !dragCurrentDate) {
       isDragging = false;
       dragStartDate = null;
@@ -166,7 +175,66 @@
     dragCurrentDate = null;
   }
 
+  // Resize state
+  let resizing = $state<{ activity: Activity; edge: 'start' | 'end'; originalStart: string; originalEnd: string } | null>(null);
+  let resizeCurrentDate = $state<string | null>(null);
+
+  function handleSegmentMouseDown(activity: Activity, seg: DayBarSegment, dateStr: string, e: MouseEvent) {
+    if (e.button !== 0 || !onresize) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const edgeZone = 6;
+
+    if (seg.isStart && e.clientX - rect.left < edgeZone) {
+      e.stopPropagation();
+      e.preventDefault();
+      resizing = { activity, edge: 'start', originalStart: activity.startDate, originalEnd: activity.endDate };
+      resizeCurrentDate = dateStr;
+    } else if (seg.isEnd && rect.right - e.clientX < edgeZone) {
+      e.stopPropagation();
+      e.preventDefault();
+      resizing = { activity, edge: 'end', originalStart: activity.startDate, originalEnd: activity.endDate };
+      resizeCurrentDate = dateStr;
+    }
+  }
+
+  function handleResizeMove(dateStr: string) {
+    if (resizing) {
+      resizeCurrentDate = dateStr;
+    }
+  }
+
+  function handleResizeUp() {
+    if (!resizing || !resizeCurrentDate || !onresize) {
+      resizing = null;
+      resizeCurrentDate = null;
+      return;
+    }
+
+    let newStart = resizing.originalStart;
+    let newEnd = resizing.originalEnd;
+
+    if (resizing.edge === 'start') {
+      newStart = resizeCurrentDate <= resizing.originalEnd ? resizeCurrentDate : resizing.originalEnd;
+    } else {
+      newEnd = resizeCurrentDate >= resizing.originalStart ? resizeCurrentDate : resizing.originalStart;
+    }
+
+    if (newStart !== resizing.originalStart || newEnd !== resizing.originalEnd) {
+      onresize(resizing.activity.id, newStart, newEnd);
+    }
+
+    resizing = null;
+    resizeCurrentDate = null;
+  }
+
+  function getSegmentCursor(seg: DayBarSegment): string {
+    if (!onresize) return 'pointer';
+    if (seg.isStart || seg.isEnd) return 'col-resize';
+    return 'pointer';
+  }
+
   function handleSegmentClick(activity: Activity, e: MouseEvent) {
+    if (resizing) return; // Don't open edit if we just finished resizing
     e.stopPropagation();
     tooltipActivity = null;
     onedit(activity);
@@ -267,8 +335,9 @@
                   class="bar-segment"
                   class:is-start={seg.isStart}
                   class:is-end={seg.isEnd}
-                  style="background: {seg.color};"
+                  style="background: {seg.color}; cursor: {getSegmentCursor(seg)};"
                   onclick={(e) => handleSegmentClick(seg.activity, e)}
+                  onmousedown={(e) => handleSegmentMouseDown(seg.activity, seg, dateStr, e)}
                   onmouseenter={(e) => handleBarEnter(seg.activity, e)}
                   onmousemove={handleBarMove}
                   onmouseleave={handleBarLeave}
@@ -281,6 +350,26 @@
                 <div class="bar-slot-empty"></div>
               {/if}
             {/each}
+
+            <!-- Ghost bar during drag or modal edit -->
+            {#if isDragging && isInDragRange(dateStr) && daySegments.length < MAX_BARS}
+              {@const isGhostStart = dragRange && dateStr === dragRange.start}
+              {@const isGhostEnd = dragRange && dateStr === dragRange.end}
+              <div
+                class="bar-segment ghost"
+                class:is-start={isGhostStart}
+                class:is-end={isGhostEnd}
+              ></div>
+            {:else if ghostDates && dateStr >= ghostDates.startDate && dateStr <= ghostDates.endDate && daySegments.length < MAX_BARS}
+              {@const isGhostStart = dateStr === ghostDates.startDate}
+              {@const isGhostEnd = dateStr === ghostDates.endDate}
+              <div
+                class="bar-segment ghost modal-ghost"
+                class:is-start={isGhostStart}
+                class:is-end={isGhostEnd}
+                style="background: {ACTIVITY_COLORS[ghostDates.type]}; opacity: 0.35;"
+              ></div>
+            {/if}
 
             {#if overflow > 0}
               <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -453,6 +542,15 @@
     border-top-right-radius: 4px;
     border-bottom-right-radius: 4px;
     margin-right: 3px;
+  }
+
+  .bar-segment.ghost {
+    background: rgba(0, 0, 0, 0.12);
+    border: 1px dashed rgba(0, 0, 0, 0.2);
+  }
+
+  .bar-segment.modal-ghost {
+    border: 1px dashed rgba(255, 255, 255, 0.5);
   }
 
   .bar-slot-empty {
