@@ -3,7 +3,7 @@
   import { ACTIVITY_COLORS, type Activity, type ActivityType } from '../lib/api';
   import Tooltip from './Tooltip.svelte';
   import {
-    today, addDays, stringToDate,
+    today, addDays, stringToDate, addDays as addD,
     getWeeksForRange, getDaySegmentsForWeek,
     monthLabel, monthIndex, hasConflict,
     minDate, maxDate,
@@ -18,21 +18,22 @@
     ondayclick: (date: string) => void;
     ondragselect: (startDate: string, endDate: string) => void;
     onresize?: (activityId: string, startDate: string, endDate: string) => void;
+    onmove?: (activityId: string, startDate: string, endDate: string) => void;
     onfocusdate?: (date: string) => void;
   }
 
-  let { activities, ghostDates, initialDate, onedit, ondayclick, ondragselect, onresize, onfocusdate }: Props = $props();
+  let { activities, ghostDates, initialDate, onedit, ondayclick, ondragselect, onresize, onmove, onfocusdate }: Props = $props();
 
   const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const MAX_BARS = 3;
+  const EDGE_ZONE = 6; // pixels from bar edge for resize cursor
 
-  // View range: 3 months back, 6 months forward
+  // View range
   let rangeStart = $state(addDays(today(), -90));
   let rangeEnd = $state(addDays(today(), 180));
 
   let weeks = $derived(getWeeksForRange(rangeStart, rangeEnd));
 
-  // Precompute per-day data for each week
   let weekData = $derived(
     weeks.map(week => {
       const { segments, overflowPerDay } = getDaySegmentsForWeek(activities, week, ACTIVITY_COLORS, MAX_BARS);
@@ -41,7 +42,6 @@
     })
   );
 
-  // Month labels: show on first week of each month
   let weekMonthLabels = $derived(
     weeks.map((week, i) => {
       const thursdayMonth = monthLabel(week.days[4]);
@@ -51,24 +51,77 @@
     })
   );
 
-  // Drag state
-  let dragStartDate = $state<string | null>(null);
-  let dragCurrentDate = $state<string | null>(null);
-  let isDragging = $state(false);
+  // === DRAG STATE ===
+  // Three modes: 'create' (empty area), 'move' (bar interior), 'resize' (bar edge)
+  type DragMode = 'create' | 'move' | 'resize' | null;
+  let dragMode = $state<DragMode>(null);
 
-  let dragRange = $derived(
-    dragStartDate && dragCurrentDate
-      ? { start: minDate(dragStartDate, dragCurrentDate), end: maxDate(dragStartDate, dragCurrentDate) }
+  // Create drag
+  let createStart = $state<string | null>(null);
+  let createCurrent = $state<string | null>(null);
+
+  let createRange = $derived(
+    createStart && createCurrent
+      ? { start: minDate(createStart, createCurrent), end: maxDate(createStart, createCurrent) }
       : null
   );
 
-  function isInDragRange(dateStr: string): boolean {
-    if (!dragRange) return false;
-    return dateStr >= dragRange.start && dateStr <= dragRange.end;
+  // Move drag
+  let moveActivity = $state<Activity | null>(null);
+  let moveAnchorDate = $state<string | null>(null); // date where mousedown occurred
+  let moveCurrentDate = $state<string | null>(null);
+  let moveLane = $state(0);
+
+  let movePreview = $derived.by(() => {
+    if (!moveActivity || !moveAnchorDate || !moveCurrentDate) return null;
+    const daysDelta = dateDiff(moveAnchorDate, moveCurrentDate);
+    const newStart = addDays(moveActivity.startDate, daysDelta);
+    const newEnd = addDays(moveActivity.endDate, daysDelta);
+    return { start: newStart, end: newEnd, activityId: moveActivity.id, type: moveActivity.type, title: moveActivity.title };
+  });
+
+  // Resize drag
+  let resizeActivity = $state<Activity | null>(null);
+  let resizeEdge = $state<'start' | 'end'>('end');
+  let resizeCurrent = $state<string | null>(null);
+  let resizeLane = $state(0);
+
+  let resizePreview = $derived.by(() => {
+    if (!resizeActivity || !resizeCurrent) return null;
+    let start = resizeActivity.startDate;
+    let end = resizeActivity.endDate;
+    if (resizeEdge === 'start') {
+      start = resizeCurrent <= end ? resizeCurrent : end;
+    } else {
+      end = resizeCurrent >= start ? resizeCurrent : start;
+    }
+    return { start, end, activityId: resizeActivity.id, type: resizeActivity.type, title: resizeActivity.title };
+  });
+
+  // The active drag preview (whichever mode)
+  let activePreview = $derived(dragMode === 'move' ? movePreview : dragMode === 'resize' ? resizePreview : null);
+  let activeDragId = $derived(activePreview?.activityId ?? null);
+  let activeLane = $derived(dragMode === 'move' ? moveLane : dragMode === 'resize' ? resizeLane : 0);
+
+  function dateDiff(from: string, to: string): number {
+    const f = stringToDate(from);
+    const t = stringToDate(to);
+    return Math.round((t.getTime() - f.getTime()) / (86400000));
   }
 
-  // Scroll container
+  function isInCreateRange(dateStr: string): boolean {
+    if (!createRange) return false;
+    return dateStr >= createRange.start && dateStr <= createRange.end;
+  }
+
+  function isInActivePreview(dateStr: string): boolean {
+    if (!activePreview) return false;
+    return dateStr >= activePreview.start && dateStr <= activePreview.end;
+  }
+
+  // === SCROLL ===
   let scrollEl: HTMLElement;
+  let scrollDebounce: ReturnType<typeof setTimeout> | undefined;
 
   onMount(async () => {
     await tick();
@@ -81,7 +134,6 @@
       el.scrollIntoView({ block: 'center', behavior: 'smooth' });
       return;
     }
-    // Date outside current range — recenter and retry
     rangeStart = addDays(dateStr, -90);
     rangeEnd = addDays(dateStr, 180);
     tick().then(() => {
@@ -90,30 +142,19 @@
     });
   }
 
-  export function scrollToToday() {
-    scrollToDate(today());
-  }
-
-  let scrollDebounce: ReturnType<typeof setTimeout> | undefined;
+  export function scrollToToday() { scrollToDate(today()); }
 
   function handleScroll() {
     if (!scrollEl) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollEl;
-
     if (scrollTop < 200) {
       const prevHeight = scrollEl.scrollHeight;
       rangeStart = addDays(rangeStart, -90);
-      tick().then(() => {
-        const newHeight = scrollEl.scrollHeight;
-        scrollEl.scrollTop += newHeight - prevHeight;
-      });
+      tick().then(() => { scrollEl.scrollTop += scrollEl.scrollHeight - prevHeight; });
     }
-
     if (scrollHeight - scrollTop - clientHeight < 200) {
       rangeEnd = addDays(rangeEnd, 90);
     }
-
-    // Report top-visible date (debounced)
     if (onfocusdate) {
       clearTimeout(scrollDebounce);
       scrollDebounce = setTimeout(() => reportTopDate(), 500);
@@ -123,8 +164,7 @@
   function reportTopDate() {
     if (!scrollEl || !onfocusdate) return;
     const containerTop = scrollEl.getBoundingClientRect().top;
-    const dateCells = scrollEl.querySelectorAll('[data-date]');
-    for (const el of dateCells) {
+    for (const el of scrollEl.querySelectorAll('[data-date]')) {
       if (el.getBoundingClientRect().top >= containerTop) {
         const date = el.getAttribute('data-date');
         if (date) { onfocusdate(date); return; }
@@ -132,130 +172,108 @@
     }
   }
 
+  // === DAY CELL MOUSEDOWN (create mode only) ===
   function handleDayMouseDown(dateStr: string, e: MouseEvent) {
     if (e.button !== 0) return;
-    dragStartDate = dateStr;
-    dragCurrentDate = dateStr;
-    isDragging = true;
+    // Only start create if clicking on the day-number area or empty space
+    const target = e.target as HTMLElement;
+    if (target.closest('.bar-segment')) return; // click was on a bar
     e.preventDefault();
+    dragMode = 'create';
+    createStart = dateStr;
+    createCurrent = dateStr;
   }
 
+  // === DAY CELL MOUSEENTER ===
   function handleDayMouseEnter(dateStr: string) {
-    if (resizing) {
-      handleResizeMove(dateStr);
-    } else if (isDragging) {
-      dragCurrentDate = dateStr;
-    }
+    if (dragMode === 'create') createCurrent = dateStr;
+    else if (dragMode === 'move') moveCurrentDate = dateStr;
+    else if (dragMode === 'resize') resizeCurrent = dateStr;
   }
 
+  // === GLOBAL MOUSEUP ===
   function handleMouseUp() {
-    if (resizing) {
-      handleResizeUp();
-      return;
+    if (dragMode === 'create') {
+      if (createStart && createCurrent) {
+        const start = minDate(createStart, createCurrent);
+        const end = maxDate(createStart, createCurrent);
+        if (start === end) ondayclick(start);
+        else ondragselect(start, end);
+      }
+    } else if (dragMode === 'move') {
+      if (movePreview && moveActivity && onmove) {
+        if (movePreview.start !== moveActivity.startDate) {
+          onmove(moveActivity.id, movePreview.start, movePreview.end);
+        }
+      }
+    } else if (dragMode === 'resize') {
+      if (resizePreview && resizeActivity && onresize) {
+        if (resizePreview.start !== resizeActivity.startDate || resizePreview.end !== resizeActivity.endDate) {
+          onresize(resizeActivity.id, resizePreview.start, resizePreview.end);
+        }
+      }
     }
-
-    if (!isDragging || !dragStartDate || !dragCurrentDate) {
-      isDragging = false;
-      dragStartDate = null;
-      dragCurrentDate = null;
-      return;
-    }
-
-    const start = minDate(dragStartDate, dragCurrentDate);
-    const end = maxDate(dragStartDate, dragCurrentDate);
-
-    if (start === end) {
-      ondayclick(start);
-    } else {
-      ondragselect(start, end);
-    }
-
-    isDragging = false;
-    dragStartDate = null;
-    dragCurrentDate = null;
+    clearDrag();
   }
 
-  // Resize state
-  let resizing = $state<{ activity: Activity; edge: 'start' | 'end'; originalStart: string; originalEnd: string } | null>(null);
-  let resizeCurrentDate = $state<string | null>(null);
+  function clearDrag() {
+    dragMode = null;
+    createStart = null; createCurrent = null;
+    moveActivity = null; moveAnchorDate = null; moveCurrentDate = null;
+    resizeActivity = null; resizeCurrent = null;
+  }
 
-  function handleSegmentMouseDown(activity: Activity, seg: DayBarSegment, dateStr: string, e: MouseEvent) {
-    if (e.button !== 0 || !onresize) return;
+  // === BAR INTERACTIONS ===
+  function handleBarMouseDown(activity: Activity, seg: DayBarSegment, dateStr: string, lane: number, e: MouseEvent) {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const edgeZone = 6;
+    const fromLeft = e.clientX - rect.left;
+    const fromRight = rect.right - e.clientX;
 
-    if (seg.isStart && e.clientX - rect.left < edgeZone) {
-      e.stopPropagation();
-      e.preventDefault();
-      resizing = { activity, edge: 'start', originalStart: activity.startDate, originalEnd: activity.endDate };
-      resizeCurrentDate = dateStr;
-    } else if (seg.isEnd && rect.right - e.clientX < edgeZone) {
-      e.stopPropagation();
-      e.preventDefault();
-      resizing = { activity, edge: 'end', originalStart: activity.startDate, originalEnd: activity.endDate };
-      resizeCurrentDate = dateStr;
-    }
-  }
-
-  // Computed resize preview range
-  let resizePreview = $derived.by(() => {
-    if (!resizing || !resizeCurrentDate) return null;
-    let start = resizing.originalStart;
-    let end = resizing.originalEnd;
-    if (resizing.edge === 'start') {
-      start = resizeCurrentDate <= end ? resizeCurrentDate : end;
+    if (seg.isStart && fromLeft < EDGE_ZONE) {
+      dragMode = 'resize';
+      resizeActivity = activity;
+      resizeEdge = 'start';
+      resizeCurrent = dateStr;
+      resizeLane = lane;
+    } else if (seg.isEnd && fromRight < EDGE_ZONE) {
+      dragMode = 'resize';
+      resizeActivity = activity;
+      resizeEdge = 'end';
+      resizeCurrent = dateStr;
+      resizeLane = lane;
     } else {
-      end = resizeCurrentDate >= start ? resizeCurrentDate : start;
-    }
-    return { start, end, type: resizing.activity.type, activityId: resizing.activity.id };
-  });
-
-  function isInResizeRange(dateStr: string): boolean {
-    if (!resizePreview) return false;
-    return dateStr >= resizePreview.start && dateStr <= resizePreview.end;
-  }
-
-  function handleResizeMove(dateStr: string) {
-    if (resizing) {
-      resizeCurrentDate = dateStr;
+      dragMode = 'move';
+      moveActivity = activity;
+      moveAnchorDate = dateStr;
+      moveCurrentDate = dateStr;
+      moveLane = lane;
     }
   }
 
-  function handleResizeUp() {
-    if (!resizing || !resizeCurrentDate || !onresize) {
-      resizing = null;
-      resizeCurrentDate = null;
-      return;
-    }
-
-    let newStart = resizing.originalStart;
-    let newEnd = resizing.originalEnd;
-
-    if (resizing.edge === 'start') {
-      newStart = resizeCurrentDate <= resizing.originalEnd ? resizeCurrentDate : resizing.originalEnd;
-    } else {
-      newEnd = resizeCurrentDate >= resizing.originalStart ? resizeCurrentDate : resizing.originalStart;
-    }
-
-    if (newStart !== resizing.originalStart || newEnd !== resizing.originalEnd) {
-      onresize(resizing.activity.id, newStart, newEnd);
-    }
-
-    resizing = null;
-    resizeCurrentDate = null;
-  }
-
-  function getSegmentCursor(seg: DayBarSegment): string {
-    if (!onresize) return 'pointer';
-    if (seg.isStart || seg.isEnd) return 'col-resize';
-    return 'pointer';
-  }
-
-  function handleSegmentClick(activity: Activity, e: MouseEvent) {
-    if (resizing) return; // Don't open edit if we just finished resizing
+  function handleBarClick(activity: Activity, e: MouseEvent) {
+    // Only fire if we didn't just finish a drag
+    if (dragMode) return;
     e.stopPropagation();
     tooltipActivity = null;
     onedit(activity);
+  }
+
+  function handleBarMouseMove(seg: DayBarSegment, e: MouseEvent) {
+    if (dragMode) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const fromLeft = e.clientX - rect.left;
+    const fromRight = rect.right - e.clientX;
+    const el = e.currentTarget as HTMLElement;
+
+    if ((seg.isStart && fromLeft < EDGE_ZONE) || (seg.isEnd && fromRight < EDGE_ZONE)) {
+      el.style.cursor = 'col-resize';
+    } else {
+      el.style.cursor = 'grab';
+    }
   }
 
   function handleMoreClick(dateStr: string, e: MouseEvent) {
@@ -263,33 +281,29 @@
     ondayclick(dateStr);
   }
 
-  // Tooltip state
+  // === TOOLTIP ===
   let tooltipActivity = $state<Activity | null>(null);
   let tooltipX = $state(0);
   let tooltipY = $state(0);
 
   function handleBarEnter(activity: Activity, e: MouseEvent) {
+    if (dragMode) return;
     tooltipActivity = activity;
     tooltipX = e.clientX;
     tooltipY = e.clientY;
   }
 
-  function handleBarMove(e: MouseEvent) {
+  function handleBarHover(e: MouseEvent) {
+    if (dragMode) { tooltipActivity = null; return; }
     tooltipX = e.clientX;
     tooltipY = e.clientY;
   }
 
-  function handleBarLeave() {
-    tooltipActivity = null;
-  }
+  function handleBarLeave() { tooltipActivity = null; }
 
-  function dayOfMonth(dateStr: string): number {
-    return stringToDate(dateStr).getDate();
-  }
-
-  function isToday(dateStr: string): boolean {
-    return dateStr === today();
-  }
+  // === HELPERS ===
+  function dayOfMonth(dateStr: string): number { return stringToDate(dateStr).getDate(); }
+  function isToday(dateStr: string): boolean { return dateStr === today(); }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -300,7 +314,6 @@
   onmouseup={handleMouseUp}
   onmouseleave={handleMouseUp}
 >
-  <!-- Day-of-week header -->
   <div class="week-header">
     <div class="label-col"></div>
     {#each DAY_NAMES as name}
@@ -308,19 +321,14 @@
     {/each}
   </div>
 
-  <!-- Week rows -->
   {#each weekData as { week, segments, overflowPerDay, conflicts }, wi (week.weekStart)}
     {@const label = weekMonthLabels[wi]}
 
     <div class="week-row">
-      <!-- Month label -->
       <div class="label-col">
-        {#if label}
-          <span class="month-label">{label}</span>
-        {/if}
+        {#if label}<span class="month-label">{label}</span>{/if}
       </div>
 
-      <!-- Day cells -->
       {#each week.days as dateStr, di}
         {@const altMonth = monthIndex(dateStr) % 2 === 1}
         {@const daySegments = segments.get(di) ?? []}
@@ -330,7 +338,7 @@
           class="day-cell"
           class:alt-month={altMonth}
           class:today={isToday(dateStr)}
-          class:drag-selected={!resizing && isInDragRange(dateStr)}
+          class:drag-selected={dragMode === 'create' && isInCreateRange(dateStr)}
           class:conflict={conflicts[di]}
           data-date={dateStr}
           onmousedown={(e) => handleDayMouseDown(dateStr, e)}
@@ -342,82 +350,83 @@
             </span>
           </div>
 
-          <!-- Activity bar segments -->
           <div class="bar-slots">
             {#each { length: MAX_BARS } as _, lane}
               {@const seg = daySegments.find(s => s.lane === lane)}
-              {@const isResizingThis = seg && resizePreview && seg.activity.id === resizePreview.activityId}
-              {#if seg && !isResizingThis}
+              {@const isActiveDrag = seg && seg.activity.id === activeDragId}
+              {#if seg && !isActiveDrag}
+                <!-- Normal bar segment -->
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
                 <div
                   class="bar-segment"
                   class:is-start={seg.isStart}
                   class:is-end={seg.isEnd}
-                  style="background: {seg.color}; cursor: {getSegmentCursor(seg)};"
-                  onclick={(e) => handleSegmentClick(seg.activity, e)}
-                  onmousedown={(e) => handleSegmentMouseDown(seg.activity, seg, dateStr, e)}
+                  style="background: {seg.color};"
+                  onclick={(e) => handleBarClick(seg.activity, e)}
+                  onmousedown={(e) => handleBarMouseDown(seg.activity, seg, dateStr, lane, e)}
                   onmouseenter={(e) => handleBarEnter(seg.activity, e)}
-                  onmousemove={handleBarMove}
+                  onmousemove={(e) => { handleBarMouseMove(seg, e); handleBarHover(e); }}
                   onmouseleave={handleBarLeave}
                 >
                   {#if seg.isStart}
                     <span class="bar-label">{seg.activity.title}</span>
                   {/if}
                 </div>
-              {:else if isResizingThis && isInResizeRange(dateStr)}
+              {:else if isActiveDrag && isInActivePreview(dateStr)}
+                <!-- Active drag preview in original lane -->
                 <div
-                  class="bar-segment resize-preview"
-                  class:is-start={dateStr === resizePreview?.start}
-                  class:is-end={dateStr === resizePreview?.end}
-                  style="background: {seg?.color};"
+                  class="bar-segment active-drag"
+                  class:is-start={dateStr === activePreview?.start}
+                  class:is-end={dateStr === activePreview?.end}
+                  style="background: {ACTIVITY_COLORS[activePreview?.type ?? 'stay']};"
                 >
-                  {#if dateStr === resizePreview?.start}
-                    <span class="bar-label">{seg?.activity.title}</span>
+                  {#if dateStr === activePreview?.start}
+                    <span class="bar-label">{activePreview?.title}</span>
                   {/if}
                 </div>
-              {:else if isResizingThis}
+              {:else if isActiveDrag}
+                <!-- Original lane slot vacated by dragged activity -->
                 <div class="bar-slot-empty"></div>
               {:else}
                 <div class="bar-slot-empty"></div>
               {/if}
             {/each}
 
-            <!-- Resize preview for expanded days -->
-            {#if resizePreview && isInResizeRange(dateStr) && !daySegments.some(s => s.activity.id === resizePreview.activityId)}
+            <!-- Active drag preview for days beyond original lanes (expansion) -->
+            {#if activePreview && isInActivePreview(dateStr) && !daySegments.some(s => s.activity.id === activeDragId && s.lane < MAX_BARS)}
               <div
-                class="bar-segment resize-preview"
-                class:is-start={dateStr === resizePreview.start}
-                class:is-end={dateStr === resizePreview.end}
-                style="background: {ACTIVITY_COLORS[resizePreview.type]};"
+                class="bar-segment active-drag"
+                class:is-start={dateStr === activePreview.start}
+                class:is-end={dateStr === activePreview.end}
+                style="background: {ACTIVITY_COLORS[activePreview.type]};"
               >
-                {#if dateStr === resizePreview.start}
-                  <span class="bar-label">{resizing?.activity.title}</span>
+                {#if dateStr === activePreview.start}
+                  <span class="bar-label">{activePreview.title}</span>
                 {/if}
               </div>
             {/if}
 
-            <!-- Ghost bar during drag or modal edit -->
-            {#if !resizing && isDragging && isInDragRange(dateStr) && daySegments.length < MAX_BARS}
-              {@const isGhostStart = dragRange && dateStr === dragRange.start}
-              {@const isGhostEnd = dragRange && dateStr === dragRange.end}
+            <!-- Ghost bar during create drag -->
+            {#if dragMode === 'create' && isInCreateRange(dateStr) && daySegments.length < MAX_BARS}
               <div
                 class="bar-segment ghost"
-                class:is-start={isGhostStart}
-                class:is-end={isGhostEnd}
+                class:is-start={createRange && dateStr === createRange.start}
+                class:is-end={createRange && dateStr === createRange.end}
               ></div>
-            {:else if ghostDates && dateStr >= ghostDates.startDate && dateStr <= ghostDates.endDate && daySegments.length < MAX_BARS}
-              {@const isGhostStart = dateStr === ghostDates.startDate}
-              {@const isGhostEnd = dateStr === ghostDates.endDate}
+            {/if}
+
+            <!-- Ghost bar from modal -->
+            {#if !dragMode && ghostDates && dateStr >= ghostDates.startDate && dateStr <= ghostDates.endDate && daySegments.length < MAX_BARS}
               <div
                 class="bar-segment ghost modal-ghost"
-                class:is-start={isGhostStart}
-                class:is-end={isGhostEnd}
+                class:is-start={dateStr === ghostDates.startDate}
+                class:is-end={dateStr === ghostDates.endDate}
                 style="background: {ACTIVITY_COLORS[ghostDates.type]}; opacity: 0.35;"
               ></div>
             {/if}
 
-            {#if overflow > 0}
+            {#if overflow > 1}
               <!-- svelte-ignore a11y_no_static_element_interactions -->
               <!-- svelte-ignore a11y_click_events_have_key_events -->
               <span class="more-link" onclick={(e) => handleMoreClick(dateStr, e)}>
@@ -491,40 +500,21 @@
   .day-cell {
     display: flex;
     flex-direction: column;
-    cursor: pointer;
+    cursor: crosshair;
     border-right: 1px solid #f0f0f0;
     min-height: 90px;
     padding: 3px 0;
     overflow: hidden;
   }
 
-  .day-cell:nth-child(9) {
-    border-right: none;
-  }
+  .day-cell:nth-child(9) { border-right: none; }
 
-  .day-cell.alt-month {
-    background: rgba(0, 0, 0, 0.03);
-  }
-
-  .day-cell.today {
-    background: rgba(59, 130, 246, 0.06);
-  }
-
-  .day-cell.drag-selected {
-    background: rgba(59, 130, 246, 0.15) !important;
-  }
-
-  .day-cell.conflict {
-    background-color: rgba(239, 68, 68, 0.08);
-  }
-
-  .day-cell.conflict.alt-month {
-    background-color: rgba(239, 68, 68, 0.11);
-  }
-
-  .day-cell:hover {
-    background: rgba(59, 130, 246, 0.07) !important;
-  }
+  .day-cell.alt-month { background: rgba(0, 0, 0, 0.03); }
+  .day-cell.today { background: rgba(59, 130, 246, 0.06); }
+  .day-cell.drag-selected { background: rgba(59, 130, 246, 0.15) !important; }
+  .day-cell.conflict { background-color: rgba(239, 68, 68, 0.08); }
+  .day-cell.conflict.alt-month { background-color: rgba(239, 68, 68, 0.11); }
+  .day-cell:hover { background: rgba(59, 130, 246, 0.07) !important; }
 
   .day-number-row {
     text-align: right;
@@ -532,10 +522,7 @@
     padding: 0 4px 2px;
   }
 
-  .day-number {
-    font-size: 0.75rem;
-    color: #888;
-  }
+  .day-number { font-size: 0.75rem; color: #888; }
 
   .today-number {
     background: #3b82f6;
@@ -563,13 +550,12 @@
     display: flex;
     align-items: center;
     padding: 0 4px;
-    cursor: pointer;
     overflow: hidden;
     opacity: 0.9;
-    /* Extend into neighboring cells to hide the border gap */
     margin: 0 -1px;
     position: relative;
     z-index: 1;
+    cursor: grab;
   }
 
   .bar-segment:hover {
@@ -590,23 +576,24 @@
     margin-right: 3px;
   }
 
+  .bar-segment.active-drag {
+    opacity: 0.7;
+    z-index: 5;
+    border: 1px dashed rgba(255, 255, 255, 0.6);
+    cursor: grabbing;
+  }
+
   .bar-segment.ghost {
     background: rgba(0, 0, 0, 0.18);
     border: 1px dashed rgba(0, 0, 0, 0.3);
+    cursor: crosshair;
   }
 
   .bar-segment.modal-ghost {
     border: 1px dashed rgba(255, 255, 255, 0.5);
   }
 
-  .bar-segment.resize-preview {
-    opacity: 0.6;
-    border: 1px dashed rgba(255, 255, 255, 0.5);
-  }
-
-  .bar-slot-empty {
-    height: 18px;
-  }
+  .bar-slot-empty { height: 18px; }
 
   .bar-label {
     font-size: 0.65rem;
@@ -625,7 +612,5 @@
     line-height: 1.2;
   }
 
-  .more-link:hover {
-    color: #333;
-  }
+  .more-link:hover { color: #333; }
 </style>

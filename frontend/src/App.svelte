@@ -322,6 +322,16 @@
     }
   }
 
+  async function handleMove(activityId: string, startDate: string, endDate: string) {
+    try {
+      await updateActivity(activityId, { startDate, endDate });
+      await refreshActivities();
+      error = '';
+    } catch (e: any) {
+      error = e.message || 'Failed to move activity';
+    }
+  }
+
   function handleFocusDate(date: string) {
     focusDate = date;
   }
@@ -434,6 +444,7 @@
         ondayclick={handleDayClick}
         ondragselect={handleDragSelect}
         onresize={handleResize}
+        onmove={handleMove}
         onfocusdate={handleFocusDate}
       />
     {:else if currentView === 'year'}

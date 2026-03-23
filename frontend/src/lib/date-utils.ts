@@ -184,6 +184,17 @@ export interface DayBarSegment {
  * maintain the same vertical position across all their day cells.
  * Returns a map: dayIndex (0-6) → array of segments.
  */
+/** Get the lane assigned to a specific activity in a week. */
+export function getActivityLane(
+  activities: Activity[],
+  week: Week,
+  activityId: string,
+): number {
+  const bars = getActivityBarsForWeek(activities, week, {} as Record<string, string>);
+  const bar = bars.find(b => b.activity.id === activityId);
+  return bar?.lane ?? 0;
+}
+
 export function getDaySegmentsForWeek(
   activities: Activity[],
   week: Week,
