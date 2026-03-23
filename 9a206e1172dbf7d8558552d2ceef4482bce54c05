@@ -1,0 +1,94 @@
+.devcontainer/docker-compose.yml
+  b0f886ff0414f142 1-20
+.gitignore
+  b0f886ff0414f142 16-20
+CLAUDE.md
+  78f73468b094b081 46-51,59-69,127-159
+frontend/src/components/AgendaView.svelte
+  dffce09a7b9e3db1 1-101
+app.yaml
+  b0f886ff0414f142 8-11
+frontend/tsconfig.json
+  dffce09a7b9e3db1 1-14
+main.go
+  b0f886ff0414f142 22,24,39-40,85-100
+frontend/src/lib/date-utils.ts
+  b0f886ff0414f142 1-235
+dev
+  b0f886ff0414f142 15-49
+frontend/src/lib/api.ts
+  b0f886ff0414f142 2,4,6,8-17,44-50
+  dffce09a7b9e3db1 1,3,5,7,18-43,51-122
+frontend/src/components/QuickAdd.svelte
+  b0f886ff0414f142 48-60
+  dffce09a7b9e3db1 1-47,61-136
+frontend/svelte.config.js
+  dffce09a7b9e3db1 1-5
+.devcontainer/Dockerfile.frontend
+  b0f886ff0414f142 1-25
+frontend/package.json
+  b0f886ff0414f142 9-10
+  dffce09a7b9e3db1 1-8,11-18
+frontend/src/components/MonthView.svelte
+  b0f886ff0414f142 1-426
+frontend/index.html
+  dffce09a7b9e3db1 1-12
+docs/prd/frontend.md
+  dffce09a7b9e3db1 1-167
+frontend/src/components/ActivityForm.svelte
+  dffce09a7b9e3db1 1,3-21,24-25,27,34,39,46-51,53-61,64,66-71,95,102,106,129,151,158-176,185-224,226-229,231-288,295-318,339-344
+  b0f886ff0414f142 2,22-23,26,28-33,35-38,40-45,52,62-63,65,72-94,96-101,103-105,107-128,130-150,152-157,177-184,225,230,289-294,319-338
+frontend/src/App.svelte
+  b0f886ff0414f142 17,24,31-36,87,135-138,141-144,153,173-183,193-196,203-211,250-254,308,327-344
+  dffce09a7b9e3db1 1-16,18-23,25-30,37-86,88-134,139-140,145-152,154-172,184-192,197-202,212-249,255-307,309-326,345-357
+frontend/src/main.ts
+  dffce09a7b9e3db1 1-6
+frontend/vite.config.ts
+  dffce09a7b9e3db1 1-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "9a206e1172dbf7d8558552d2ceef4482bce54c05",
+  "prompts": {
+    "78f73468b094b081": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1faa2564-fcd5-4053-9d23-44be329f5aa2",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 50,
+      "total_deletions": 0,
+      "accepted_lines": 50,
+      "overriden_lines": 0
+    },
+    "b0f886ff0414f142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "40c9da77-12ca-4865-a9f1-4575816a6d33",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 1282,
+      "total_deletions": 448,
+      "accepted_lines": 1013,
+      "overriden_lines": 0
+    },
+    "dffce09a7b9e3db1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "584907b7-c048-4180-92e6-eaa5a0119c1f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 1244,
+      "total_deletions": 29,
+      "accepted_lines": 1050,
+      "overriden_lines": 0
+    }
+  }
+}
