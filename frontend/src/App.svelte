@@ -52,21 +52,22 @@
     loading = false;
   });
 
-  // Go-to-date state
+  // Help and go-to-date state
+  let showShortcutHelp = $state(false);
   let showGoToDate = $state(false);
   let goToDateValue = $state('');
   let goToDateInput: HTMLInputElement;
 
   // Global keyboard shortcuts
   function handleGlobalKeydown(e: KeyboardEvent) {
-    // ESC closes go-to-date popover
-    if (showGoToDate && e.key === 'Escape') {
-      showGoToDate = false;
-      return;
+    // ESC closes popovers
+    if (e.key === 'Escape') {
+      if (showGoToDate) { showGoToDate = false; return; }
+      if (showShortcutHelp) { showShortcutHelp = false; return; }
     }
 
-    // Don't trigger shortcuts if typing in an input/textarea or modal is open
-    if (modalOpen || showGoToDate) return;
+    // Don't trigger shortcuts if typing in an input/textarea or modal/popover is open
+    if (modalOpen || showGoToDate || showShortcutHelp) return;
     const tag = (e.target as HTMLElement)?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
@@ -75,19 +76,19 @@
         e.preventDefault();
         openQuickAdd();
         break;
-      case '1':
+      case 'm':
         e.preventDefault();
         currentView = 'month';
         break;
-      case '2':
+      case 'y':
         e.preventDefault();
         currentView = 'year';
         break;
-      case '3':
+      case 'd':
         e.preventDefault();
         currentView = 'day';
         break;
-      case '4':
+      case 'a':
         e.preventDefault();
         currentView = 'agenda';
         break;
@@ -98,6 +99,10 @@
       case 'g':
         e.preventDefault();
         openGoToDate();
+        break;
+      case '?':
+        e.preventDefault();
+        showShortcutHelp = !showShortcutHelp;
         break;
     }
   }
@@ -305,6 +310,28 @@
             />
           </label>
           <button class="goto-btn" onclick={handleGoToDateSubmit} disabled={!goToDateValue}>Go</button>
+        </div>
+      </div>
+    {/if}
+
+    <!-- Keyboard shortcut help -->
+    {#if showShortcutHelp}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <div class="help-overlay" onclick={() => showShortcutHelp = false}>
+        <div class="help-popover" onclick={(e) => e.stopPropagation()}>
+          <h3>Keyboard Shortcuts</h3>
+          <div class="shortcut-grid">
+            <kbd>m</kbd><span>Month view</span>
+            <kbd>y</kbd><span>Year view</span>
+            <kbd>d</kbd><span>Day view</span>
+            <kbd>a</kbd><span>Agenda view</span>
+            <kbd>t</kbd><span>Go to today</span>
+            <kbd>g</kbd><span>Go to date</span>
+            <kbd>n</kbd><span>New activity</span>
+            <kbd>?</kbd><span>Show this help</span>
+            <kbd>Esc</kbd><span>Close modal / dismiss</span>
+          </div>
         </div>
       </div>
     {/if}
@@ -549,6 +576,54 @@
 
   .goto-btn:hover { background: #555; }
   .goto-btn:disabled { opacity: 0.4; cursor: default; }
+
+  .help-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 15vh;
+    background: rgba(0, 0, 0, 0.2);
+  }
+
+  .help-popover {
+    background: white;
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    min-width: 240px;
+  }
+
+  .help-popover h3 {
+    margin: 0 0 0.75rem;
+    font-size: 1rem;
+  }
+
+  .shortcut-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.35rem 0.75rem;
+    align-items: center;
+  }
+
+  .shortcut-grid kbd {
+    background: #f3f4f6;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 0.15rem 0.4rem;
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: #555;
+    text-align: center;
+    min-width: 24px;
+  }
+
+  .shortcut-grid span {
+    font-size: 0.85rem;
+    color: #666;
+  }
 
   .error {
     color: #dc2626;
