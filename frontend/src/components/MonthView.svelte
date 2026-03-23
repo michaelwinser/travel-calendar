@@ -197,6 +197,24 @@
     }
   }
 
+  // Computed resize preview range
+  let resizePreview = $derived.by(() => {
+    if (!resizing || !resizeCurrentDate) return null;
+    let start = resizing.originalStart;
+    let end = resizing.originalEnd;
+    if (resizing.edge === 'start') {
+      start = resizeCurrentDate <= end ? resizeCurrentDate : end;
+    } else {
+      end = resizeCurrentDate >= start ? resizeCurrentDate : start;
+    }
+    return { start, end, type: resizing.activity.type, activityId: resizing.activity.id };
+  });
+
+  function isInResizeRange(dateStr: string): boolean {
+    if (!resizePreview) return false;
+    return dateStr >= resizePreview.start && dateStr <= resizePreview.end;
+  }
+
   function handleResizeMove(dateStr: string) {
     if (resizing) {
       resizeCurrentDate = dateStr;
@@ -312,7 +330,7 @@
           class="day-cell"
           class:alt-month={altMonth}
           class:today={isToday(dateStr)}
-          class:drag-selected={isInDragRange(dateStr)}
+          class:drag-selected={!resizing && isInDragRange(dateStr)}
           class:conflict={conflicts[di]}
           data-date={dateStr}
           onmousedown={(e) => handleDayMouseDown(dateStr, e)}
@@ -328,7 +346,8 @@
           <div class="bar-slots">
             {#each { length: MAX_BARS } as _, lane}
               {@const seg = daySegments.find(s => s.lane === lane)}
-              {#if seg}
+              {@const isResizingThis = seg && resizePreview && seg.activity.id === resizePreview.activityId}
+              {#if seg && !isResizingThis}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
                 <div
@@ -346,13 +365,40 @@
                     <span class="bar-label">{seg.activity.title}</span>
                   {/if}
                 </div>
+              {:else if isResizingThis && isInResizeRange(dateStr)}
+                <div
+                  class="bar-segment resize-preview"
+                  class:is-start={dateStr === resizePreview?.start}
+                  class:is-end={dateStr === resizePreview?.end}
+                  style="background: {seg?.color};"
+                >
+                  {#if dateStr === resizePreview?.start}
+                    <span class="bar-label">{seg?.activity.title}</span>
+                  {/if}
+                </div>
+              {:else if isResizingThis}
+                <div class="bar-slot-empty"></div>
               {:else}
                 <div class="bar-slot-empty"></div>
               {/if}
             {/each}
 
+            <!-- Resize preview for expanded days -->
+            {#if resizePreview && isInResizeRange(dateStr) && !daySegments.some(s => s.activity.id === resizePreview.activityId)}
+              <div
+                class="bar-segment resize-preview"
+                class:is-start={dateStr === resizePreview.start}
+                class:is-end={dateStr === resizePreview.end}
+                style="background: {ACTIVITY_COLORS[resizePreview.type]};"
+              >
+                {#if dateStr === resizePreview.start}
+                  <span class="bar-label">{resizing?.activity.title}</span>
+                {/if}
+              </div>
+            {/if}
+
             <!-- Ghost bar during drag or modal edit -->
-            {#if isDragging && isInDragRange(dateStr) && daySegments.length < MAX_BARS}
+            {#if !resizing && isDragging && isInDragRange(dateStr) && daySegments.length < MAX_BARS}
               {@const isGhostStart = dragRange && dateStr === dragRange.start}
               {@const isGhostEnd = dragRange && dateStr === dragRange.end}
               <div
@@ -545,11 +591,16 @@
   }
 
   .bar-segment.ghost {
-    background: rgba(0, 0, 0, 0.12);
-    border: 1px dashed rgba(0, 0, 0, 0.2);
+    background: rgba(0, 0, 0, 0.18);
+    border: 1px dashed rgba(0, 0, 0, 0.3);
   }
 
   .bar-segment.modal-ghost {
+    border: 1px dashed rgba(255, 255, 255, 0.5);
+  }
+
+  .bar-segment.resize-preview {
+    opacity: 0.6;
     border: 1px dashed rgba(255, 255, 255, 0.5);
   }
 
