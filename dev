@@ -12,6 +12,41 @@ cd "$SCRIPT_DIR"
 APP_BINARY_NAME="travel"
 APP_E2E_DIR="tests/e2e"
 
+# --- Frontend build (runs in devcontainer) ---
+
+_build_frontend() {
+    echo "Building frontend..."
+    _dc_file=".devcontainer/docker-compose.yml"
+
+    docker compose -f "$_dc_file" run --rm -T frontend sh -c "
+        cd /app/frontend
+        if [ ! -d node_modules ]; then pnpm install; fi
+        pnpm build
+    "
+}
+
+# Override dev_build to include frontend
+dev_build() {
+    target="${1:-all}"
+    case "$target" in
+        all)
+            _build_frontend
+            echo "Building server..."
+            go build -o "$APP_BINARY_NAME" .
+            ;;
+        server)
+            go build -o "$APP_BINARY_NAME" .
+            ;;
+        frontend)
+            _build_frontend
+            ;;
+        *)
+            echo "Usage: ./dev build [all|server|frontend]"
+            return 1
+            ;;
+    esac
+}
+
 # Dispatch — add app-specific commands before the fallthrough
 case "${1:-help}" in
     *)  dev_dispatch "$@" ;;

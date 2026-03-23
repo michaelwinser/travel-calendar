@@ -5,6 +5,10 @@ store:
   type: sqlite
   path: data/app.db
 
+auth:
+  client_id: ${secret:google-client-id}
+  client_secret: ${secret:google-client-secret}
+
 environments:
   local:
     url: http://localhost:3000
@@ -12,6 +16,3 @@ environments:
   production:
     store:
       type: firestore
-    auth:
-      client_id: ${secret:google-client-id}
-      client_secret: ${secret:google-client-secret}

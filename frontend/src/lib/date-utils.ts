@@ -1,0 +1,235 @@
+// Pure date computation helpers for calendar views.
+// All dates are YYYY-MM-DD strings to match the API.
+
+import type { Activity } from './api';
+
+export interface Week {
+  days: string[];     // 7 YYYY-MM-DD strings, Sun-Sat
+  weekStart: string;  // ISO date of the Sunday
+}
+
+export interface ActivityBar {
+  activity: Activity;
+  startCol: number;   // 0-6 column index within the week
+  spanCols: number;   // how many columns wide
+  lane: number;       // vertical stacking position
+  startsHere: boolean; // activity starts in this week (round left)
+  endsHere: boolean;   // activity ends in this week (round right)
+}
+
+export function dateToString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export function stringToDate(s: string): Date {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+export function today(): string {
+  return dateToString(new Date());
+}
+
+export function addDays(dateStr: string, n: number): string {
+  const d = stringToDate(dateStr);
+  d.setDate(d.getDate() + n);
+  return dateToString(d);
+}
+
+/** Get the Sunday that starts the week containing the given date. */
+function weekSunday(dateStr: string): Date {
+  const d = stringToDate(dateStr);
+  d.setDate(d.getDate() - d.getDay());
+  return d;
+}
+
+/** Generate weeks covering a date range. Each week runs Sun-Sat. */
+export function getWeeksForRange(startDate: string, endDate: string): Week[] {
+  const weeks: Week[] = [];
+  const sun = weekSunday(startDate);
+  const end = stringToDate(endDate);
+
+  while (sun <= end) {
+    const days: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(sun);
+      d.setDate(d.getDate() + i);
+      days.push(dateToString(d));
+    }
+    weeks.push({ days, weekStart: days[0] });
+    sun.setDate(sun.getDate() + 7);
+  }
+  return weeks;
+}
+
+/** Get the month label for a date (e.g., "Mar 2026"). */
+export function monthLabel(dateStr: string): string {
+  const d = stringToDate(dateStr);
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+/** Get month index (0-11) for alternating shading. */
+export function monthIndex(dateStr: string): number {
+  return stringToDate(dateStr).getMonth();
+}
+
+/** Check if an activity overlaps a given date. */
+function activityOverlapsDate(a: Activity, dateStr: string): boolean {
+  return a.startDate <= dateStr && a.endDate >= dateStr;
+}
+
+/** Get the columns an activity occupies in a given week. Returns null if no overlap. */
+export function getActivityDaysInWeek(
+  activity: Activity,
+  week: Week,
+): { startCol: number; spanCols: number; startsHere: boolean; endsHere: boolean } | null {
+  const weekEnd = week.days[6];
+  const weekStart = week.days[0];
+
+  // No overlap at all
+  if (activity.endDate < weekStart || activity.startDate > weekEnd) return null;
+
+  // Clip to week boundaries
+  const effectiveStart = activity.startDate > weekStart ? activity.startDate : weekStart;
+  const effectiveEnd = activity.endDate < weekEnd ? activity.endDate : weekEnd;
+
+  const startCol = week.days.indexOf(effectiveStart);
+  const endCol = week.days.indexOf(effectiveEnd);
+  if (startCol === -1 || endCol === -1) return null;
+
+  return {
+    startCol,
+    spanCols: endCol - startCol + 1,
+    startsHere: activity.startDate >= weekStart,
+    endsHere: activity.endDate <= weekEnd,
+  };
+}
+
+/** Compute activity bars for a week with lane assignment (greedy first-fit). */
+export function getActivityBarsForWeek(
+  activities: Activity[],
+  week: Week,
+  colorMap: Record<string, string>,
+): ActivityBar[] {
+  const bars: ActivityBar[] = [];
+
+  // Get all activities that overlap this week, sorted by start date then duration (longer first)
+  const overlapping = activities
+    .map(a => ({ activity: a, span: getActivityDaysInWeek(a, week) }))
+    .filter((x): x is { activity: Activity; span: NonNullable<ReturnType<typeof getActivityDaysInWeek>> } => x.span !== null)
+    .sort((a, b) => {
+      if (a.activity.startDate !== b.activity.startDate) return a.activity.startDate < b.activity.startDate ? -1 : 1;
+      // Longer activities first for better visual stacking
+      const aDur = a.span.spanCols;
+      const bDur = b.span.spanCols;
+      return bDur - aDur;
+    });
+
+  // Greedy lane assignment
+  const lanes: boolean[][] = []; // lanes[lane][col] = occupied
+
+  for (const { activity, span } of overlapping) {
+    let lane = 0;
+    while (true) {
+      if (!lanes[lane]) lanes[lane] = Array(7).fill(false);
+      const conflict = lanes[lane].slice(span.startCol, span.startCol + span.spanCols).some(Boolean);
+      if (!conflict) break;
+      lane++;
+    }
+
+    // Mark columns as occupied
+    for (let c = span.startCol; c < span.startCol + span.spanCols; c++) {
+      lanes[lane][c] = true;
+    }
+
+    bars.push({
+      activity,
+      startCol: span.startCol,
+      spanCols: span.spanCols,
+      lane,
+      startsHere: span.startsHere,
+      endsHere: span.endsHere,
+    });
+  }
+
+  return bars;
+}
+
+/** Check if a date has conflicting activities (multiple locations). */
+export function hasConflict(dateStr: string, activities: Activity[]): boolean {
+  const locations = new Set<string>();
+  for (const a of activities) {
+    if (activityOverlapsDate(a, dateStr) && a.location) {
+      locations.add(a.location);
+    }
+  }
+  return locations.size > 1;
+}
+
+/** Per-day bar segment for rendering inside day cells. */
+export interface DayBarSegment {
+  activity: Activity;
+  lane: number;
+  isStart: boolean;
+  isEnd: boolean;
+  color: string;
+}
+
+/**
+ * Compute per-day bar segments for a week.
+ * Lane assignment is done at the week level so multi-day activities
+ * maintain the same vertical position across all their day cells.
+ * Returns a map: dayIndex (0-6) → array of segments.
+ */
+export function getDaySegmentsForWeek(
+  activities: Activity[],
+  week: Week,
+  colorMap: Record<string, string>,
+  maxLanes: number,
+): { segments: Map<number, DayBarSegment[]>; overflowPerDay: number[] } {
+  // First, do week-level lane assignment (same as getActivityBarsForWeek)
+  const bars = getActivityBarsForWeek(activities, week, colorMap);
+
+  // Build per-day segment lists
+  const segments = new Map<number, DayBarSegment[]>();
+  for (let d = 0; d < 7; d++) segments.set(d, []);
+
+  const overflowPerDay = Array(7).fill(0);
+
+  for (const bar of bars) {
+    for (let col = bar.startCol; col < bar.startCol + bar.spanCols; col++) {
+      const seg: DayBarSegment = {
+        activity: bar.activity,
+        lane: bar.lane,
+        isStart: col === bar.startCol && bar.startsHere,
+        isEnd: col === bar.startCol + bar.spanCols - 1 && bar.endsHere,
+        color: colorMap[bar.activity.type] ?? '#999',
+      };
+
+      if (bar.lane < maxLanes) {
+        segments.get(col)!.push(seg);
+      } else {
+        overflowPerDay[col]++;
+      }
+    }
+  }
+
+  // Sort segments by lane within each day
+  for (const segs of segments.values()) {
+    segs.sort((a, b) => a.lane - b.lane);
+  }
+
+  return { segments, overflowPerDay };
+}
+
+/** Get min/max date strings, or null if either is null. */
+export function minDate(a: string, b: string): string {
+  return a < b ? a : b;
+}
+
+export function maxDate(a: string, b: string): string {
+  return a > b ? a : b;
+}

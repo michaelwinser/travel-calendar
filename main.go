@@ -19,7 +19,9 @@ package main
 import (
 	"bufio"
 	"context"
+	"embed"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"strings"
@@ -33,6 +35,9 @@ import (
 	"github.com/michaelwinser/travel-calendar/api"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+//go:embed frontend/dist/*
+var frontendDist embed.FS
 
 const appName = "travel-calendar"
 
@@ -76,18 +81,23 @@ func main() {
 	cli := appcli.New("travel", "Travel calendar — plan trips, detect conflicts, stay sane", setup)
 
 	cli.SetServeFunc(func() error {
-		// Routes already registered in setup() for auto-serve.
-		// Just add the root page for the web UI.
 		r := app.Router()
-		r.Get("/", app.LoginPage(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/html")
-			w.Write([]byte(`<!DOCTYPE html>
-<html><head><title>Travel Calendar</title></head>
-<body style="font-family:system-ui;max-width:800px;margin:2rem auto;padding:0 1rem">
-<h1>Travel Calendar</h1>
-<p>Signed in as ` + appbase.Email(r) + `. <a href="/api/activities">/api/activities</a></p>
-<form method="POST" action="/api/auth/logout"><button>Sign out</button></form>
-</body></html>`))
+
+		// Serve the Svelte SPA for authenticated users, login page otherwise.
+		distFS, err := fs.Sub(frontendDist, "frontend/dist")
+		if err != nil {
+			return fmt.Errorf("embedding frontend: %w", err)
+		}
+		fileServer := http.FileServer(http.FS(distFS))
+
+		// Serve static assets (JS, CSS) directly
+		r.Handle("/assets/*", fileServer)
+
+		// Root: login page if unauthenticated, SPA if authenticated
+		r.Get("/*", app.LoginPage(func(w http.ResponseWriter, r *http.Request) {
+			// Serve index.html for all routes (SPA)
+			r.URL.Path = "/"
+			fileServer.ServeHTTP(w, r)
 		}))
 
 		return app.Serve()

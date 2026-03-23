@@ -1,0 +1,20 @@
+# Frontend development environment
+#
+# Start:  docker compose -f .devcontainer/docker-compose.yml up -d frontend
+# Run:    docker compose -f .devcontainer/docker-compose.yml exec frontend sh -c "cd /app/frontend && <command>"
+# Stop:   docker compose -f .devcontainer/docker-compose.yml down
+
+services:
+  frontend:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile.frontend
+    volumes:
+      - ..:/app:cached
+      - pnpm-store:/root/.local/share/pnpm/store
+    ports:
+      - "${PORT_FRONTEND:-5173}:5173"
+    command: sleep infinity
+
+volumes:
+  pnpm-store:

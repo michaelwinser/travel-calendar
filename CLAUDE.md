@@ -43,12 +43,29 @@ travel-calendar/
 
 This app is built on `github.com/michaelwinser/appbase`. Read `../appbase/CLAUDE.md` for module docs.
 
+**The `appbase` CLI must be installed** for codegen, deploy, and secrets commands:
+```bash
+go install github.com/michaelwinser/appbase/cmd/appbase@latest
+```
+The binary is at `$(go env GOPATH)/bin/appbase`. If not on PATH, use the full path or add `$(go env GOPATH)/bin` to PATH. Do NOT use `go run ../appbase` — the module is a dependency, not a peer source checkout.
+
 **Rules:**
 - Do NOT modify appbase from this repo. If you need something new, log it in `docs/appbase-feedback.md`
 - Domain entities and store are ours; appbase provides connections, auth, CLI base, server scaffolding
 - Use `store.Collection[T]` for persistence — no raw SQL schema management
 - Use `appbase.UserID(r)` for auth in HTTP handlers
 - CLI commands MUST go through the API, never access the store directly
+
+### appbase API Patterns (current)
+
+- **Config:** `appbase.Config{LocalMode: appcli.IsLocalMode}` for CLI, `LocalMode: true` for desktop
+- **CLI commands:** Use `appcli.ClientForCommand(cmd, "travel-calendar", app.Handler())`
+- **DB path:** `cfg.DB.SQLitePath = appcli.LocalDataPath + "/app.db"` in setup()
+- **Direct store access:** Use `appcli.LocalUserID()` not `"cli-user"`
+- **SQLite driver:** `modernc.org/sqlite` (pure Go, driver name is `sqlite` not `sqlite3`)
+- **Desktop:** Use `app.LocalHandler()` with Wails, not `app.Handler()`
+
+See `../appbase/docs/migration-local-mode.md` for the full migration guide.
 
 ### Data Model
 
@@ -106,6 +123,39 @@ Use the Commit Agent for all commits when available.
 - **PRD**: `docs/prd/kinetic-ledger.md` — vision, use cases, features
 - **Technical Design**: `docs/kinetic-ledger-design.md` — data model, CLI spec, acceptance criteria
 - **Mockups**: `docs/kinetic-ledger-*.png` — UI wireframes
+
+## Development Tooling
+
+**Do not install Node.js, npm, pnpm, or frontend build tools on the host.**
+All frontend tooling runs inside the project's devcontainer.
+
+### Frontend work
+
+Never run `npm`, `npx`, `pnpm`, or `yarn` directly. Use the devcontainer:
+
+```bash
+# Start container, run command, stop container
+docker compose -f .devcontainer/docker-compose.yml up -d frontend
+docker compose -f .devcontainer/docker-compose.yml exec frontend sh -c "cd /app && <command>"
+docker compose -f .devcontainer/docker-compose.yml down
+```
+
+If the project doesn't have `.devcontainer/Dockerfile.frontend` yet, create one following the pattern in `../appbase/.devcontainer/Dockerfile.frontend`.
+
+To add a new frontend tool, add it to `.devcontainer/Dockerfile.frontend` — do not install on the host.
+
+### Frontend types
+
+TypeScript types are generated from `openapi.yaml`, not hand-written:
+
+```bash
+# Inside the devcontainer:
+npx openapi-typescript openapi.yaml -o frontend/src/lib/api-types.ts
+```
+
+Import generated types in `api.ts`: `import type { components } from './api-types'`
+
+Do not hand-write TypeScript interfaces for API request/response types.
 
 ## Principles
 

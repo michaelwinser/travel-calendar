@@ -1,0 +1,25 @@
+# Frontend development container for travel-calendar
+#
+# Provides: Node.js 20, pnpm, OpenAPI TypeScript codegen, Svelte/Vite tooling
+#
+# Usage:
+#   docker compose -f .devcontainer/docker-compose.yml up -d frontend
+#   docker compose -f .devcontainer/docker-compose.yml exec frontend sh -c "cd /app/frontend && pnpm install"
+
+FROM node:20-alpine
+
+# Install pnpm
+ENV PNPM_HOME="/root/.local/share/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+ENV SHELL="/bin/sh"
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Install OpenAPI TypeScript codegen globally
+RUN pnpm add -g openapi-typescript
+
+# Common dev tools
+RUN apk add --no-cache curl git bash
+
+WORKDIR /app
+
+CMD ["sleep", "infinity"]
