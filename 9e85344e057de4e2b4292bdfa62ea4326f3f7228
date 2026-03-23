@@ -1,0 +1,23 @@
+frontend/src/components/MonthView.svelte
+  b0f886ff0414f142 200-217,333,349-350,368-380,386-399,401,594-595,602-603
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "9e85344e057de4e2b4292bdfa62ea4326f3f7228",
+  "prompts": {
+    "b0f886ff0414f142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "40c9da77-12ca-4865-a9f1-4575816a6d33",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 56,
+      "total_deletions": 5,
+      "accepted_lines": 56,
+      "overriden_lines": 0
+    }
+  }
+}
