@@ -14,6 +14,7 @@
     endDate?: string;
     location?: string;
     notes?: string;
+    tripName?: string;
     focusText?: boolean;
     onsubmit: (data: {
       title: string;
@@ -22,6 +23,7 @@
       endDate: string;
       location: string;
       notes: string;
+      tripName: string;
       parseHistoryId?: string;
     }) => void;
     oncancel: () => void;
@@ -38,6 +40,7 @@
   let endDate = $state(props.endDate ?? '');
   let location = $state(props.location ?? '');
   let notes = $state(props.notes ?? '');
+  let tripName = $state(props.tripName ?? '');
   let error = $state('');
   let confirmingDelete = $state(false);
 
@@ -152,6 +155,7 @@
       endDate: endDate || startDate,
       location: location.trim(),
       notes: notes.trim(),
+      tripName: tripName.trim(),
       parseHistoryId: parseResult?.id,
     });
   }
@@ -227,6 +231,11 @@
       <label class={confClass('location')}>
         <span>Location</span>
         <input type="text" bind:value={location} placeholder="e.g. Brussels, Home" onfocus={handleFieldFocus} />
+      </label>
+
+      <label>
+        <span>Trip</span>
+        <input type="text" bind:value={tripName} placeholder="e.g. FOSDEM 2027" onfocus={handleFieldFocus} />
       </label>
 
       <label>

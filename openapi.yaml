@@ -216,6 +216,9 @@ components:
           type: string
         notes:
           type: string
+        tripName:
+          type: string
+          description: Optional trip grouping name (e.g., "FOSDEM 2027")
         source:
           type: string
           enum: [manual, google_calendar, system]
@@ -244,6 +247,8 @@ components:
           type: string
         notes:
           type: string
+        tripName:
+          type: string
         parseHistoryId:
           type: string
           description: Optional ID from a prior parse, to link creation to parse history
@@ -267,6 +272,8 @@ components:
         location:
           type: string
         notes:
+          type: string
+        tripName:
           type: string
 
     DateCheck:

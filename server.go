@@ -87,8 +87,12 @@ func (s *ActivityServer) CreateActivity(w http.ResponseWriter, r *http.Request) 
 	if req.Notes != nil {
 		notes = *req.Notes
 	}
+	tripName := ""
+	if req.TripName != nil {
+		tripName = *req.TripName
+	}
 
-	a, err := s.store.Create(userID, req.Title, string(req.Type), startDate, endDate, location, notes)
+	a, err := s.store.Create(userID, req.Title, string(req.Type), startDate, endDate, location, notes, tripName)
 	if err != nil {
 		server.RespondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -161,6 +165,9 @@ func (s *ActivityServer) UpdateActivity(w http.ResponseWriter, r *http.Request, 
 	}
 	if req.Notes != nil {
 		a.Notes = *req.Notes
+	}
+	if req.TripName != nil {
+		a.TripName = *req.TripName
 	}
 
 	if err := s.store.Update(a); err != nil {
@@ -343,6 +350,9 @@ func entityToAPI(a Activity) api.Activity {
 	}
 	if a.Notes != "" {
 		act.Notes = &a.Notes
+	}
+	if a.TripName != "" {
+		act.TripName = &a.TripName
 	}
 	return act
 }

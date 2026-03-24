@@ -291,6 +291,7 @@
     endDate: string;
     location: string;
     notes: string;
+    tripName: string;
     parseHistoryId?: string;
   }) {
     try {
@@ -302,6 +303,7 @@
           endDate: data.endDate !== data.startDate ? data.endDate : undefined,
           location: data.location || undefined,
           notes: data.notes || undefined,
+          tripName: data.tripName || undefined,
           parseHistoryId: data.parseHistoryId,
         });
       } else if (modalActivity) {
@@ -312,6 +314,7 @@
           endDate: data.endDate,
           location: data.location || undefined,
           notes: data.notes || undefined,
+          tripName: data.tripName || undefined,
         });
       }
       closeModal();
@@ -509,6 +512,7 @@
       endDate={modalMode === 'edit' ? modalActivity?.endDate : modalPrefill.endDate}
       location={modalMode === 'edit' ? (modalActivity?.location ?? '') : undefined}
       notes={modalMode === 'edit' ? (modalActivity?.notes ?? '') : undefined}
+      tripName={modalMode === 'edit' ? (modalActivity?.tripName ?? '') : undefined}
       focusText={modalFocusText}
       onsubmit={handleModalSubmit}
       oncancel={closeModal}

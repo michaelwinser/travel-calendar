@@ -91,6 +91,8 @@ export interface components {
             endDate: string;
             location?: string;
             notes?: string;
+            /** @description Optional trip grouping name (e.g., "FOSDEM 2027") */
+            tripName?: string;
             /** @enum {string} */
             source: "manual" | "google_calendar" | "system";
             /** Format: date-time */
@@ -109,6 +111,7 @@ export interface components {
             endDate?: string;
             location?: string;
             notes?: string;
+            tripName?: string;
             /** @description Optional ID from a prior parse, to link creation to parse history */
             parseHistoryId?: string;
         };
@@ -123,6 +126,7 @@ export interface components {
             endDate?: string;
             location?: string;
             notes?: string;
+            tripName?: string;
         };
         DateCheck: {
             /** Format: date */

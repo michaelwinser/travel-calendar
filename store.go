@@ -19,6 +19,7 @@ type Activity struct {
 	EndDate   string `json:"endDate"   store:"end_date"`
 	Location  string `json:"location"  store:"location"`
 	Notes     string `json:"notes"     store:"notes"`
+	TripName  string `json:"tripName"  store:"trip_name"`
 	Source    string `json:"source"    store:"source"`
 	CreatedAt string `json:"createdAt" store:"created_at"`
 }
@@ -50,7 +51,7 @@ func NewActivityStore(d *db.DB) (*ActivityStore, error) {
 }
 
 // Create adds a new activity.
-func (s *ActivityStore) Create(userID, title, actType, startDate, endDate, location, notes string) (*Activity, error) {
+func (s *ActivityStore) Create(userID, title, actType, startDate, endDate, location, notes, tripName string) (*Activity, error) {
 	if err := validateType(actType); err != nil {
 		return nil, err
 	}
@@ -66,6 +67,7 @@ func (s *ActivityStore) Create(userID, title, actType, startDate, endDate, locat
 		EndDate:   endDate,
 		Location:  location,
 		Notes:     notes,
+		TripName:  tripName,
 		Source:    "manual",
 		CreatedAt: time.Now().Format(time.RFC3339),
 	}
