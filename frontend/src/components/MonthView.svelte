@@ -571,7 +571,8 @@
   .bar-segment.active-drag {
     opacity: 0.7;
     z-index: 5;
-    border: 1px dashed rgba(255, 255, 255, 0.6);
+    outline: 1px dashed rgba(255, 255, 255, 0.6);
+    outline-offset: -1px;
     cursor: grabbing;
   }
 
