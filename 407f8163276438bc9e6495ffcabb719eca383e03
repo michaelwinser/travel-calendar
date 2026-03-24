@@ -1,0 +1,42 @@
+frontend/src/lib/date-utils.ts
+  b0f886ff0414f142 366-501
+frontend/src/components/TripDetailPopup.svelte
+  b0f886ff0414f142 1-142
+frontend/src/App.svelte
+  b0f886ff0414f142 506
+frontend/src/components/YearView.svelte
+  b0f886ff0414f142 3-4,6,8,13,22,26-32,41,62-67,69,91,130,144,158,162,174-175,181,183-191,194,246,252,258,260-263,271-282,311,363,383,386,394,397-398,413,415,419-428
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "407f8163276438bc9e6495ffcabb719eca383e03",
+  "prompts": {
+    "b0f886ff0414f142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "40c9da77-12ca-4865-a9f1-4575816a6d33",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 358,
+      "total_deletions": 85,
+      "accepted_lines": 358,
+      "overriden_lines": 0
+    },
+    "db0ccec4fd040162": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f91b5184-5d36-475e-a387-fb6a0cd69653",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 364,
+      "total_deletions": 0,
+      "accepted_lines": 364,
+      "overriden_lines": 0
+    }
+  }
+}
