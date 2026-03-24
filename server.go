@@ -15,9 +15,17 @@ import (
 // Ensure ActivityServer implements the generated interface.
 var _ api.ServerInterface = (*ActivityServer)(nil)
 
+// Trip color palette for auto-assignment.
+var tripColors = []string{
+	"#4f86c6", "#e07b53", "#6bb86a", "#c75ca2",
+	"#d4a843", "#5cbcb6", "#8b6cc1", "#c95454",
+	"#5a8f5a", "#c4853d",
+}
+
 // ActivityServer implements the generated ServerInterface.
 type ActivityServer struct {
 	store        *ActivityStore
+	trips        *TripStore
 	parseHistory *ParseHistoryStore
 }
 
@@ -87,12 +95,12 @@ func (s *ActivityServer) CreateActivity(w http.ResponseWriter, r *http.Request) 
 	if req.Notes != nil {
 		notes = *req.Notes
 	}
-	tripName := ""
-	if req.TripName != nil {
-		tripName = *req.TripName
+	tripID := ""
+	if req.TripId != nil {
+		tripID = *req.TripId
 	}
 
-	a, err := s.store.Create(userID, req.Title, string(req.Type), startDate, endDate, location, notes, tripName)
+	a, err := s.store.Create(userID, req.Title, string(req.Type), startDate, endDate, location, notes, tripID)
 	if err != nil {
 		server.RespondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -166,8 +174,8 @@ func (s *ActivityServer) UpdateActivity(w http.ResponseWriter, r *http.Request, 
 	if req.Notes != nil {
 		a.Notes = *req.Notes
 	}
-	if req.TripName != nil {
-		a.TripName = *req.TripName
+	if req.TripId != nil {
+		a.TripID = *req.TripId
 	}
 
 	if err := s.store.Update(a); err != nil {
@@ -320,6 +328,186 @@ func (s *ActivityServer) CheckDate(w http.ResponseWriter, r *http.Request, date 
 	})
 }
 
+// --- Trip handlers ---
+
+func (s *ActivityServer) ListTrips(w http.ResponseWriter, r *http.Request) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	trips, err := s.trips.List(userID)
+	if err != nil {
+		server.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	activities, _ := s.store.List(userID)
+
+	result := make([]api.TripSummary, 0, len(trips))
+	for _, t := range trips {
+		// Compute derived fields from activities
+		var startDate, endDate string
+		locSet := map[string]bool{}
+		count := 0
+		for _, a := range activities {
+			if a.TripID != t.ID {
+				continue
+			}
+			count++
+			if startDate == "" || a.StartDate < startDate {
+				startDate = a.StartDate
+			}
+			if endDate == "" || a.EndDate > endDate {
+				endDate = a.EndDate
+			}
+			if a.Location != "" {
+				locSet[a.Location] = true
+			}
+		}
+
+		sd, _ := time.Parse("2006-01-02", startDate)
+		ed, _ := time.Parse("2006-01-02", endDate)
+
+		locs := make([]string, 0, len(locSet))
+		for l := range locSet {
+			locs = append(locs, l)
+		}
+
+		summary := api.TripSummary{
+			Id:            t.ID,
+			Name:          t.Name,
+			Color:         t.Color,
+			StartDate:     openapi_types.Date{Time: sd},
+			EndDate:       openapi_types.Date{Time: ed},
+			ActivityCount: count,
+		}
+		if len(locs) > 0 {
+			summary.Locations = &locs
+		}
+		result = append(result, summary)
+	}
+
+	server.RespondJSON(w, http.StatusOK, result)
+}
+
+func (s *ActivityServer) CreateTrip(w http.ResponseWriter, r *http.Request) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	var req api.CreateTripRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		server.RespondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Name == "" {
+		server.RespondError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+
+	color := ""
+	if req.Color != nil {
+		color = *req.Color
+	}
+	if color == "" {
+		// Auto-assign from palette based on name hash
+		hash := 0
+		for _, ch := range req.Name {
+			hash = ((hash << 5) - hash + int(ch))
+		}
+		if hash < 0 {
+			hash = -hash
+		}
+		color = tripColors[hash%len(tripColors)]
+	}
+
+	t, err := s.trips.Create(userID, req.Name, color)
+	if err != nil {
+		server.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	createdAt, _ := time.Parse(time.RFC3339, t.CreatedAt)
+	server.RespondJSON(w, http.StatusCreated, api.Trip{
+		Id:        t.ID,
+		UserId:    t.UserID,
+		Name:      t.Name,
+		Color:     t.Color,
+		CreatedAt: createdAt,
+	})
+}
+
+func (s *ActivityServer) UpdateTrip(w http.ResponseWriter, r *http.Request, id string) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	t, err := s.trips.Get(id)
+	if err != nil || t == nil || t.UserID != userID {
+		server.RespondError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	var req api.UpdateTripRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		server.RespondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Name != nil {
+		t.Name = *req.Name
+	}
+	if req.Color != nil {
+		t.Color = *req.Color
+	}
+
+	if err := s.trips.Update(t); err != nil {
+		server.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	createdAt, _ := time.Parse(time.RFC3339, t.CreatedAt)
+	server.RespondJSON(w, http.StatusOK, api.Trip{
+		Id:        t.ID,
+		UserId:    t.UserID,
+		Name:      t.Name,
+		Color:     t.Color,
+		CreatedAt: createdAt,
+	})
+}
+
+func (s *ActivityServer) DeleteTrip(w http.ResponseWriter, r *http.Request, id string) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	t, err := s.trips.Get(id)
+	if err != nil || t == nil || t.UserID != userID {
+		server.RespondError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	// Unlink activities from this trip
+	activities, _ := s.store.List(userID)
+	for _, a := range activities {
+		if a.TripID == id {
+			a.TripID = ""
+			s.store.Update(&a)
+		}
+	}
+
+	if err := s.trips.Delete(id); err != nil {
+		server.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	server.RespondJSON(w, http.StatusOK, api.OkResponse{Ok: ptr("true")})
+}
+
 // --- helpers ---
 
 func requireUser(w http.ResponseWriter, r *http.Request) string {
@@ -351,8 +539,8 @@ func entityToAPI(a Activity) api.Activity {
 	if a.Notes != "" {
 		act.Notes = &a.Notes
 	}
-	if a.TripName != "" {
-		act.TripName = &a.TripName
+	if a.TripID != "" {
+		act.TripId = &a.TripID
 	}
 	return act
 }

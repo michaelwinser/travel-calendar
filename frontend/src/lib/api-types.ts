@@ -75,6 +75,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/trips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List trips for the authenticated user */
+        get: operations["listTrips"];
+        put?: never;
+        /** Create a new trip */
+        post: operations["createTrip"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trips/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update a trip */
+        put: operations["updateTrip"];
+        post?: never;
+        /** Delete a trip (activities become standalone) */
+        delete: operations["deleteTrip"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -91,8 +127,8 @@ export interface components {
             endDate: string;
             location?: string;
             notes?: string;
-            /** @description Optional trip grouping name (e.g., "FOSDEM 2027") */
-            tripName?: string;
+            /** @description Optional trip ID this activity belongs to */
+            tripId?: string;
             /** @enum {string} */
             source: "manual" | "google_calendar" | "system";
             /** Format: date-time */
@@ -111,7 +147,7 @@ export interface components {
             endDate?: string;
             location?: string;
             notes?: string;
-            tripName?: string;
+            tripId?: string;
             /** @description Optional ID from a prior parse, to link creation to parse history */
             parseHistoryId?: string;
         };
@@ -126,7 +162,7 @@ export interface components {
             endDate?: string;
             location?: string;
             notes?: string;
-            tripName?: string;
+            tripId?: string;
         };
         DateCheck: {
             /** Format: date */
@@ -170,6 +206,41 @@ export interface components {
             endDate?: "high" | "medium" | "low";
             /** @enum {string} */
             location?: "high" | "medium" | "low";
+        };
+        Trip: {
+            id: string;
+            userId: string;
+            name: string;
+            /** @description Hex color for visual grouping */
+            color: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        TripSummary: {
+            id: string;
+            name: string;
+            color: string;
+            /**
+             * Format: date
+             * @description Earliest activity start date
+             */
+            startDate: string;
+            /**
+             * Format: date
+             * @description Latest activity end date
+             */
+            endDate: string;
+            locations?: string[];
+            activityCount: number;
+        };
+        CreateTripRequest: {
+            name: string;
+            /** @description Hex color (auto-assigned if omitted) */
+            color?: string;
+        };
+        UpdateTripRequest: {
+            name?: string;
+            color?: string;
         };
         OkResponse: {
             ok?: string;
@@ -393,6 +464,105 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    listTrips: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of trips with computed fields */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TripSummary"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createTrip: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTripRequest"];
+            };
+        };
+        responses: {
+            /** @description Created trip */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Trip"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    updateTrip: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTripRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated trip */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Trip"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTrip: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
 }

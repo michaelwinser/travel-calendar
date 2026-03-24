@@ -15,6 +15,10 @@ export type ParseResult = components['schemas']['ParseResult'];
 export type ParsedActivity = components['schemas']['ParsedActivity'];
 export type ParseConfidence = components['schemas']['ParseConfidence'];
 export type DateCheck = components['schemas']['DateCheck'];
+export type Trip = components['schemas']['Trip'];
+export type TripSummary = components['schemas']['TripSummary'];
+export type CreateTripRequest = components['schemas']['CreateTripRequest'];
+export type UpdateTripRequest = components['schemas']['UpdateTripRequest'];
 export type Confidence = 'high' | 'medium' | 'low';
 
 export interface AuthStatus {
@@ -107,6 +111,45 @@ export async function checkDate(date: string): Promise<DateCheck> {
   const res = await fetch(`${API_BASE}/activities/check/${date}`);
   if (!res.ok) throw new Error(`Failed to check date: ${res.statusText}`);
   return res.json();
+}
+
+// --- Trips ---
+
+export async function listTrips(): Promise<TripSummary[]> {
+  const res = await fetch(`${API_BASE}/trips`);
+  if (!res.ok) throw new Error(`Failed to list trips: ${res.statusText}`);
+  return res.json();
+}
+
+export async function createTrip(req: CreateTripRequest): Promise<Trip> {
+  const res = await fetch(`${API_BASE}/trips`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || res.statusText);
+  }
+  return res.json();
+}
+
+export async function updateTrip(id: string, req: UpdateTripRequest): Promise<Trip> {
+  const res = await fetch(`${API_BASE}/trips/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || res.statusText);
+  }
+  return res.json();
+}
+
+export async function deleteTrip(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/trips/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`Failed to delete trip: ${res.statusText}`);
 }
 
 // --- Helpers ---

@@ -14,6 +14,7 @@
     endDate?: string;
     location?: string;
     notes?: string;
+    tripId?: string;
     tripName?: string;
     focusText?: boolean;
     onsubmit: (data: {
@@ -23,6 +24,7 @@
       endDate: string;
       location: string;
       notes: string;
+      tripId: string;
       tripName: string;
       parseHistoryId?: string;
     }) => void;
@@ -155,6 +157,7 @@
       endDate: endDate || startDate,
       location: location.trim(),
       notes: notes.trim(),
+      tripId: props.tripId ?? '',
       tripName: tripName.trim(),
       parseHistoryId: parseResult?.id,
     });

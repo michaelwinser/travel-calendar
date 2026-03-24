@@ -9,6 +9,15 @@ import (
 	"github.com/michaelwinser/appbase/store"
 )
 
+// Trip groups related activities into a journey.
+type Trip struct {
+	ID        string `json:"id"        store:"id,pk"`
+	UserID    string `json:"userId"    store:"user_id,index"`
+	Name      string `json:"name"      store:"name"`
+	Color     string `json:"color"     store:"color"`
+	CreatedAt string `json:"createdAt" store:"created_at"`
+}
+
 // Activity is the primary planning entity — a span of time with a purpose and location.
 type Activity struct {
 	ID        string `json:"id"        store:"id,pk"`
@@ -19,7 +28,7 @@ type Activity struct {
 	EndDate   string `json:"endDate"   store:"end_date"`
 	Location  string `json:"location"  store:"location"`
 	Notes     string `json:"notes"     store:"notes"`
-	TripName  string `json:"tripName"  store:"trip_name"`
+	TripID    string `json:"tripId"    store:"trip_id"`
 	Source    string `json:"source"    store:"source"`
 	CreatedAt string `json:"createdAt" store:"created_at"`
 }
@@ -36,6 +45,44 @@ const (
 // ValidTypes lists all accepted activity types.
 var ValidTypes = []string{TypeTravel, TypeStay, TypeConference, TypeVacation, TypeCommitment}
 
+// TripStore handles trip persistence.
+type TripStore struct {
+	coll *store.Collection[Trip]
+}
+
+// NewTripStore creates a store backed by the given database.
+func NewTripStore(d *db.DB) (*TripStore, error) {
+	coll, err := store.NewCollection[Trip](d, "trips")
+	if err != nil {
+		return nil, err
+	}
+	return &TripStore{coll: coll}, nil
+}
+
+func (s *TripStore) Create(userID, name, color string) (*Trip, error) {
+	t := &Trip{
+		ID:        uuid.New().String(),
+		UserID:    userID,
+		Name:      name,
+		Color:     color,
+		CreatedAt: time.Now().Format(time.RFC3339),
+	}
+	if err := s.coll.Create(t); err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+func (s *TripStore) Get(id string) (*Trip, error) { return s.coll.Get(id) }
+
+func (s *TripStore) List(userID string) ([]Trip, error) {
+	return s.coll.Where("user_id", "==", userID).OrderBy("created_at", store.Asc).All()
+}
+
+func (s *TripStore) Update(t *Trip) error { return s.coll.Update(t.ID, t) }
+
+func (s *TripStore) Delete(id string) error { return s.coll.Delete(id) }
+
 // ActivityStore handles activity persistence.
 type ActivityStore struct {
 	coll *store.Collection[Activity]
@@ -51,7 +98,7 @@ func NewActivityStore(d *db.DB) (*ActivityStore, error) {
 }
 
 // Create adds a new activity.
-func (s *ActivityStore) Create(userID, title, actType, startDate, endDate, location, notes, tripName string) (*Activity, error) {
+func (s *ActivityStore) Create(userID, title, actType, startDate, endDate, location, notes, tripID string) (*Activity, error) {
 	if err := validateType(actType); err != nil {
 		return nil, err
 	}
@@ -67,7 +114,7 @@ func (s *ActivityStore) Create(userID, title, actType, startDate, endDate, locat
 		EndDate:   endDate,
 		Location:  location,
 		Notes:     notes,
-		TripName:  tripName,
+		TripID:    tripID,
 		Source:    "manual",
 		CreatedAt: time.Now().Format(time.RFC3339),
 	}

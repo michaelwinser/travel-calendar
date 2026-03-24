@@ -191,6 +191,100 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /api/trips:
+    get:
+      operationId: listTrips
+      summary: List trips for the authenticated user
+      security:
+        - session: []
+      responses:
+        '200':
+          description: List of trips with computed fields
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TripSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      operationId: createTrip
+      summary: Create a new trip
+      security:
+        - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTripRequest'
+      responses:
+        '201':
+          description: Created trip
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/trips/{id}:
+    put:
+      operationId: updateTrip
+      summary: Update a trip
+      security:
+        - session: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTripRequest'
+      responses:
+        '200':
+          description: Updated trip
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trip'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      operationId: deleteTrip
+      summary: Delete a trip (activities become standalone)
+      security:
+        - session: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
 components:
   schemas:
     Activity:
@@ -216,9 +310,9 @@ components:
           type: string
         notes:
           type: string
-        tripName:
+        tripId:
           type: string
-          description: Optional trip grouping name (e.g., "FOSDEM 2027")
+          description: Optional trip ID this activity belongs to
         source:
           type: string
           enum: [manual, google_calendar, system]
@@ -247,7 +341,7 @@ components:
           type: string
         notes:
           type: string
-        tripName:
+        tripId:
           type: string
         parseHistoryId:
           type: string
@@ -273,7 +367,7 @@ components:
           type: string
         notes:
           type: string
-        tripName:
+        tripId:
           type: string
 
     DateCheck:
@@ -354,6 +448,67 @@ components:
         location:
           type: string
           enum: [high, medium, low]
+
+    Trip:
+      type: object
+      required: [id, userId, name, color, createdAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        name:
+          type: string
+        color:
+          type: string
+          description: Hex color for visual grouping
+        createdAt:
+          type: string
+          format: date-time
+
+    TripSummary:
+      type: object
+      required: [id, name, color, startDate, endDate, activityCount]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        color:
+          type: string
+        startDate:
+          type: string
+          format: date
+          description: Earliest activity start date
+        endDate:
+          type: string
+          format: date
+          description: Latest activity end date
+        locations:
+          type: array
+          items:
+            type: string
+        activityCount:
+          type: integer
+
+    CreateTripRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        color:
+          type: string
+          description: Hex color (auto-assigned if omitted)
+
+    UpdateTripRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        color:
+          type: string
 
     OkResponse:
       type: object

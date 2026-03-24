@@ -172,9 +172,9 @@ export function hasConflict(dateStr: string, activities: Activity[]): boolean {
   let standaloneIdx = 0;
 
   for (const a of overlapping) {
-    if (a.tripName) {
-      if (!tripsSeen.has(a.tripName)) {
-        tripsSeen.add(a.tripName);
+    if (a.tripId) {
+      if (!tripsSeen.has(a.tripId)) {
+        tripsSeen.add(a.tripId);
         // Use the trip's first activity's location as representative
         sourceLocations.push(a.location!);
       }

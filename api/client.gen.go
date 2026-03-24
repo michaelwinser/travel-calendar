@@ -116,6 +116,22 @@ type ClientInterface interface {
 	UpdateActivityWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateActivity(ctx context.Context, id string, body UpdateActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListTrips request
+	ListTrips(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateTripWithBody request with any body
+	CreateTripWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateTrip(ctx context.Context, body CreateTripJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteTrip request
+	DeleteTrip(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateTripWithBody request with any body
+	UpdateTripWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateTrip(ctx context.Context, id string, body UpdateTripJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ListActivities(ctx context.Context, params *ListActivitiesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -228,6 +244,78 @@ func (c *Client) UpdateActivityWithBody(ctx context.Context, id string, contentT
 
 func (c *Client) UpdateActivity(ctx context.Context, id string, body UpdateActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateActivityRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListTrips(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListTripsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateTripWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateTripRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateTrip(ctx context.Context, body CreateTripJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateTripRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteTrip(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteTripRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateTripWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateTripRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateTrip(ctx context.Context, id string, body UpdateTripJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateTripRequest(c.Server, id, body)
 	if err != nil {
 		return nil, err
 	}
@@ -548,6 +636,154 @@ func NewUpdateActivityRequestWithBody(server string, id string, contentType stri
 	return req, nil
 }
 
+// NewListTripsRequest generates requests for ListTrips
+func NewListTripsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/trips")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateTripRequest calls the generic CreateTrip builder with application/json body
+func NewCreateTripRequest(server string, body CreateTripJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateTripRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateTripRequestWithBody generates requests for CreateTrip with any type of body
+func NewCreateTripRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/trips")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteTripRequest generates requests for DeleteTrip
+func NewDeleteTripRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/trips/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateTripRequest calls the generic UpdateTrip builder with application/json body
+func NewUpdateTripRequest(server string, id string, body UpdateTripJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateTripRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewUpdateTripRequestWithBody generates requests for UpdateTrip with any type of body
+func NewUpdateTripRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/trips/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -617,6 +853,22 @@ type ClientWithResponsesInterface interface {
 	UpdateActivityWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateActivityResponse, error)
 
 	UpdateActivityWithResponse(ctx context.Context, id string, body UpdateActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateActivityResponse, error)
+
+	// ListTripsWithResponse request
+	ListTripsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListTripsResponse, error)
+
+	// CreateTripWithBodyWithResponse request with any body
+	CreateTripWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateTripResponse, error)
+
+	CreateTripWithResponse(ctx context.Context, body CreateTripJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTripResponse, error)
+
+	// DeleteTripWithResponse request
+	DeleteTripWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteTripResponse, error)
+
+	// UpdateTripWithBodyWithResponse request with any body
+	UpdateTripWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateTripResponse, error)
+
+	UpdateTripWithResponse(ctx context.Context, id string, body UpdateTripJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateTripResponse, error)
 }
 
 type ListActivitiesResponse struct {
@@ -786,6 +1038,101 @@ func (r UpdateActivityResponse) StatusCode() int {
 	return 0
 }
 
+type ListTripsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]TripSummary
+	JSON401      *Unauthorized
+}
+
+// Status returns HTTPResponse.Status
+func (r ListTripsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListTripsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateTripResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *Trip
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateTripResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateTripResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteTripResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OkResponse
+	JSON401      *Unauthorized
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteTripResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteTripResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateTripResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *Trip
+	JSON401      *Unauthorized
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateTripResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateTripResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 // ListActivitiesWithResponse request returning *ListActivitiesResponse
 func (c *ClientWithResponses) ListActivitiesWithResponse(ctx context.Context, params *ListActivitiesParams, reqEditors ...RequestEditorFn) (*ListActivitiesResponse, error) {
 	rsp, err := c.ListActivities(ctx, params, reqEditors...)
@@ -871,6 +1218,58 @@ func (c *ClientWithResponses) UpdateActivityWithResponse(ctx context.Context, id
 		return nil, err
 	}
 	return ParseUpdateActivityResponse(rsp)
+}
+
+// ListTripsWithResponse request returning *ListTripsResponse
+func (c *ClientWithResponses) ListTripsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListTripsResponse, error) {
+	rsp, err := c.ListTrips(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListTripsResponse(rsp)
+}
+
+// CreateTripWithBodyWithResponse request with arbitrary body returning *CreateTripResponse
+func (c *ClientWithResponses) CreateTripWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateTripResponse, error) {
+	rsp, err := c.CreateTripWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateTripResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateTripWithResponse(ctx context.Context, body CreateTripJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTripResponse, error) {
+	rsp, err := c.CreateTrip(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateTripResponse(rsp)
+}
+
+// DeleteTripWithResponse request returning *DeleteTripResponse
+func (c *ClientWithResponses) DeleteTripWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteTripResponse, error) {
+	rsp, err := c.DeleteTrip(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteTripResponse(rsp)
+}
+
+// UpdateTripWithBodyWithResponse request with arbitrary body returning *UpdateTripResponse
+func (c *ClientWithResponses) UpdateTripWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateTripResponse, error) {
+	rsp, err := c.UpdateTripWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateTripResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateTripWithResponse(ctx context.Context, id string, body UpdateTripJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateTripResponse, error) {
+	rsp, err := c.UpdateTrip(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateTripResponse(rsp)
 }
 
 // ParseListActivitiesResponse parses an HTTP response from a ListActivitiesWithResponse call
@@ -1126,6 +1525,159 @@ func ParseUpdateActivityResponse(rsp *http.Response) (*UpdateActivityResponse, e
 			return nil, err
 		}
 		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListTripsResponse parses an HTTP response from a ListTripsWithResponse call
+func ParseListTripsResponse(rsp *http.Response) (*ListTripsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListTripsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []TripSummary
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateTripResponse parses an HTTP response from a CreateTripWithResponse call
+func ParseCreateTripResponse(rsp *http.Response) (*CreateTripResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateTripResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Trip
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteTripResponse parses an HTTP response from a DeleteTripWithResponse call
+func ParseDeleteTripResponse(rsp *http.Response) (*DeleteTripResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteTripResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OkResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateTripResponse parses an HTTP response from a UpdateTripWithResponse call
+func ParseUpdateTripResponse(rsp *http.Response) (*UpdateTripResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateTripResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Trip
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest Unauthorized

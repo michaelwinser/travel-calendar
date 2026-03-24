@@ -45,6 +45,7 @@ const cliName = "travel"
 var (
 	app          *appbase.App
 	activities   *ActivityStore
+	trips        *TripStore
 	parseHistory *ParseHistoryStore
 )
 
@@ -66,13 +67,17 @@ func setup() error {
 	if err != nil {
 		return err
 	}
+	trips, err = NewTripStore(app.DB())
+	if err != nil {
+		return err
+	}
 	parseHistory, err = NewParseHistoryStore(app.DB())
 	if err != nil {
 		return err
 	}
 
 	// Register API routes
-	activityServer := &ActivityServer{store: activities, parseHistory: parseHistory}
+	activityServer := &ActivityServer{store: activities, trips: trips, parseHistory: parseHistory}
 	api.HandlerFromMux(activityServer, app.Server().Router())
 
 	return nil

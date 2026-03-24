@@ -9,9 +9,12 @@
     createActivity,
     updateActivity,
     deleteActivity,
+    listTrips,
+    createTrip,
     type Activity,
     type ActivityType,
     type AuthStatus,
+    type TripSummary,
   } from './lib/api';
   import AgendaView from './components/AgendaView.svelte';
   import MonthView from './components/MonthView.svelte';
@@ -23,6 +26,7 @@
 
   let auth = $state<AuthStatus>({ loggedIn: false });
   let activities = $state<Activity[]>([]);
+  let tripsCache = $state<TripSummary[]>([]);
   let loading = $state(true);
   let error = $state('');
 
@@ -218,6 +222,7 @@
 
   async function refreshActivities() {
     activities = await listActivities();
+    tripsCache = await listTrips();
   }
 
   async function handleLogin() {
@@ -284,6 +289,21 @@
 
   // --- CRUD ---
 
+  async function resolveTripId(tripName: string, existingTripId?: string): Promise<string | undefined> {
+    if (!tripName) return undefined;
+    // If we already have a trip ID and the name matches, keep it
+    if (existingTripId) {
+      const existing = tripsCache.find(t => t.id === existingTripId);
+      if (existing && existing.name === tripName) return existingTripId;
+    }
+    // Look up by name
+    const found = tripsCache.find(t => t.name === tripName);
+    if (found) return found.id;
+    // Create new trip
+    const newTrip = await createTrip({ name: tripName });
+    return newTrip.id;
+  }
+
   async function handleModalSubmit(data: {
     title: string;
     type: ActivityType;
@@ -291,10 +311,13 @@
     endDate: string;
     location: string;
     notes: string;
+    tripId: string;
     tripName: string;
     parseHistoryId?: string;
   }) {
     try {
+      const tripId = await resolveTripId(data.tripName, data.tripId || undefined);
+
       if (modalMode === 'create') {
         await createActivity({
           title: data.title,
@@ -303,7 +326,7 @@
           endDate: data.endDate !== data.startDate ? data.endDate : undefined,
           location: data.location || undefined,
           notes: data.notes || undefined,
-          tripName: data.tripName || undefined,
+          tripId: tripId,
           parseHistoryId: data.parseHistoryId,
         });
       } else if (modalActivity) {
@@ -314,7 +337,7 @@
           endDate: data.endDate,
           location: data.location || undefined,
           notes: data.notes || undefined,
-          tripName: data.tripName || undefined,
+          tripId: tripId ?? '',
         });
       }
       closeModal();
@@ -498,7 +521,7 @@
         onfocusdate={handleFocusDate}
       />
     {:else if currentView === 'agenda'}
-      <AgendaView {activities} onedit={handleEdit} />
+      <AgendaView {activities} trips={tripsCache} onedit={handleEdit} />
     {/if}
   {/if}
 
@@ -512,7 +535,8 @@
       endDate={modalMode === 'edit' ? modalActivity?.endDate : modalPrefill.endDate}
       location={modalMode === 'edit' ? (modalActivity?.location ?? '') : undefined}
       notes={modalMode === 'edit' ? (modalActivity?.notes ?? '') : undefined}
-      tripName={modalMode === 'edit' ? (modalActivity?.tripName ?? '') : undefined}
+      tripId={modalMode === 'edit' ? (modalActivity?.tripId ?? '') : undefined}
+      tripName={modalMode === 'edit' ? (tripsCache.find(t => t.id === modalActivity?.tripId)?.name ?? '') : undefined}
       focusText={modalFocusText}
       onsubmit={handleModalSubmit}
       oncancel={closeModal}

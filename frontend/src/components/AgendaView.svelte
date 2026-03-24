@@ -1,16 +1,18 @@
 <script lang="ts">
-  import { ACTIVITY_COLORS, type Activity } from '../lib/api';
+  import { ACTIVITY_COLORS, type Activity, type TripSummary } from '../lib/api';
 
   interface Props {
     activities: Activity[];
+    trips: TripSummary[];
     onedit: (activity: Activity) => void;
   }
 
-  let { activities, onedit }: Props = $props();
+  let { activities, trips, onedit }: Props = $props();
 
-  // Group activities: trip activities grouped under headers, standalone at top level
   interface AgendaGroup {
+    tripId: string | null;
     tripName: string | null;
+    tripColor: string | null;
     activities: Activity[];
     startDate: string;
     endDate: string;
@@ -22,10 +24,10 @@
     const standalone: Activity[] = [];
 
     for (const a of activities) {
-      if (a.tripName) {
-        const list = tripMap.get(a.tripName);
+      if (a.tripId) {
+        const list = tripMap.get(a.tripId);
         if (list) list.push(a);
-        else tripMap.set(a.tripName, [a]);
+        else tripMap.set(a.tripId, [a]);
       } else {
         standalone.push(a);
       }
@@ -33,23 +35,24 @@
 
     const result: AgendaGroup[] = [];
 
-    // Trips first, sorted by earliest start date
-    const trips = Array.from(tripMap.entries())
-      .map(([name, acts]) => ({
-        tripName: name,
+    for (const [tripId, acts] of tripMap) {
+      const trip = trips.find(t => t.id === tripId);
+      result.push({
+        tripId,
+        tripName: trip?.name ?? 'Unknown trip',
+        tripColor: trip?.color ?? '#999',
         activities: acts,
         startDate: acts.reduce((min, a) => a.startDate < min ? a.startDate : min, acts[0].startDate),
         endDate: acts.reduce((max, a) => a.endDate > max ? a.endDate : max, acts[0].endDate),
-        locations: [...new Set(acts.map(a => a.location).filter(Boolean))],
-      }))
-      .sort((a, b) => a.startDate < b.startDate ? -1 : 1);
+        locations: [...new Set(acts.map(a => a.location).filter(Boolean))] as string[],
+      });
+    }
 
-    result.push(...trips);
-
-    // Standalone activities as individual groups
     for (const a of standalone) {
       result.push({
+        tripId: null,
         tripName: null,
+        tripColor: null,
         activities: [a],
         startDate: a.startDate,
         endDate: a.endDate,
@@ -57,9 +60,7 @@
       });
     }
 
-    // Sort all groups by start date
     result.sort((a, b) => a.startDate < b.startDate ? -1 : 1);
-
     return result;
   });
 
@@ -79,9 +80,9 @@
 {:else}
   <div class="agenda">
     {#each groups as group}
-      {#if group.tripName}
+      {#if group.tripId}
         <!-- Trip group -->
-        <div class="trip-header">
+        <div class="trip-header" style="border-left: 4px solid {group.tripColor};">
           <span class="trip-name">{group.tripName}</span>
           <span class="trip-dates">{formatDateRange(group.startDate, group.endDate)}</span>
           {#if group.locations.length > 0}
