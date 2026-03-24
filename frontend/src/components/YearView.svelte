@@ -1,15 +1,16 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { ACTIVITY_COLORS, type Activity } from '../lib/api';
-  import Tooltip from './Tooltip.svelte';
+  import { ACTIVITY_COLORS, type Activity, type TripSummary } from '../lib/api';
+  import TripDetailPopup from './TripDetailPopup.svelte';
   import {
-    today, addDays, getMonthsForRange, getYearBarsForMonth,
+    today, addDays, getMonthsForRange, getTripBarsForMonth,
     minDate, maxDate, hasConflict,
-    type YearMonth, type YearBar,
+    type YearMonth, type TripYearBar,
   } from '../lib/date-utils';
 
   interface Props {
     activities: Activity[];
+    trips: TripSummary[];
     initialDate?: string;
     onedit: (activity: Activity) => void;
     ondayclick: (date: string) => void;
@@ -18,22 +19,26 @@
     onfocusdate?: (date: string) => void;
   }
 
-  let { activities, initialDate, onedit, ondayclick, ondragselect, onswitchtomonth, onfocusdate }: Props = $props();
+  let { activities, trips, initialDate, onedit, ondayclick, ondragselect, onswitchtomonth, onfocusdate }: Props = $props();
 
   const MAX_BAR_LANES = 3;
 
-  // Show 6 months back, 12 months forward
+  // Build trip lookup
+  let tripLookup = $derived.by(() => {
+    const map = new Map<string, { name: string; color: string }>();
+    for (const t of trips) map.set(t.id, { name: t.name, color: t.color });
+    return map;
+  });
+
   let rangeStart = $state(addDays(today(), -180));
   let rangeEnd = $state(addDays(today(), 365));
 
   let months = $derived(getMonthsForRange(rangeStart, rangeEnd));
 
-  // Precompute bars and conflicts per month
-  // Note: client-side conflict detection is a stopgap — will migrate to backend API (#60)
   let monthData = $derived(
     months.map(m => ({
       month: m,
-      bars: getYearBarsForMonth(activities, m, ACTIVITY_COLORS, MAX_BAR_LANES),
+      bars: getTripBarsForMonth(activities, m, tripLookup, ACTIVITY_COLORS, MAX_BAR_LANES),
       conflicts: new Set(m.days.filter(d => hasConflict(d, activities))),
     }))
   );
@@ -54,7 +59,14 @@
     return dateStr >= dragRange.start && dateStr <= dragRange.end;
   }
 
+  // Trip detail popup
+  let popupBar = $state<TripYearBar | null>(null);
+  let popupX = $state(0);
+  let popupY = $state(0);
+
+  // Scroll
   let scrollEl: HTMLElement;
+  let scrollDebounce: ReturnType<typeof setTimeout> | undefined;
 
   onMount(async () => {
     await tick();
@@ -76,14 +88,11 @@
     });
   }
 
-  export function scrollToToday() {
-    scrollToDate(today());
-  }
+  export function scrollToToday() { scrollToDate(today()); }
 
   export function scrollAction(action: 'pageDown' | 'pageUp' | 'nextActivity' | 'prevActivity') {
     if (!scrollEl) return;
     const { clientHeight } = scrollEl;
-
     if (action === 'pageDown') {
       scrollEl.scrollBy({ top: clientHeight * 0.8, behavior: 'smooth' });
     } else if (action === 'pageUp') {
@@ -93,7 +102,6 @@
       if (!bars.length) return;
       const containerTop = scrollEl.getBoundingClientRect().top;
       const center = containerTop + clientHeight / 2;
-
       if (action === 'nextActivity') {
         for (const bar of bars) {
           if (bar.getBoundingClientRect().top > center + 10) {
@@ -113,25 +121,17 @@
     }
   }
 
-  let scrollDebounce: ReturnType<typeof setTimeout> | undefined;
-
   function handleScroll() {
     if (!scrollEl) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollEl;
-
     if (scrollTop < 200) {
       const prevHeight = scrollEl.scrollHeight;
       rangeStart = addDays(rangeStart, -180);
-      tick().then(() => {
-        const newHeight = scrollEl.scrollHeight;
-        scrollEl.scrollTop += newHeight - prevHeight;
-      });
+      tick().then(() => { scrollEl.scrollTop += scrollEl.scrollHeight - prevHeight; });
     }
-
     if (scrollHeight - scrollTop - clientHeight < 200) {
       rangeEnd = addDays(rangeEnd, 180);
     }
-
     if (onfocusdate) {
       clearTimeout(scrollDebounce);
       scrollDebounce = setTimeout(() => reportTopDate(), 500);
@@ -141,8 +141,7 @@
   function reportTopDate() {
     if (!scrollEl || !onfocusdate) return;
     const containerTop = scrollEl.getBoundingClientRect().top;
-    const rows = scrollEl.querySelectorAll('[data-month-contains]');
-    for (const el of rows) {
+    for (const el of scrollEl.querySelectorAll('[data-month-contains]')) {
       if (el.getBoundingClientRect().top >= containerTop) {
         const month = el.getAttribute('data-month-contains');
         if (month) { onfocusdate(month + '-01'); return; }
@@ -156,13 +155,11 @@
     dragCurrentDate = dateStr;
     isDragging = true;
     e.preventDefault();
-    e.stopPropagation(); // prevent month-row click
+    e.stopPropagation();
   }
 
   function handleDayMouseEnter(dateStr: string) {
-    if (isDragging) {
-      dragCurrentDate = dateStr;
-    }
+    if (isDragging) dragCurrentDate = dateStr;
   }
 
   function handleMouseUp() {
@@ -172,50 +169,29 @@
       dragCurrentDate = null;
       return;
     }
-
     const start = minDate(dragStartDate, dragCurrentDate);
     const end = maxDate(dragStartDate, dragCurrentDate);
-
-    if (start === end) {
-      ondayclick(start);
-    } else {
-      ondragselect(start, end);
-    }
-
+    if (start === end) ondayclick(start);
+    else ondragselect(start, end);
     isDragging = false;
     dragStartDate = null;
     dragCurrentDate = null;
   }
 
-  function handleBarClick(activity: Activity, e: MouseEvent) {
+  function handleBarClick(bar: TripYearBar, e: MouseEvent) {
     e.stopPropagation();
-    tooltipActivity = null;
-    onedit(activity);
+    if (bar.tripId === null && bar.activities.length === 1) {
+      // Standalone activity — open edit directly
+      onedit(bar.activities[0]);
+    } else {
+      // Trip — show detail popup
+      popupBar = bar;
+      popupX = e.clientX;
+      popupY = e.clientY;
+    }
   }
 
-  // Tooltip state
-  let tooltipActivity = $state<Activity | null>(null);
-  let tooltipX = $state(0);
-  let tooltipY = $state(0);
-
-  function handleBarEnter(activity: Activity, e: MouseEvent) {
-    tooltipActivity = activity;
-    tooltipX = e.clientX;
-    tooltipY = e.clientY;
-  }
-
-  function handleBarMove(e: MouseEvent) {
-    tooltipX = e.clientX;
-    tooltipY = e.clientY;
-  }
-
-  function handleBarLeave() {
-    tooltipActivity = null;
-  }
-
-  function isToday(dateStr: string): boolean {
-    return dateStr === today();
-  }
+  function isToday(dateStr: string): boolean { return dateStr === today(); }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -227,13 +203,10 @@
   onmouseleave={handleMouseUp}
 >
   {#each monthData as { month: m, bars, conflicts } (m.label)}
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div
       class="month-row"
       data-month-contains="{m.year}-{String(m.month + 1).padStart(2, '0')}"
     >
-      <!-- Month label (click to switch to month view) -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <div class="month-name" onclick={() => onswitchtomonth(m.days[0])}>
@@ -241,9 +214,7 @@
         <span class="month-name-year">{m.year}</span>
       </div>
 
-      <!-- Day grid: numbers + bar lanes -->
       <div class="day-grid" style="--cols: {m.days.length}">
-        <!-- Day numbers (interactive for click/drag) -->
         {#each m.days as dateStr, di}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
@@ -272,23 +243,24 @@
           {/if}
         {/if}
 
-        <!-- Activity bars -->
+        <!-- Trip bars -->
         {#each bars as bar}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <div
             class="year-bar"
+            class:is-trip={bar.tripId !== null}
             style="
               grid-column: {bar.startDay + 1} / span {bar.spanDays};
               grid-row: {bar.lane + 2};
               background: {bar.color};
             "
-            onclick={(e) => handleBarClick(bar.activity, e)}
-            onmouseenter={(e) => handleBarEnter(bar.activity, e)}
-            onmousemove={handleBarMove}
-            onmouseleave={handleBarLeave}
+            onclick={(e) => handleBarClick(bar, e)}
           >
-            <span class="year-bar-label">{bar.activity.title}</span>
+            <span class="year-bar-label">{bar.tripName}</span>
+            {#if bar.activityCount > 1}
+              <span class="year-bar-count">{bar.activityCount}</span>
+            {/if}
           </div>
         {/each}
       </div>
@@ -296,7 +268,18 @@
   {/each}
 </div>
 
-<Tooltip activity={tooltipActivity} x={tooltipX} y={tooltipY} />
+<!-- Trip detail popup -->
+{#if popupBar}
+  <TripDetailPopup
+    tripName={popupBar.tripName}
+    color={popupBar.color}
+    activities={popupBar.activities}
+    x={popupX}
+    y={popupY}
+    {onedit}
+    onclose={() => popupBar = null}
+  />
+{/if}
 
 <style>
   .year-view {
@@ -325,9 +308,7 @@
     cursor: pointer;
   }
 
-  .month-name:hover {
-    color: #3b82f6;
-  }
+  .month-name:hover { color: #3b82f6; }
 
   .month-name-month {
     display: block;
@@ -379,9 +360,7 @@
     margin: 0 auto;
   }
 
-  .day-num.weekend {
-    color: #ccc;
-  }
+  .day-num.weekend { color: #ccc; }
 
   .day-num.conflict {
     color: #dc2626;
@@ -401,10 +380,10 @@
   }
 
   .year-bar {
-    height: 14px;
+    height: 16px;
     display: flex;
     align-items: center;
-    padding: 0 3px;
+    padding: 0 4px;
     border-radius: 3px;
     margin: 1px 1px;
     overflow: hidden;
@@ -412,6 +391,11 @@
     cursor: pointer;
     z-index: 1;
     position: relative;
+    gap: 3px;
+  }
+
+  .year-bar.is-trip {
+    height: 18px;
   }
 
   .year-bar.ghost {
@@ -426,11 +410,21 @@
   }
 
   .year-bar-label {
-    font-size: 0.55rem;
+    font-size: 0.6rem;
     color: white;
-    font-weight: 500;
+    font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex: 1;
+  }
+
+  .year-bar-count {
+    font-size: 0.5rem;
+    color: rgba(255, 255, 255, 0.8);
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 3px;
+    padding: 0 3px;
+    flex-shrink: 0;
   }
 </style>

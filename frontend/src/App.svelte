@@ -503,6 +503,7 @@
       <YearView
         bind:this={yearView}
         {activities}
+        trips={tripsCache}
         initialDate={focusDate}
         onedit={handleEdit}
         ondayclick={handleDayClick}

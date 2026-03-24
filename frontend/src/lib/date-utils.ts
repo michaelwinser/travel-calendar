@@ -363,6 +363,142 @@ export function getYearBarsForMonth(
   return bars;
 }
 
+/** Trip-level bar for the year view. */
+export interface TripYearBar {
+  tripId: string | null;  // null for standalone activities
+  tripName: string;
+  color: string;
+  startDay: number;
+  spanDays: number;
+  lane: number;
+  activityCount: number;
+  activities: Activity[];
+}
+
+/** Compute trip-level bars for a month in the year view.
+ *  Each trip becomes one bar spanning its activities' date range.
+ *  Standalone activities become individual bars. */
+export function getTripBarsForMonth(
+  activities: Activity[],
+  month: YearMonth,
+  tripColors: Map<string, { name: string; color: string }>,
+  activityColors: Record<string, string>,
+  maxLanes: number,
+): TripYearBar[] {
+  const monthStart = month.days[0];
+  const monthEnd = month.days[month.days.length - 1];
+
+  // Group activities by trip
+  const tripGroups = new Map<string, Activity[]>();
+  const standalone: Activity[] = [];
+
+  for (const a of activities) {
+    if (a.endDate < monthStart || a.startDate > monthEnd) continue;
+    if (a.tripId) {
+      const list = tripGroups.get(a.tripId);
+      if (list) list.push(a);
+      else tripGroups.set(a.tripId, [a]);
+    } else {
+      standalone.push(a);
+    }
+  }
+
+  // Build bar entries (trips + standalone), each with their month span
+  interface BarEntry {
+    tripId: string | null;
+    name: string;
+    color: string;
+    startDay: number;
+    spanDays: number;
+    activityCount: number;
+    activities: Activity[];
+  }
+
+  const entries: BarEntry[] = [];
+
+  for (const [tripId, acts] of tripGroups) {
+    const trip = tripColors.get(tripId);
+    let earliest = acts[0].startDate;
+    let latest = acts[0].endDate;
+    for (const a of acts) {
+      if (a.startDate < earliest) earliest = a.startDate;
+      if (a.endDate > latest) latest = a.endDate;
+    }
+
+    const effectiveStart = earliest > monthStart ? earliest : monthStart;
+    const effectiveEnd = latest < monthEnd ? latest : monthEnd;
+    const startDay = month.days.indexOf(effectiveStart);
+    const endDay = month.days.indexOf(effectiveEnd);
+    if (startDay === -1 || endDay === -1) continue;
+
+    entries.push({
+      tripId,
+      name: trip?.name ?? 'Trip',
+      color: trip?.color ?? '#999',
+      startDay,
+      spanDays: endDay - startDay + 1,
+      activityCount: acts.length,
+      activities: acts,
+    });
+  }
+
+  for (const a of standalone) {
+    const effectiveStart = a.startDate > monthStart ? a.startDate : monthStart;
+    const effectiveEnd = a.endDate < monthEnd ? a.endDate : monthEnd;
+    const startDay = month.days.indexOf(effectiveStart);
+    const endDay = month.days.indexOf(effectiveEnd);
+    if (startDay === -1 || endDay === -1) continue;
+
+    entries.push({
+      tripId: null,
+      name: a.title,
+      color: activityColors[a.type] ?? '#999',
+      startDay,
+      spanDays: endDay - startDay + 1,
+      activityCount: 1,
+      activities: [a],
+    });
+  }
+
+  // Sort by start day, then longer first
+  entries.sort((a, b) => {
+    if (a.startDay !== b.startDay) return a.startDay - b.startDay;
+    return b.spanDays - a.spanDays;
+  });
+
+  // Lane assignment
+  const lanes: boolean[][] = [];
+  const bars: TripYearBar[] = [];
+
+  for (const entry of entries) {
+    let lane = 0;
+    while (lane < maxLanes) {
+      if (!lanes[lane]) lanes[lane] = Array(month.days.length).fill(false);
+      const conflict = lanes[lane].slice(entry.startDay, entry.startDay + entry.spanDays).some(Boolean);
+      if (!conflict) break;
+      lane++;
+    }
+    if (lane >= maxLanes) continue;
+
+    for (let d = entry.startDay; d < entry.startDay + entry.spanDays; d++) {
+      lanes[lane][d] = true;
+    }
+
+    bars.push({
+      tripId: entry.tripId,
+      tripName: entry.name,
+      color: entry.color,
+      startDay: entry.startDay,
+      spanDays: entry.spanDays,
+      lane,
+      activityCount: entry.activityCount,
+      activities: entry.activities,
+    });
+  }
+
+  return bars;
+}
+
 /** Get min/max date strings, or null if either is null. */
 export function minDate(a: string, b: string): string {
   return a < b ? a : b;
