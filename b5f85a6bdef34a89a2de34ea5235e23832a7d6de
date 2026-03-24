@@ -1,0 +1,39 @@
+store.go
+  b0f886ff0414f142 12-20,31,48-85,101,117
+frontend/src/lib/date-utils.ts
+  b0f886ff0414f142 175-177
+frontend/src/components/ActivityModal.svelte
+  b0f886ff0414f142 17,27,160
+frontend/src/App.svelte
+  b0f886ff0414f142 12-13,17,29,225,292-306,314,319-320,329,340,524,538-539
+server.go
+  b0f886ff0414f142 18-24,28,98-100,103,177-178,331-510,542-543
+frontend/src/components/AgendaView.svelte
+  b0f886ff0414f142 2,6,10,13,15,27-28,30,38-43,47-49,53,55,83,85
+openapi.yaml
+  b0f886ff0414f142 194-287,313,315,344,370,452-512
+frontend/src/lib/api.ts
+  b0f886ff0414f142 18-21,116-154
+main.go
+  b0f886ff0414f142 48,70-73,80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "b5f85a6bdef34a89a2de34ea5235e23832a7d6de",
+  "prompts": {
+    "b0f886ff0414f142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "40c9da77-12ca-4865-a9f1-4575816a6d33",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 509,
+      "total_deletions": 43,
+      "accepted_lines": 509,
+      "overriden_lines": 0
+    }
+  }
+}
