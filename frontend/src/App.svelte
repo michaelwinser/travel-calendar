@@ -165,6 +165,22 @@
         e.preventDefault();
         openGoToDate();
         break;
+      case 'j':
+        e.preventDefault();
+        scrollCurrentView('pageDown');
+        break;
+      case 'k':
+        e.preventDefault();
+        scrollCurrentView('pageUp');
+        break;
+      case 'J':
+        e.preventDefault();
+        scrollCurrentView('nextActivity');
+        break;
+      case 'K':
+        e.preventDefault();
+        scrollCurrentView('prevActivity');
+        break;
       case '?':
         e.preventDefault();
         showShortcutHelp = !showShortcutHelp;
@@ -177,6 +193,12 @@
     monthView?.scrollToToday();
     dayView?.scrollToToday();
     yearView?.scrollToToday();
+  }
+
+  function scrollCurrentView(action: 'pageDown' | 'pageUp' | 'nextActivity' | 'prevActivity') {
+    if (currentView === 'month') monthView?.scrollAction(action);
+    else if (currentView === 'day') dayView?.scrollAction(action);
+    else if (currentView === 'year') yearView?.scrollAction(action);
   }
 
   function openGoToDate() {
@@ -423,6 +445,10 @@
             <kbd>t</kbd><span>Go to today</span>
             <kbd>g</kbd><span>Go to date</span>
             <kbd>n</kbd><span>New activity</span>
+            <kbd>j</kbd><span>Page down</span>
+            <kbd>k</kbd><span>Page up</span>
+            <kbd>J</kbd><span>Next activity</span>
+            <kbd>K</kbd><span>Previous activity</span>
             <kbd>?</kbd><span>Show this help</span>
             <kbd>Esc</kbd><span>Close modal / dismiss</span>
           </div>

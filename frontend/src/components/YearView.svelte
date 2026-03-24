@@ -80,6 +80,39 @@
     scrollToDate(today());
   }
 
+  export function scrollAction(action: 'pageDown' | 'pageUp' | 'nextActivity' | 'prevActivity') {
+    if (!scrollEl) return;
+    const { clientHeight } = scrollEl;
+
+    if (action === 'pageDown') {
+      scrollEl.scrollBy({ top: clientHeight * 0.8, behavior: 'smooth' });
+    } else if (action === 'pageUp') {
+      scrollEl.scrollBy({ top: -clientHeight * 0.8, behavior: 'smooth' });
+    } else {
+      const bars = scrollEl.querySelectorAll('.year-bar:not(.ghost)');
+      if (!bars.length) return;
+      const containerTop = scrollEl.getBoundingClientRect().top;
+      const center = containerTop + clientHeight / 2;
+
+      if (action === 'nextActivity') {
+        for (const bar of bars) {
+          if (bar.getBoundingClientRect().top > center + 10) {
+            bar.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            return;
+          }
+        }
+      } else {
+        const arr = Array.from(bars);
+        for (let i = arr.length - 1; i >= 0; i--) {
+          if (arr[i].getBoundingClientRect().bottom < center - 10) {
+            arr[i].scrollIntoView({ block: 'center', behavior: 'smooth' });
+            return;
+          }
+        }
+      }
+    }
+  }
+
   let scrollDebounce: ReturnType<typeof setTimeout> | undefined;
 
   function handleScroll() {

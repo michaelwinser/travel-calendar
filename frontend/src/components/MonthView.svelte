@@ -141,6 +141,44 @@
 
   export function scrollToToday() { scrollToDate(today()); }
 
+  export function scrollAction(action: 'pageDown' | 'pageUp' | 'nextActivity' | 'prevActivity') {
+    if (!scrollEl) return;
+    const { clientHeight } = scrollEl;
+
+    if (action === 'pageDown') {
+      scrollEl.scrollBy({ top: clientHeight * 0.8, behavior: 'smooth' });
+    } else if (action === 'pageUp') {
+      scrollEl.scrollBy({ top: -clientHeight * 0.8, behavior: 'smooth' });
+    } else {
+      // Find rows with activity bars
+      const allBars = scrollEl.querySelectorAll('.bar-segment:not(.ghost):not(.bar-slot-empty)');
+      if (!allBars.length) return;
+
+      const containerTop = scrollEl.getBoundingClientRect().top;
+      const center = containerTop + clientHeight / 2;
+
+      if (action === 'nextActivity') {
+        for (const bar of allBars) {
+          const rect = bar.getBoundingClientRect();
+          if (rect.top > center + 10) {
+            bar.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            return;
+          }
+        }
+      } else {
+        // prevActivity — iterate in reverse
+        const arr = Array.from(allBars);
+        for (let i = arr.length - 1; i >= 0; i--) {
+          const rect = arr[i].getBoundingClientRect();
+          if (rect.bottom < center - 10) {
+            arr[i].scrollIntoView({ block: 'center', behavior: 'smooth' });
+            return;
+          }
+        }
+      }
+    }
+  }
+
   function handleScroll() {
     if (!scrollEl) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollEl;
