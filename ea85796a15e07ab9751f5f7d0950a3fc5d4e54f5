@@ -1,0 +1,25 @@
+.dockerignore
+  b0f886ff0414f142 41-46
+Dockerfile
+  b0f886ff0414f142 1-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "ea85796a15e07ab9751f5f7d0950a3fc5d4e54f5",
+  "prompts": {
+    "b0f886ff0414f142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "40c9da77-12ca-4865-a9f1-4575816a6d33",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 35,
+      "total_deletions": 1,
+      "accepted_lines": 35,
+      "overriden_lines": 0
+    }
+  }
+}
