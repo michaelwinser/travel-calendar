@@ -569,11 +569,12 @@
   }
 
   .bar-segment.active-drag {
-    opacity: 0.7;
+    opacity: 0.8;
     z-index: 5;
-    outline: 1px dashed rgba(255, 255, 255, 0.6);
+    outline: 2px dashed rgba(255, 255, 255, 0.9);
     outline-offset: -1px;
     cursor: grabbing;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   }
 
   .bar-segment.ghost {
