@@ -38,7 +38,12 @@ coverage/
 .nyc_output/
 
 # Claude Code
-.claude/conversations/
+.claude/
+blog/
+
+# Dev tooling
+.devcontainer/
+.pnpm-store/
 
 # Environment files (use docker-compose environment instead)
 .env
