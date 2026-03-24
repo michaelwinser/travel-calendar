@@ -1,0 +1,33 @@
+openapi.yaml
+  b0f886ff0414f142 219-221,250-251,276-277
+frontend/src/components/AgendaView.svelte
+  b0f886ff0414f142 11-65,70-73,78,81-115,127-133,145-162,165-170,185-186
+frontend/src/components/ActivityModal.svelte
+  b0f886ff0414f142 17,26,43,158,237-240
+frontend/src/App.svelte
+  b0f886ff0414f142 294,306,317,515
+store.go
+  b0f886ff0414f142 22,54,70
+server.go
+  b0f886ff0414f142 90-93,95,169-171,354-356
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "79a45b94ba23aa824b0007fcf95dee735724b561",
+  "prompts": {
+    "b0f886ff0414f142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "40c9da77-12ca-4865-a9f1-4575816a6d33",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 169,
+      "total_deletions": 16,
+      "accepted_lines": 169,
+      "overriden_lines": 0
+    }
+  }
+}
