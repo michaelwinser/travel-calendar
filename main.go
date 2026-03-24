@@ -40,6 +40,7 @@ import (
 var frontendDist embed.FS
 
 const appName = "travel-calendar"
+const cliName = "travel"
 
 var (
 	app          *appbase.App
@@ -176,7 +177,7 @@ func apiClient(cmd *cobra.Command) (client *api.ClientWithResponses, cleanup fun
 		return nil, nil, err
 	}
 
-	httpClient, baseURL, stop, err := appcli.ClientForCommand(cmd, appName, app.Handler())
+	httpClient, baseURL, stop, err := appcli.ClientForCommand(cmd, cliName, app.Handler())
 	if err != nil {
 		return nil, nil, err
 	}
