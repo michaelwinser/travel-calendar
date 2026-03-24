@@ -158,15 +158,35 @@ export function getActivityBarsForWeek(
   return bars;
 }
 
-/** Check if a date has conflicting activities (multiple locations). */
+/** Check if a date has conflicting activities (multiple locations).
+ *  Activities within the same trip do not conflict with each other. */
 export function hasConflict(dateStr: string, activities: Activity[]): boolean {
-  const locations = new Set<string>();
-  for (const a of activities) {
-    if (activityOverlapsDate(a, dateStr) && a.location) {
-      locations.add(a.location);
+  const overlapping = activities.filter(a => activityOverlapsDate(a, dateStr) && a.location);
+  if (overlapping.length < 2) return false;
+
+  // Collect locations per source (trip or standalone).
+  // All activities in the same trip are one source.
+  // Each standalone activity is its own source.
+  const sourceLocations: string[] = [];
+  const tripsSeen = new Set<string>();
+  let standaloneIdx = 0;
+
+  for (const a of overlapping) {
+    if (a.tripName) {
+      if (!tripsSeen.has(a.tripName)) {
+        tripsSeen.add(a.tripName);
+        // Use the trip's first activity's location as representative
+        sourceLocations.push(a.location!);
+      }
+      // Skip other activities in the same trip
+    } else {
+      sourceLocations.push(a.location!);
     }
   }
-  return locations.size > 1;
+
+  // Conflict if sources have different locations
+  const uniqueLocations = new Set(sourceLocations);
+  return uniqueLocations.size > 1;
 }
 
 /** Per-day bar segment for rendering inside day cells. */
