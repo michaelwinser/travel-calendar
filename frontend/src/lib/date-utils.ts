@@ -612,12 +612,14 @@ export function computeTripLanes(
   return result;
 }
 
-/** For a given date, find which TripLane entries are active and what activity text to show. */
+/** For a given date, find which TripLane entries are active and what to render. */
 export interface DayTripSegment {
   tripLane: TripLane;
-  isStart: boolean;
-  isEnd: boolean;
-  activityLabel: string; // the activity text for this day within the trip
+  isTripStart: boolean;    // first day of the trip
+  isTripEnd: boolean;      // last day of the trip
+  hasActivityStart: boolean; // an activity starts on this day
+  activityLabel: string;   // label to show (activity title or summary)
+  dayActivities: Activity[]; // activities spanning this day
 }
 
 export function getDayTripSegments(dateStr: string, tripLanes: TripLane[]): Map<number, DayTripSegment> {
@@ -626,33 +628,25 @@ export function getDayTripSegments(dateStr: string, tripLanes: TripLane[]): Map<
   for (const tl of tripLanes) {
     if (dateStr < tl.startDate || dateStr > tl.endDate) continue;
 
-    // Find which activity(ies) span this day
     const dayActivities = tl.activities.filter(
       a => a.startDate <= dateStr && a.endDate >= dateStr
     );
 
+    const starting = dayActivities.filter(a => a.startDate === dateStr);
     let label = '';
-    if (dayActivities.length === 1) {
-      const a = dayActivities[0];
-      // Show label only on the activity's start day (or first visible day)
-      if (a.startDate === dateStr) {
-        label = a.title;
-      }
-    } else if (dayActivities.length > 1) {
-      // Multiple activities on this day — show on first occurrence
-      const starting = dayActivities.filter(a => a.startDate === dateStr);
-      if (starting.length === 1) {
-        label = starting[0].title;
-      } else if (starting.length > 1) {
-        label = `${starting.length} activities`;
-      }
+    if (starting.length === 1) {
+      label = starting[0].title;
+    } else if (starting.length > 1) {
+      label = `${starting.length} activities`;
     }
 
     segments.set(tl.lane, {
       tripLane: tl,
-      isStart: dateStr === tl.startDate,
-      isEnd: dateStr === tl.endDate,
+      isTripStart: dateStr === tl.startDate,
+      isTripEnd: dateStr === tl.endDate,
+      hasActivityStart: starting.length > 0,
       activityLabel: label,
+      dayActivities,
     });
   }
 

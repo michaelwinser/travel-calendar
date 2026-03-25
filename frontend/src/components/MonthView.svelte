@@ -287,19 +287,20 @@
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
                 <div
                   class="bar-segment"
-                  class:is-start={seg.isStart}
-                  class:is-end={seg.isEnd}
+                  class:is-trip-start={seg.isTripStart}
+                  class:is-trip-end={seg.isTripEnd}
                   class:is-trip={seg.tripLane.tripId !== null}
+                  class:has-activity-start={seg.hasActivityStart && seg.tripLane.tripId !== null}
                   style="background: {seg.tripLane.color};"
                   onclick={(e) => handleBarClick(seg.tripLane, e)}
                   onmouseenter={(e) => handleBarEnter(seg.tripLane, e)}
                   onmousemove={handleBarHover}
                   onmouseleave={handleBarLeave}
                 >
-                  {#if seg.activityLabel}
-                    <span class="bar-label">{seg.isStart && seg.tripLane.tripId ? seg.tripLane.tripName + ': ' : ''}{seg.activityLabel}</span>
-                  {:else if seg.isStart && seg.tripLane.tripId}
+                  {#if seg.isTripStart && seg.tripLane.tripId}
                     <span class="bar-label trip-label">{seg.tripLane.tripName}</span>
+                  {:else if seg.activityLabel}
+                    <span class="bar-label">{seg.activityLabel}</span>
                   {/if}
                 </div>
               {:else}
@@ -468,20 +469,28 @@
     z-index: 2;
   }
 
-  .bar-segment.is-start {
+  .bar-segment.is-trip-start {
     border-top-left-radius: 4px;
     border-bottom-left-radius: 4px;
     margin-left: 3px;
   }
 
-  .bar-segment.is-end {
+  .bar-segment.is-trip-end {
     border-top-right-radius: 4px;
     border-bottom-right-radius: 4px;
     margin-right: 3px;
   }
 
   .bar-segment.is-trip {
-    height: 20px;
+    height: 26px;
+  }
+
+  .bar-segment.has-activity-start {
+    border-left: 2px solid rgba(255, 255, 255, 0.4);
+  }
+
+  .bar-segment.is-trip-start.has-activity-start {
+    border-left: none;
   }
 
   .bar-segment.ghost {
@@ -503,10 +512,15 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    padding-left: 2px;
+  }
+
+  .is-trip .bar-label {
+    font-size: 0.55rem;
   }
 
   .trip-label {
     font-weight: 700;
-    font-size: 0.65rem;
+    font-size: 0.6rem;
   }
 </style>
