@@ -438,13 +438,10 @@
     background: #3b82f6;
     color: white;
     border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    padding: 1px 4px;
     font-weight: 600;
     font-size: 0.7rem;
+    line-height: 1;
   }
 
   .bar-slots {
