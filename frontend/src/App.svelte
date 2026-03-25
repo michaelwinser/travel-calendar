@@ -490,6 +490,7 @@
       <MonthView
         bind:this={monthView}
         {activities}
+        trips={tripsCache}
         {ghostDates}
         initialDate={focusDate}
         onedit={handleEdit}

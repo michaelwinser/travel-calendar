@@ -1,17 +1,19 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { ACTIVITY_COLORS, type Activity, type ActivityType } from '../lib/api';
+  import { ACTIVITY_COLORS, type Activity, type ActivityType, type TripSummary } from '../lib/api';
   import Tooltip from './Tooltip.svelte';
+  import TripDetailPopup from './TripDetailPopup.svelte';
   import {
-    today, addDays, stringToDate, addDays as addD,
-    getWeeksForRange, getDaySegmentsForWeek,
+    today, addDays, stringToDate,
+    getWeeksForRange, computeTripLanes, getDayTripSegments,
     monthLabel, monthIndex, hasConflict,
     minDate, maxDate,
-    type DayBarSegment,
+    type TripLane, type DayTripSegment,
   } from '../lib/date-utils';
 
   interface Props {
     activities: Activity[];
+    trips: TripSummary[];
     ghostDates?: { startDate: string; endDate: string; type: ActivityType } | null;
     initialDate?: string;
     onedit: (activity: Activity) => void;
@@ -22,11 +24,17 @@
     onfocusdate?: (date: string) => void;
   }
 
-  let { activities, ghostDates, initialDate, onedit, ondayclick, ondragselect, onresize, onmove, onfocusdate }: Props = $props();
+  let { activities, trips, ghostDates, initialDate, onedit, ondayclick, ondragselect, onresize, onmove, onfocusdate }: Props = $props();
 
   const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const MAX_BARS = 3;
-  const EDGE_ZONE = 6; // pixels from bar edge for resize cursor
+  const MAX_LANES = 4;
+
+  // Trip lookup
+  let tripLookup = $derived.by(() => {
+    const map = new Map<string, { name: string; color: string }>();
+    for (const t of trips) map.set(t.id, { name: t.name, color: t.color });
+    return map;
+  });
 
   // View range
   let rangeStart = $state(addDays(today(), -90));
@@ -34,14 +42,10 @@
 
   let weeks = $derived(getWeeksForRange(rangeStart, rangeEnd));
 
-  let weekData = $derived(
-    weeks.map(week => {
-      const { segments, overflowPerDay } = getDaySegmentsForWeek(activities, week, ACTIVITY_COLORS, MAX_BARS);
-      const conflicts = week.days.map(d => hasConflict(d, activities));
-      return { week, segments, overflowPerDay, conflicts };
-    })
-  );
+  // Global trip lane assignment
+  let tripLanes = $derived(computeTripLanes(activities, tripLookup, ACTIVITY_COLORS, MAX_LANES));
 
+  // Month labels
   let weekMonthLabels = $derived(
     weeks.map((week, i) => {
       const thursdayMonth = monthLabel(week.days[4]);
@@ -51,13 +55,12 @@
     })
   );
 
-  // === DRAG STATE ===
-  type DragMode = 'create' | 'move' | 'resize' | null;
-  let dragMode = $state<DragMode>(null);
-  let didMove = $state(false); // tracks if mouse moved during drag (click vs drag)
-  let dragActivity = $state<Activity | null>(null); // the activity being moved/resized
+  // Max lane used (for row height)
+  let maxLane = $derived(tripLanes.reduce((max, tl) => Math.max(max, tl.lane), -1));
 
-  // Create drag
+  // === DRAG STATE ===
+  type DragMode = 'create' | null;
+  let dragMode = $state<DragMode>(null);
   let createStart = $state<string | null>(null);
   let createCurrent = $state<string | null>(null);
 
@@ -67,56 +70,22 @@
       : null
   );
 
-  // Move drag
-  let moveAnchorDate = $state<string | null>(null);
-  let moveCurrentDate = $state<string | null>(null);
-  let dragLane = $state(0); // shared lane for move and resize
-
-  let movePreview = $derived.by(() => {
-    if (dragMode !== 'move' || !dragActivity || !moveAnchorDate || !moveCurrentDate) return null;
-    const daysDelta = dateDiff(moveAnchorDate, moveCurrentDate);
-    const newStart = addDays(dragActivity.startDate, daysDelta);
-    const newEnd = addDays(dragActivity.endDate, daysDelta);
-    return { start: newStart, end: newEnd, activityId: dragActivity.id, type: dragActivity.type, title: dragActivity.title };
-  });
-
-  // Resize drag
-  let resizeEdge = $state<'start' | 'end'>('end');
-  let resizeCurrent = $state<string | null>(null);
-
-  let resizePreview = $derived.by(() => {
-    if (dragMode !== 'resize' || !dragActivity || !resizeCurrent) return null;
-    let start = dragActivity.startDate;
-    let end = dragActivity.endDate;
-    if (resizeEdge === 'start') {
-      start = resizeCurrent <= end ? resizeCurrent : end;
-    } else {
-      end = resizeCurrent >= start ? resizeCurrent : start;
-    }
-    return { start, end, activityId: dragActivity.id, type: dragActivity.type, title: dragActivity.title };
-  });
-
-  // The active drag preview (whichever mode)
-  let activePreview = $derived(dragMode === 'move' ? movePreview : dragMode === 'resize' ? resizePreview : null);
-  let activeDragId = $derived(activePreview?.activityId ?? null);
-
-  function dateDiff(from: string, to: string): number {
-    const f = stringToDate(from);
-    const t = stringToDate(to);
-    return Math.round((t.getTime() - f.getTime()) / (86400000));
-  }
-
   function isInCreateRange(dateStr: string): boolean {
     if (!createRange) return false;
     return dateStr >= createRange.start && dateStr <= createRange.end;
   }
 
-  function isInActivePreview(dateStr: string): boolean {
-    if (!activePreview) return false;
-    return dateStr >= activePreview.start && dateStr <= activePreview.end;
-  }
+  // Trip detail popup
+  let popupTripLane = $state<TripLane | null>(null);
+  let popupX = $state(0);
+  let popupY = $state(0);
 
-  // === SCROLL ===
+  // Tooltip
+  let tooltipActivity = $state<Activity | null>(null);
+  let tooltipX = $state(0);
+  let tooltipY = $state(0);
+
+  // Scroll
   let scrollEl: HTMLElement;
   let scrollDebounce: ReturnType<typeof setTimeout> | undefined;
 
@@ -144,33 +113,26 @@
   export function scrollAction(action: 'pageDown' | 'pageUp' | 'nextActivity' | 'prevActivity') {
     if (!scrollEl) return;
     const { clientHeight } = scrollEl;
-
     if (action === 'pageDown') {
       scrollEl.scrollBy({ top: clientHeight * 0.8, behavior: 'smooth' });
     } else if (action === 'pageUp') {
       scrollEl.scrollBy({ top: -clientHeight * 0.8, behavior: 'smooth' });
     } else {
-      // Find rows with activity bars
-      const allBars = scrollEl.querySelectorAll('.bar-segment:not(.ghost):not(.bar-slot-empty)');
-      if (!allBars.length) return;
-
+      const bars = scrollEl.querySelectorAll('.bar-segment:not(.ghost):not(.bar-slot-empty)');
+      if (!bars.length) return;
       const containerTop = scrollEl.getBoundingClientRect().top;
       const center = containerTop + clientHeight / 2;
-
       if (action === 'nextActivity') {
-        for (const bar of allBars) {
-          const rect = bar.getBoundingClientRect();
-          if (rect.top > center + 10) {
+        for (const bar of bars) {
+          if (bar.getBoundingClientRect().top > center + 10) {
             bar.scrollIntoView({ block: 'center', behavior: 'smooth' });
             return;
           }
         }
       } else {
-        // prevActivity — iterate in reverse
-        const arr = Array.from(allBars);
+        const arr = Array.from(bars);
         for (let i = arr.length - 1; i >= 0; i--) {
-          const rect = arr[i].getBoundingClientRect();
-          if (rect.bottom < center - 10) {
+          if (arr[i].getBoundingClientRect().bottom < center - 10) {
             arr[i].scrollIntoView({ block: 'center', behavior: 'smooth' });
             return;
           }
@@ -207,132 +169,55 @@
     }
   }
 
-  // === DAY CELL MOUSEDOWN (create mode only) ===
+  // Day cell interactions
   function handleDayMouseDown(dateStr: string, e: MouseEvent) {
     if (e.button !== 0) return;
-    // Only start create if clicking on the day-number area or empty space
     const target = e.target as HTMLElement;
-    if (target.closest('.bar-segment')) return; // click was on a bar
+    if (target.closest('.bar-segment')) return;
     e.preventDefault();
     dragMode = 'create';
     createStart = dateStr;
     createCurrent = dateStr;
   }
 
-  // === DAY CELL MOUSEENTER ===
   function handleDayMouseEnter(dateStr: string) {
-    if (!dragMode) return;
-    if (dragMode === 'create') {
-      if (dateStr !== createStart) didMove = true;
-      createCurrent = dateStr;
-    } else if (dragMode === 'move') {
-      if (dateStr !== moveAnchorDate) didMove = true;
-      moveCurrentDate = dateStr;
-    } else if (dragMode === 'resize') {
-      didMove = true;
-      resizeCurrent = dateStr;
-    }
+    if (dragMode === 'create') createCurrent = dateStr;
   }
 
-  // === GLOBAL MOUSEUP ===
   function handleMouseUp() {
-    const mode = dragMode;
-    const moved = didMove;
-
-    if (mode === 'create') {
-      if (createStart && createCurrent) {
-        const start = minDate(createStart, createCurrent);
-        const end = maxDate(createStart, createCurrent);
-        if (start === end) ondayclick(start);
-        else ondragselect(start, end);
-      }
-    } else if (mode === 'move') {
-      if (!moved && dragActivity) {
-        // No movement — treat as click → edit
-        tooltipActivity = null;
-        onedit(dragActivity);
-      } else if (moved && movePreview && dragActivity && onmove) {
-        onmove(dragActivity.id, movePreview.start, movePreview.end);
-      }
-    } else if (mode === 'resize') {
-      if (!moved && dragActivity) {
-        // No movement — treat as click → edit
-        tooltipActivity = null;
-        onedit(dragActivity);
-      } else if (moved && resizePreview && dragActivity && onresize) {
-        if (resizePreview.start !== dragActivity.startDate || resizePreview.end !== dragActivity.endDate) {
-          onresize(dragActivity.id, resizePreview.start, resizePreview.end);
-        }
-      }
+    if (dragMode === 'create' && createStart && createCurrent) {
+      const start = minDate(createStart, createCurrent);
+      const end = maxDate(createStart, createCurrent);
+      if (start === end) ondayclick(start);
+      else ondragselect(start, end);
     }
-    clearDrag();
-  }
-
-  function clearDrag() {
     dragMode = null;
-    didMove = false;
-    dragActivity = null;
-    createStart = null; createCurrent = null;
-    moveAnchorDate = null; moveCurrentDate = null;
-    resizeCurrent = null;
+    createStart = null;
+    createCurrent = null;
   }
 
-  // === BAR INTERACTIONS ===
-  function handleBarMouseDown(activity: Activity, seg: DayBarSegment, dateStr: string, lane: number, e: MouseEvent) {
-    if (e.button !== 0) return;
+  // Bar interactions
+  function handleBarClick(tripLane: TripLane, e: MouseEvent) {
     e.stopPropagation();
-    e.preventDefault();
-
-    dragActivity = activity;
-    dragLane = lane;
-    didMove = false;
-
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const fromLeft = e.clientX - rect.left;
-    const fromRight = rect.right - e.clientX;
-
-    if (seg.isStart && fromLeft < EDGE_ZONE) {
-      dragMode = 'resize';
-      resizeEdge = 'start';
-      resizeCurrent = dateStr;
-    } else if (seg.isEnd && fromRight < EDGE_ZONE) {
-      dragMode = 'resize';
-      resizeEdge = 'end';
-      resizeCurrent = dateStr;
-    } else {
-      dragMode = 'move';
-      moveAnchorDate = dateStr;
-      moveCurrentDate = dateStr;
+    if (tripLane.tripId === null && tripLane.activities.length === 1) {
+      // Standalone activity — edit directly
+      onedit(tripLane.activities[0]);
+    } else if (tripLane.tripId !== null) {
+      // Trip — show popup
+      popupTripLane = tripLane;
+      popupX = e.clientX;
+      popupY = e.clientY;
     }
   }
 
-  function handleBarMouseMove(seg: DayBarSegment, e: MouseEvent) {
+  function handleBarEnter(tripLane: TripLane, e: MouseEvent) {
     if (dragMode) return;
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const fromLeft = e.clientX - rect.left;
-    const fromRight = rect.right - e.clientX;
-    const el = e.currentTarget as HTMLElement;
-
-    if ((seg.isStart && fromLeft < EDGE_ZONE) || (seg.isEnd && fromRight < EDGE_ZONE)) {
-      el.style.cursor = 'col-resize';
+    if (tripLane.activities.length === 1) {
+      tooltipActivity = tripLane.activities[0];
     } else {
-      el.style.cursor = 'grab';
+      // For trips, show first activity in tooltip (or could show trip summary)
+      tooltipActivity = tripLane.activities[0];
     }
-  }
-
-  function handleMoreClick(dateStr: string, e: MouseEvent) {
-    e.stopPropagation();
-    ondayclick(dateStr);
-  }
-
-  // === TOOLTIP ===
-  let tooltipActivity = $state<Activity | null>(null);
-  let tooltipX = $state(0);
-  let tooltipY = $state(0);
-
-  function handleBarEnter(activity: Activity, e: MouseEvent) {
-    if (dragMode) return;
-    tooltipActivity = activity;
     tooltipX = e.clientX;
     tooltipY = e.clientY;
   }
@@ -345,7 +230,7 @@
 
   function handleBarLeave() { tooltipActivity = null; }
 
-  // === HELPERS ===
+  // Helpers
   function dayOfMonth(dateStr: string): number { return stringToDate(dateStr).getDate(); }
   function isToday(dateStr: string): boolean { return dateStr === today(); }
 </script>
@@ -365,7 +250,7 @@
     {/each}
   </div>
 
-  {#each weekData as { week, segments, overflowPerDay, conflicts }, wi (week.weekStart)}
+  {#each weeks as week, wi (week.weekStart)}
     {@const label = weekMonthLabels[wi]}
 
     <div class="week-row">
@@ -375,15 +260,15 @@
 
       {#each week.days as dateStr, di}
         {@const altMonth = monthIndex(dateStr) % 2 === 1}
-        {@const daySegments = segments.get(di) ?? []}
-        {@const overflow = overflowPerDay[di]}
+        {@const daySegs = getDayTripSegments(dateStr, tripLanes)}
+        {@const conflict = hasConflict(dateStr, activities)}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
           class="day-cell"
           class:alt-month={altMonth}
           class:today={isToday(dateStr)}
           class:drag-selected={dragMode === 'create' && isInCreateRange(dateStr)}
-          class:conflict={conflicts[di]}
+          class:conflict={conflict}
           data-date={dateStr}
           onmousedown={(e) => handleDayMouseDown(dateStr, e)}
           onmouseenter={() => handleDayMouseEnter(dateStr)}
@@ -395,41 +280,26 @@
           </div>
 
           <div class="bar-slots">
-            {#each { length: MAX_BARS } as _, lane}
-              {@const seg = daySegments.find(s => s.lane === lane)}
-              {@const isActiveDrag = seg && seg.activity.id === activeDragId}
-              {@const showPreviewHere = activePreview && lane === dragLane && isInActivePreview(dateStr)}
-              {#if showPreviewHere}
-                <!-- Drag preview in the original lane -->
-                <div
-                  class="bar-segment active-drag"
-                  class:is-start={dateStr === activePreview?.start}
-                  class:is-end={dateStr === activePreview?.end}
-                  style="background: {ACTIVITY_COLORS[activePreview?.type ?? 'stay']};"
-                >
-                  {#if dateStr === activePreview?.start}
-                    <span class="bar-label">{activePreview?.title}</span>
-                  {/if}
-                </div>
-              {:else if isActiveDrag}
-                <!-- Vacated slot (original position of dragged activity) -->
-                <div class="bar-slot-empty"></div>
-              {:else if seg}
-                <!-- Normal bar segment -->
+            {#each { length: Math.min(maxLane + 1, MAX_LANES) } as _, lane}
+              {@const seg = daySegs.get(lane)}
+              {#if seg}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
                 <div
                   class="bar-segment"
                   class:is-start={seg.isStart}
                   class:is-end={seg.isEnd}
-                  style="background: {seg.color};"
-                  onmousedown={(e) => handleBarMouseDown(seg.activity, seg, dateStr, lane, e)}
-                  onmouseenter={(e) => handleBarEnter(seg.activity, e)}
-                  onmousemove={(e) => { handleBarMouseMove(seg, e); handleBarHover(e); }}
+                  class:is-trip={seg.tripLane.tripId !== null}
+                  style="background: {seg.tripLane.color};"
+                  onclick={(e) => handleBarClick(seg.tripLane, e)}
+                  onmouseenter={(e) => handleBarEnter(seg.tripLane, e)}
+                  onmousemove={handleBarHover}
                   onmouseleave={handleBarLeave}
                 >
-                  {#if seg.isStart}
-                    <span class="bar-label">{seg.activity.title}</span>
+                  {#if seg.activityLabel}
+                    <span class="bar-label">{seg.isStart && seg.tripLane.tripId ? seg.tripLane.tripName + ': ' : ''}{seg.activityLabel}</span>
+                  {:else if seg.isStart && seg.tripLane.tripId}
+                    <span class="bar-label trip-label">{seg.tripLane.tripName}</span>
                   {/if}
                 </div>
               {:else}
@@ -447,21 +317,13 @@
             {/if}
 
             <!-- Ghost bar from modal -->
-            {#if !dragMode && ghostDates && dateStr >= ghostDates.startDate && dateStr <= ghostDates.endDate && daySegments.length < MAX_BARS}
+            {#if !dragMode && ghostDates && dateStr >= ghostDates.startDate && dateStr <= ghostDates.endDate}
               <div
                 class="bar-segment ghost modal-ghost"
                 class:is-start={dateStr === ghostDates.startDate}
                 class:is-end={dateStr === ghostDates.endDate}
                 style="background: {ACTIVITY_COLORS[ghostDates.type]}; opacity: 0.35;"
               ></div>
-            {/if}
-
-            {#if overflow > 1}
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <!-- svelte-ignore a11y_click_events_have_key_events -->
-              <span class="more-link" onclick={(e) => handleMoreClick(dateStr, e)}>
-                +{overflow} more
-              </span>
             {/if}
           </div>
         </div>
@@ -471,6 +333,18 @@
 </div>
 
 <Tooltip activity={tooltipActivity} x={tooltipX} y={tooltipY} />
+
+{#if popupTripLane}
+  <TripDetailPopup
+    tripName={popupTripLane.tripName}
+    color={popupTripLane.color}
+    activities={popupTripLane.activities}
+    x={popupX}
+    y={popupY}
+    {onedit}
+    onclose={() => popupTripLane = null}
+  />
+{/if}
 
 <style>
   .month-view {
@@ -585,7 +459,7 @@
     margin: 0 -1px;
     position: relative;
     z-index: 1;
-    cursor: grab;
+    cursor: pointer;
   }
 
   .bar-segment:hover {
@@ -606,13 +480,8 @@
     margin-right: 3px;
   }
 
-  .bar-segment.active-drag {
-    opacity: 0.8;
-    z-index: 5;
-    outline: 2px dashed rgba(255, 255, 255, 0.9);
-    outline-offset: -1px;
-    cursor: grabbing;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  .bar-segment.is-trip {
+    height: 20px;
   }
 
   .bar-segment.ghost {
@@ -628,7 +497,7 @@
   .bar-slot-empty { height: 18px; }
 
   .bar-label {
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     color: white;
     font-weight: 500;
     white-space: nowrap;
@@ -636,13 +505,8 @@
     text-overflow: ellipsis;
   }
 
-  .more-link {
-    font-size: 0.6rem;
-    color: #888;
-    cursor: pointer;
-    padding: 0 4px;
-    line-height: 1.2;
+  .trip-label {
+    font-weight: 700;
+    font-size: 0.65rem;
   }
-
-  .more-link:hover { color: #333; }
 </style>

@@ -499,6 +499,166 @@ export function getTripBarsForMonth(
   return bars;
 }
 
+/** A trip (or standalone activity) with its global lane assignment for month view. */
+export interface TripLane {
+  tripId: string | null;
+  tripName: string;
+  color: string;
+  startDate: string;
+  endDate: string;
+  lane: number;
+  activities: Activity[];
+}
+
+/** Compute global trip lane assignments for a date range.
+ *  Each trip gets one lane spanning its full duration.
+ *  Standalone activities each get their own lane.
+ *  Returns lanes sorted by start date. */
+export function computeTripLanes(
+  activities: Activity[],
+  tripColors: Map<string, { name: string; color: string }>,
+  activityColors: Record<string, string>,
+  maxLanes: number,
+): TripLane[] {
+  // Group activities by trip
+  const tripGroups = new Map<string, Activity[]>();
+  const standalone: Activity[] = [];
+
+  for (const a of activities) {
+    if (a.tripId) {
+      const list = tripGroups.get(a.tripId);
+      if (list) list.push(a);
+      else tripGroups.set(a.tripId, [a]);
+    } else {
+      standalone.push(a);
+    }
+  }
+
+  // Build lane entries
+  interface LaneEntry {
+    tripId: string | null;
+    name: string;
+    color: string;
+    startDate: string;
+    endDate: string;
+    activities: Activity[];
+  }
+
+  const entries: LaneEntry[] = [];
+
+  for (const [tripId, acts] of tripGroups) {
+    const trip = tripColors.get(tripId);
+    let earliest = acts[0].startDate;
+    let latest = acts[0].endDate;
+    for (const a of acts) {
+      if (a.startDate < earliest) earliest = a.startDate;
+      if (a.endDate > latest) latest = a.endDate;
+    }
+    entries.push({
+      tripId,
+      name: trip?.name ?? 'Trip',
+      color: trip?.color ?? '#999',
+      startDate: earliest,
+      endDate: latest,
+      activities: acts.sort((a, b) => a.startDate < b.startDate ? -1 : 1),
+    });
+  }
+
+  for (const a of standalone) {
+    entries.push({
+      tripId: null,
+      name: a.title,
+      color: activityColors[a.type] ?? '#999',
+      startDate: a.startDate,
+      endDate: a.endDate,
+      activities: [a],
+    });
+  }
+
+  // Sort by start date, then longer first
+  entries.sort((a, b) => {
+    if (a.startDate !== b.startDate) return a.startDate < b.startDate ? -1 : 1;
+    // Longer spans first for better packing
+    const aDur = a.endDate > b.endDate ? 1 : a.endDate < b.endDate ? -1 : 0;
+    return -aDur;
+  });
+
+  // Greedy lane assignment using date ranges
+  const laneEnds: string[] = []; // laneEnds[i] = the end date of the last entry in lane i
+  const result: TripLane[] = [];
+
+  for (const entry of entries) {
+    let lane = 0;
+    while (lane < maxLanes) {
+      if (lane >= laneEnds.length || laneEnds[lane] < entry.startDate) break;
+      lane++;
+    }
+    if (lane >= maxLanes) continue; // overflow, skip
+
+    if (lane >= laneEnds.length) laneEnds.push(entry.endDate);
+    else laneEnds[lane] = entry.endDate;
+
+    result.push({
+      tripId: entry.tripId,
+      tripName: entry.name,
+      color: entry.color,
+      startDate: entry.startDate,
+      endDate: entry.endDate,
+      lane,
+      activities: entry.activities,
+    });
+  }
+
+  return result;
+}
+
+/** For a given date, find which TripLane entries are active and what activity text to show. */
+export interface DayTripSegment {
+  tripLane: TripLane;
+  isStart: boolean;
+  isEnd: boolean;
+  activityLabel: string; // the activity text for this day within the trip
+}
+
+export function getDayTripSegments(dateStr: string, tripLanes: TripLane[]): Map<number, DayTripSegment> {
+  const segments = new Map<number, DayTripSegment>();
+
+  for (const tl of tripLanes) {
+    if (dateStr < tl.startDate || dateStr > tl.endDate) continue;
+
+    // Find which activity(ies) span this day
+    const dayActivities = tl.activities.filter(
+      a => a.startDate <= dateStr && a.endDate >= dateStr
+    );
+
+    let label = '';
+    if (dayActivities.length === 1) {
+      const a = dayActivities[0];
+      // Show label only on the activity's start day (or first visible day)
+      if (a.startDate === dateStr) {
+        label = a.title;
+      }
+    } else if (dayActivities.length > 1) {
+      // Multiple activities on this day — show on first occurrence
+      const starting = dayActivities.filter(a => a.startDate === dateStr);
+      if (starting.length === 1) {
+        label = starting[0].title;
+      } else if (starting.length > 1) {
+        label = `${starting.length} activities`;
+      }
+    }
+
+    segments.set(tl.lane, {
+      tripLane: tl,
+      isStart: dateStr === tl.startDate,
+      isEnd: dateStr === tl.endDate,
+      activityLabel: label,
+    });
+  }
+
+  return segments;
+}
+
 /** Get min/max date strings, or null if either is null. */
 export function minDate(a: string, b: string): string {
   return a < b ? a : b;
