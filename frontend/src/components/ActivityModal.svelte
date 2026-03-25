@@ -3,7 +3,7 @@
   import {
     ACTIVITY_TYPES, ACTIVITY_COLORS,
     parseActivity,
-    type ActivityType, type ParseResult,
+    type ActivityType, type ParseResult, type TripSummary,
   } from '../lib/api';
 
   interface Props {
@@ -16,6 +16,7 @@
     notes?: string;
     tripId?: string;
     tripName?: string;
+    trips?: TripSummary[];
     focusText?: boolean;
     onsubmit: (data: {
       title: string;
@@ -43,6 +44,7 @@
   let location = $state(props.location ?? '');
   let notes = $state(props.notes ?? '');
   let tripName = $state(props.tripName ?? '');
+  let showTripSuggestions = $state(false);
   let error = $state('');
   let confirmingDelete = $state(false);
 
@@ -67,6 +69,20 @@
       quickText = generateText();
     }
   });
+
+  // Trip autocomplete
+  let tripSuggestions = $derived.by(() => {
+    if (!props.trips || !tripName.trim() || !showTripSuggestions) return [];
+    const query = tripName.trim().toLowerCase();
+    return props.trips.filter(t =>
+      t.name.toLowerCase().includes(query) && t.name !== tripName
+    ).slice(0, 5);
+  });
+
+  function selectTrip(trip: TripSummary) {
+    tripName = trip.name;
+    showTripSuggestions = false;
+  }
 
   // Sync from props when they change
   $effect(() => { if (props.title) title = props.title; });
@@ -236,10 +252,31 @@
         <input type="text" bind:value={location} placeholder="e.g. Brussels, Home" onfocus={handleFieldFocus} />
       </label>
 
-      <label>
-        <span>Trip</span>
-        <input type="text" bind:value={tripName} placeholder="e.g. FOSDEM 2027" onfocus={handleFieldFocus} />
-      </label>
+      <div class="trip-field">
+        <label>
+          <span>Trip</span>
+          <input
+            type="text"
+            bind:value={tripName}
+            placeholder="e.g. FOSDEM 2027"
+            onfocus={() => { handleFieldFocus(); showTripSuggestions = true; }}
+            oninput={() => showTripSuggestions = true}
+            onblur={() => setTimeout(() => showTripSuggestions = false, 150)}
+          />
+        </label>
+        {#if tripSuggestions.length > 0}
+          <div class="trip-suggestions">
+            {#each tripSuggestions as trip}
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <div class="trip-suggestion" onmousedown={() => selectTrip(trip)}>
+                <span class="trip-swatch" style="background: {trip.color};"></span>
+                <span class="trip-suggestion-name">{trip.name}</span>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </div>
 
       <label>
         <span>Notes</span>
@@ -470,5 +507,45 @@
     color: #dc2626;
     font-size: 0.85rem;
     margin: 0 0 0.5rem;
+  }
+  .trip-field {
+    position: relative;
+  }
+
+  .trip-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 10;
+    overflow: hidden;
+  }
+
+  .trip-suggestion {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+
+  .trip-suggestion:hover {
+    background: #f5f5f5;
+  }
+
+  .trip-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .trip-suggestion-name {
+    color: #333;
   }
 </style>

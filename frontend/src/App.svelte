@@ -579,6 +579,7 @@
       notes={modalMode === 'edit' ? (modalActivity?.notes ?? '') : undefined}
       tripId={modalMode === 'edit' ? (modalActivity?.tripId ?? '') : undefined}
       tripName={modalMode === 'edit' ? (tripsCache.find(t => t.id === modalActivity?.tripId)?.name ?? '') : undefined}
+      trips={tripsCache}
       focusText={modalFocusText}
       onsubmit={handleModalSubmit}
       oncancel={closeModal}
