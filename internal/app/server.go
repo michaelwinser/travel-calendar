@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"encoding/json"
@@ -27,6 +27,11 @@ type ActivityServer struct {
 	store        *ActivityStore
 	trips        *TripStore
 	parseHistory *ParseHistoryStore
+}
+
+// NewActivityServer creates a new server with all dependencies.
+func NewActivityServer(store *ActivityStore, trips *TripStore, parseHistory *ParseHistoryStore) *ActivityServer {
+	return &ActivityServer{store: store, trips: trips, parseHistory: parseHistory}
 }
 
 func (s *ActivityServer) ListActivities(w http.ResponseWriter, r *http.Request, params api.ListActivitiesParams) {

@@ -1,0 +1,21 @@
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleName</key>
+  <string>TravelCalendar</string>
+  <key>CFBundleExecutable</key>
+  <string>TravelCalendar</string>
+  <key>CFBundleIdentifier</key>
+  <string>io.xwind.travel-calendar</string>
+  <key>CFBundleVersion</key>
+  <string>1.3.0</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.3.0</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+  <key>NSHumanReadableCopyright</key>
+  <string>xwind.io</string>
+</dict>
+</plist>

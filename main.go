@@ -32,6 +32,7 @@ import (
 
 	"github.com/michaelwinser/appbase"
 	appcli "github.com/michaelwinser/appbase/cli"
+	travelapp "github.com/michaelwinser/travel-calendar/internal/app"
 	"github.com/michaelwinser/travel-calendar/api"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -42,12 +43,7 @@ var frontendDist embed.FS
 const appName = "travel-calendar"
 const cliName = "travel"
 
-var (
-	app          *appbase.App
-	activities   *ActivityStore
-	trips        *TripStore
-	parseHistory *ParseHistoryStore
-)
+var app *appbase.App
 
 func setup() error {
 	var err error
@@ -63,21 +59,21 @@ func setup() error {
 	if err != nil {
 		return err
 	}
-	activities, err = NewActivityStore(app.DB())
+	activities, err := travelapp.NewActivityStore(app.DB())
 	if err != nil {
 		return err
 	}
-	trips, err = NewTripStore(app.DB())
+	trips, err := travelapp.NewTripStore(app.DB())
 	if err != nil {
 		return err
 	}
-	parseHistory, err = NewParseHistoryStore(app.DB())
+	parseHistory, err := travelapp.NewParseHistoryStore(app.DB())
 	if err != nil {
 		return err
 	}
 
 	// Register API routes
-	activityServer := &ActivityServer{store: activities, trips: trips, parseHistory: parseHistory}
+	activityServer := travelapp.NewActivityServer(activities, trips, parseHistory)
 	api.HandlerFromMux(activityServer, app.Server().Router())
 
 	return nil
@@ -120,7 +116,7 @@ func main() {
 	addCmd.Flags().String("from", "", "Start date (YYYY-MM-DD, required)")
 	addCmd.Flags().String("to", "", "End date (YYYY-MM-DD, defaults to --from)")
 	addCmd.Flags().String("loc", "", "Location (e.g. Brussels, Home)")
-	addCmd.Flags().String("type", "stay", fmt.Sprintf("Activity type (%s)", strings.Join(ValidTypes, ", ")))
+	addCmd.Flags().String("type", "stay", fmt.Sprintf("Activity type (%s)", strings.Join(travelapp.ValidTypes, ", ")))
 	addCmd.Flags().String("notes", "", "Optional notes")
 	addCmd.MarkFlagRequired("from")
 	cli.AddCommand(addCmd)

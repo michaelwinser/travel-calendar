@@ -1,0 +1,11 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "travel-calendar",
+  "outputfilename": "TravelCalendar",
+  "frontend:install": "",
+  "frontend:build": "",
+  "wailsjsdir": "./dist",
+  "author": {
+    "name": "travel-calendar"
+  }
+}
