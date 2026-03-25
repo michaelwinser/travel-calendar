@@ -40,8 +40,16 @@ dev_build() {
         frontend)
             _build_frontend
             ;;
+        desktop)
+            _build_frontend
+            echo "Building desktop..."
+            mkdir -p cmd/desktop/dist cmd/desktop/frontend
+            cp -r frontend/dist/* cmd/desktop/dist/ 2>/dev/null || true
+            export PATH="$PATH:$(go env GOPATH)/bin"
+            (cd cmd/desktop && wails build -tags desktop -skipbindings)
+            ;;
         *)
-            echo "Usage: ./dev build [all|server|frontend]"
+            echo "Usage: ./dev build [all|server|frontend|desktop]"
             return 1
             ;;
     esac
