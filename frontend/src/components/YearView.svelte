@@ -299,7 +299,7 @@
     align-items: flex-start;
     border-bottom: 1px solid #eee;
     padding: 0.5rem 0;
-    min-height: 40px;
+    min-height: 50px;
   }
 
   .month-name {
@@ -383,11 +383,11 @@
   }
 
   .year-bar {
-    height: 16px;
+    height: 18px;
     display: flex;
     align-items: center;
-    padding: 0 4px;
-    border-radius: 3px;
+    padding: 0 5px;
+    border-radius: 4px;
     margin: 1px 1px;
     overflow: hidden;
     opacity: 0.85;
@@ -398,7 +398,7 @@
   }
 
   .year-bar.is-trip {
-    height: 18px;
+    height: 24px;
   }
 
   .year-bar.ghost {
@@ -413,7 +413,7 @@
   }
 
   .year-bar-label {
-    font-size: 0.6rem;
+    font-size: 0.65rem;
     color: white;
     font-weight: 600;
     white-space: nowrap;
@@ -423,7 +423,7 @@
   }
 
   .year-bar-count {
-    font-size: 0.5rem;
+    font-size: 0.55rem;
     color: rgba(255, 255, 255, 0.8);
     background: rgba(0, 0, 0, 0.15);
     border-radius: 3px;
