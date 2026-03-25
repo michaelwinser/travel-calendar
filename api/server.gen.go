@@ -232,27 +232,54 @@ func (e ParsedActivityType) Valid() bool {
 	}
 }
 
+// Defines values for SharedActivityType.
+const (
+	SharedActivityTypeCommitment SharedActivityType = "commitment"
+	SharedActivityTypeConference SharedActivityType = "conference"
+	SharedActivityTypeStay       SharedActivityType = "stay"
+	SharedActivityTypeTravel     SharedActivityType = "travel"
+	SharedActivityTypeVacation   SharedActivityType = "vacation"
+)
+
+// Valid indicates whether the value is a known member of the SharedActivityType enum.
+func (e SharedActivityType) Valid() bool {
+	switch e {
+	case SharedActivityTypeCommitment:
+		return true
+	case SharedActivityTypeConference:
+		return true
+	case SharedActivityTypeStay:
+		return true
+	case SharedActivityTypeTravel:
+		return true
+	case SharedActivityTypeVacation:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateActivityRequestType.
 const (
-	UpdateActivityRequestTypeCommitment UpdateActivityRequestType = "commitment"
-	UpdateActivityRequestTypeConference UpdateActivityRequestType = "conference"
-	UpdateActivityRequestTypeStay       UpdateActivityRequestType = "stay"
-	UpdateActivityRequestTypeTravel     UpdateActivityRequestType = "travel"
-	UpdateActivityRequestTypeVacation   UpdateActivityRequestType = "vacation"
+	Commitment UpdateActivityRequestType = "commitment"
+	Conference UpdateActivityRequestType = "conference"
+	Stay       UpdateActivityRequestType = "stay"
+	Travel     UpdateActivityRequestType = "travel"
+	Vacation   UpdateActivityRequestType = "vacation"
 )
 
 // Valid indicates whether the value is a known member of the UpdateActivityRequestType enum.
 func (e UpdateActivityRequestType) Valid() bool {
 	switch e {
-	case UpdateActivityRequestTypeCommitment:
+	case Commitment:
 		return true
-	case UpdateActivityRequestTypeConference:
+	case Conference:
 		return true
-	case UpdateActivityRequestTypeStay:
+	case Stay:
 		return true
-	case UpdateActivityRequestTypeTravel:
+	case Travel:
 		return true
-	case UpdateActivityRequestTypeVacation:
+	case Vacation:
 		return true
 	default:
 		return false
@@ -299,6 +326,31 @@ type CreateActivityRequest struct {
 
 // CreateActivityRequestType defines model for CreateActivityRequest.Type.
 type CreateActivityRequestType string
+
+// CreateShareLinkRequest defines model for CreateShareLinkRequest.
+type CreateShareLinkRequest struct {
+	ExpiresAt *time.Time          `json:"expiresAt,omitempty"`
+	FromDate  *openapi_types.Date `json:"fromDate,omitempty"`
+
+	// Label User-friendly name (auto-generated if omitted)
+	Label *string `json:"label,omitempty"`
+
+	// ShowTitle Whether activity titles are visible (default false)
+	ShowTitle *bool               `json:"showTitle,omitempty"`
+	ToDate    *openapi_types.Date `json:"toDate,omitempty"`
+
+	// TripIds Comma-separated trip IDs to filter by
+	TripIds *string `json:"tripIds,omitempty"`
+}
+
+// CreateShareRequest defines model for CreateShareRequest.
+type CreateShareRequest struct {
+	// Email Email of the user to share with
+	Email string `json:"email"`
+
+	// ShowTitle Whether activity titles are visible (default false)
+	ShowTitle *bool `json:"showTitle,omitempty"`
+}
 
 // CreateTripRequest defines model for CreateTripRequest.
 type CreateTripRequest struct {
@@ -382,6 +434,95 @@ type ParsedActivity struct {
 // ParsedActivityType defines model for ParsedActivity.Type.
 type ParsedActivityType string
 
+// PublicProfile defines model for PublicProfile.
+type PublicProfile struct {
+	// Enabled Whether the public page is active
+	Enabled bool `json:"enabled"`
+
+	// Handle URL slug for the public page (e.g. michael)
+	Handle string `json:"handle"`
+}
+
+// Share defines model for Share.
+type Share struct {
+	CreatedAt time.Time `json:"createdAt"`
+	Id        string    `json:"id"`
+
+	// OwnerEmail Email of the user who created this share
+	OwnerEmail string `json:"ownerEmail"`
+
+	// SharedWith Email of the recipient
+	SharedWith string `json:"sharedWith"`
+
+	// ShowTitle Whether activity titles are visible to the recipient
+	ShowTitle bool `json:"showTitle"`
+}
+
+// ShareLink defines model for ShareLink.
+type ShareLink struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// ExpiresAt When this link expires (empty = never)
+	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
+
+	// FromDate Only share activities starting from this date
+	FromDate *openapi_types.Date `json:"fromDate,omitempty"`
+	Id       string              `json:"id"`
+
+	// Label User-friendly name for this link
+	Label string `json:"label"`
+
+	// ShowTitle Whether activity titles are visible to viewers
+	ShowTitle bool `json:"showTitle"`
+
+	// ToDate Only share activities ending before this date
+	ToDate *openapi_types.Date `json:"toDate,omitempty"`
+
+	// Token URL-safe token for accessing the shared calendar
+	Token string `json:"token"`
+
+	// TripIds Comma-separated trip IDs to filter by (empty = all)
+	TripIds *string `json:"tripIds,omitempty"`
+}
+
+// SharedActivity defines model for SharedActivity.
+type SharedActivity struct {
+	EndDate   openapi_types.Date `json:"endDate"`
+	Location  *string            `json:"location,omitempty"`
+	StartDate openapi_types.Date `json:"startDate"`
+
+	// Title Included only if showTitle is enabled on the share
+	Title *string `json:"title,omitempty"`
+
+	// TripColor Trip hex color
+	TripColor *string `json:"tripColor,omitempty"`
+
+	// TripName Trip name for context (not the ID)
+	TripName *string            `json:"tripName,omitempty"`
+	Type     SharedActivityType `json:"type"`
+}
+
+// SharedActivityType defines model for SharedActivity.Type.
+type SharedActivityType string
+
+// SharedCalendarResponse defines model for SharedCalendarResponse.
+type SharedCalendarResponse struct {
+	Activities []SharedActivity `json:"activities"`
+
+	// Label Share link label or sharer description
+	Label string `json:"label"`
+
+	// OwnerEmail Email of the calendar owner
+	OwnerEmail *string `json:"ownerEmail,omitempty"`
+}
+
+// SharedWithMeEntry defines model for SharedWithMeEntry.
+type SharedWithMeEntry struct {
+	// OwnerEmail Email of the person who shared with you
+	OwnerEmail string `json:"ownerEmail"`
+	ShareId    string `json:"shareId"`
+}
+
 // Trip defines model for Trip.
 type Trip struct {
 	// Color Hex color for visual grouping
@@ -421,6 +562,14 @@ type UpdateActivityRequest struct {
 // UpdateActivityRequestType defines model for UpdateActivityRequest.Type.
 type UpdateActivityRequestType string
 
+// UpdatePublicProfileRequest defines model for UpdatePublicProfileRequest.
+type UpdatePublicProfileRequest struct {
+	Enabled bool `json:"enabled"`
+
+	// Handle URL slug (lowercase alphanumeric + hyphens, 3-30 chars)
+	Handle string `json:"handle"`
+}
+
 // UpdateTripRequest defines model for UpdateTripRequest.
 type UpdateTripRequest struct {
 	Color *string `json:"color,omitempty"`
@@ -448,6 +597,18 @@ type ListActivitiesParams struct {
 	To *openapi_types.Date `form:"to,omitempty" json:"to,omitempty"`
 }
 
+// GetSharedActivitiesParams defines parameters for GetSharedActivities.
+type GetSharedActivitiesParams struct {
+	// Month Filter by month (YYYY-MM)
+	Month *string `form:"month,omitempty" json:"month,omitempty"`
+
+	// From Filter start (YYYY-MM-DD)
+	From *openapi_types.Date `form:"from,omitempty" json:"from,omitempty"`
+
+	// To Filter end (YYYY-MM-DD)
+	To *openapi_types.Date `form:"to,omitempty" json:"to,omitempty"`
+}
+
 // CreateActivityJSONRequestBody defines body for CreateActivity for application/json ContentType.
 type CreateActivityJSONRequestBody = CreateActivityRequest
 
@@ -456,6 +617,15 @@ type ParseActivityJSONRequestBody = ParseRequest
 
 // UpdateActivityJSONRequestBody defines body for UpdateActivity for application/json ContentType.
 type UpdateActivityJSONRequestBody = UpdateActivityRequest
+
+// UpdatePublicProfileJSONRequestBody defines body for UpdatePublicProfile for application/json ContentType.
+type UpdatePublicProfileJSONRequestBody = UpdatePublicProfileRequest
+
+// CreateShareLinkJSONRequestBody defines body for CreateShareLink for application/json ContentType.
+type CreateShareLinkJSONRequestBody = CreateShareLinkRequest
+
+// CreateShareJSONRequestBody defines body for CreateShare for application/json ContentType.
+type CreateShareJSONRequestBody = CreateShareRequest
 
 // CreateTripJSONRequestBody defines body for CreateTrip for application/json ContentType.
 type CreateTripJSONRequestBody = CreateTripRequest
@@ -486,6 +656,36 @@ type ServerInterface interface {
 	// Update an activity
 	// (PUT /api/activities/{id})
 	UpdateActivity(w http.ResponseWriter, r *http.Request, id string)
+	// Get the authenticated user's public profile settings
+	// (GET /api/public-profile)
+	GetPublicProfile(w http.ResponseWriter, r *http.Request)
+	// Create or update public profile settings
+	// (PUT /api/public-profile)
+	UpdatePublicProfile(w http.ResponseWriter, r *http.Request)
+	// List share links created by the authenticated user
+	// (GET /api/share-links)
+	ListShareLinks(w http.ResponseWriter, r *http.Request)
+	// Create a new share link
+	// (POST /api/share-links)
+	CreateShareLink(w http.ResponseWriter, r *http.Request)
+	// Revoke a share link
+	// (DELETE /api/share-links/{id})
+	DeleteShareLink(w http.ResponseWriter, r *http.Request, id string)
+	// List calendars shared with the authenticated user
+	// (GET /api/shared-with-me)
+	ListSharedWithMe(w http.ResponseWriter, r *http.Request)
+	// Get privacy-filtered activities from a user who shared with you
+	// (GET /api/shared-with-me/{email}/activities)
+	GetSharedActivities(w http.ResponseWriter, r *http.Request, email string, params GetSharedActivitiesParams)
+	// List calendar shares created by the authenticated user
+	// (GET /api/shares)
+	ListShares(w http.ResponseWriter, r *http.Request)
+	// Share calendar with another user by email
+	// (POST /api/shares)
+	CreateShare(w http.ResponseWriter, r *http.Request)
+	// Revoke a share
+	// (DELETE /api/shares/{id})
+	DeleteShare(w http.ResponseWriter, r *http.Request, id string)
 	// List trips for the authenticated user
 	// (GET /api/trips)
 	ListTrips(w http.ResponseWriter, r *http.Request)
@@ -543,6 +743,66 @@ func (_ Unimplemented) GetActivity(w http.ResponseWriter, r *http.Request, id st
 // Update an activity
 // (PUT /api/activities/{id})
 func (_ Unimplemented) UpdateActivity(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get the authenticated user's public profile settings
+// (GET /api/public-profile)
+func (_ Unimplemented) GetPublicProfile(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create or update public profile settings
+// (PUT /api/public-profile)
+func (_ Unimplemented) UpdatePublicProfile(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List share links created by the authenticated user
+// (GET /api/share-links)
+func (_ Unimplemented) ListShareLinks(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a new share link
+// (POST /api/share-links)
+func (_ Unimplemented) CreateShareLink(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Revoke a share link
+// (DELETE /api/share-links/{id})
+func (_ Unimplemented) DeleteShareLink(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List calendars shared with the authenticated user
+// (GET /api/shared-with-me)
+func (_ Unimplemented) ListSharedWithMe(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get privacy-filtered activities from a user who shared with you
+// (GET /api/shared-with-me/{email}/activities)
+func (_ Unimplemented) GetSharedActivities(w http.ResponseWriter, r *http.Request, email string, params GetSharedActivitiesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List calendar shares created by the authenticated user
+// (GET /api/shares)
+func (_ Unimplemented) ListShares(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Share calendar with another user by email
+// (POST /api/shares)
+func (_ Unimplemented) CreateShare(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Revoke a share
+// (DELETE /api/shares/{id})
+func (_ Unimplemented) DeleteShare(w http.ResponseWriter, r *http.Request, id string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -792,6 +1052,266 @@ func (siw *ServerInterfaceWrapper) UpdateActivity(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetPublicProfile operation middleware
+func (siw *ServerInterfaceWrapper) GetPublicProfile(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPublicProfile(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdatePublicProfile operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePublicProfile(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePublicProfile(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListShareLinks operation middleware
+func (siw *ServerInterfaceWrapper) ListShareLinks(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListShareLinks(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateShareLink operation middleware
+func (siw *ServerInterfaceWrapper) CreateShareLink(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateShareLink(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteShareLink operation middleware
+func (siw *ServerInterfaceWrapper) DeleteShareLink(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteShareLink(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSharedWithMe operation middleware
+func (siw *ServerInterfaceWrapper) ListSharedWithMe(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSharedWithMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSharedActivities operation middleware
+func (siw *ServerInterfaceWrapper) GetSharedActivities(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "email" -------------
+	var email string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "email", chi.URLParam(r, "email"), &email, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "email", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetSharedActivitiesParams
+
+	// ------------- Optional query parameter "month" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "month", r.URL.Query(), &params.Month, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "month", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "from", r.URL.Query(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "to", r.URL.Query(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSharedActivities(w, r, email, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListShares operation middleware
+func (siw *ServerInterfaceWrapper) ListShares(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListShares(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateShare operation middleware
+func (siw *ServerInterfaceWrapper) CreateShare(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateShare(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteShare operation middleware
+func (siw *ServerInterfaceWrapper) DeleteShare(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteShare(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTrips operation middleware
 func (siw *ServerInterfaceWrapper) ListTrips(w http.ResponseWriter, r *http.Request) {
 
@@ -1029,6 +1549,36 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Put(options.BaseURL+"/api/activities/{id}", wrapper.UpdateActivity)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/public-profile", wrapper.GetPublicProfile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/api/public-profile", wrapper.UpdatePublicProfile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/share-links", wrapper.ListShareLinks)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/share-links", wrapper.CreateShareLink)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/api/share-links/{id}", wrapper.DeleteShareLink)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/shared-with-me", wrapper.ListSharedWithMe)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/shared-with-me/{email}/activities", wrapper.GetSharedActivities)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/shares", wrapper.ListShares)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/shares", wrapper.CreateShare)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/api/shares/{id}", wrapper.DeleteShare)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/trips", wrapper.ListTrips)
 	})
 	r.Group(func(r chi.Router) {
@@ -1047,37 +1597,54 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

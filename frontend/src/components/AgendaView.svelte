@@ -1,14 +1,33 @@
 <script lang="ts">
-  import { ACTIVITY_COLORS, type Activity, type TripSummary } from '../lib/api';
+  import { ACTIVITY_COLORS, type Activity, type TripSummary, type OverlayCalendar } from '../lib/api';
 
   interface Props {
     activities: Activity[];
     trips: TripSummary[];
+    overlayActivities?: Activity[];
+    overlayCalendars?: OverlayCalendar[];
     onedit: (activity: Activity) => void;
     onedittrip?: (tripId: string) => void;
   }
 
-  let { activities, trips, onedit, onedittrip }: Props = $props();
+  let { activities, trips, overlayActivities, overlayCalendars, onedit, onedittrip }: Props = $props();
+
+  // Group overlay activities by owner email
+  let overlayGroups = $derived.by(() => {
+    if (!overlayActivities?.length || !overlayCalendars?.length) return [];
+    const colorMap = new Map<string, string>();
+    for (const c of overlayCalendars) if (c.visible) colorMap.set(c.email, c.color);
+    const byOwner = new Map<string, Activity[]>();
+    for (const a of overlayActivities) {
+      const list = byOwner.get(a.userId);
+      if (list) list.push(a); else byOwner.set(a.userId, [a]);
+    }
+    return [...byOwner.entries()].map(([email, acts]) => ({
+      email,
+      color: colorMap.get(email) ?? '#999',
+      activities: acts.sort((a, b) => a.startDate < b.startDate ? -1 : 1),
+    }));
+  });
 
   interface AgendaGroup {
     tripId: string | null;
@@ -122,6 +141,26 @@
       {/if}
     {/each}
   </div>
+{/if}
+
+{#if overlayGroups.length > 0}
+  {#each overlayGroups as group}
+    <div class="overlay-section">
+      <div class="overlay-header" style="border-left: 4px solid {group.color};">
+        <span class="overlay-email">{group.email}</span>
+      </div>
+      {#each group.activities as activity}
+        <div class="overlay-row">
+          <span class="type-dot" style="background: {group.color}"></span>
+          <span class="dates">{formatDates(activity)}</span>
+          {#if activity.location}
+            <span class="location">{activity.location}</span>
+          {/if}
+          <span class="type-label">{activity.type}</span>
+        </div>
+      {/each}
+    </div>
+  {/each}
 {/if}
 
 <style>
@@ -246,5 +285,39 @@
     font-size: 0.75rem;
     color: #aaa;
     text-transform: capitalize;
+  }
+
+  .overlay-section {
+    margin-top: 1rem;
+    opacity: 0.75;
+  }
+
+  .overlay-header {
+    display: flex;
+    align-items: center;
+    padding: 0.4rem 0.85rem;
+    background: #f8f9fa;
+    border-radius: 6px 6px 0 0;
+  }
+
+  .overlay-email {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #666;
+  }
+
+  .overlay-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.45rem 0.85rem 0.45rem 1.5rem;
+    background: white;
+    border: 1px solid #eee;
+    border-top: none;
+    font-size: 0.85rem;
+  }
+
+  .overlay-row:last-child {
+    border-radius: 0 0 6px 6px;
   }
 </style>

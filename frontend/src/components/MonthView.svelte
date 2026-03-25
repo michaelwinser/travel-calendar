@@ -11,10 +11,14 @@
     type TripLane, type DayTripSegment,
   } from '../lib/date-utils';
 
+  import type { OverlayCalendar } from '../lib/api';
+
   interface Props {
     activities: Activity[];
     trips: TripSummary[];
     ghostDates?: { startDate: string; endDate: string; type: ActivityType } | null;
+    overlayActivities?: Activity[];
+    overlayCalendars?: OverlayCalendar[];
     initialDate?: string;
     onedit: (activity: Activity) => void;
     ondayclick: (date: string) => void;
@@ -25,15 +29,53 @@
     onfocusdate?: (date: string) => void;
   }
 
-  let { activities, trips, ghostDates, initialDate, onedit, ondayclick, ondragselect, onresize, onmove, onedittrip, onfocusdate }: Props = $props();
+  let { activities, trips, ghostDates, overlayActivities, overlayCalendars, initialDate, onedit, ondayclick, ondragselect, onresize, onmove, onedittrip, onfocusdate }: Props = $props();
 
   const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // Merge overlay activities into the main data so they go through the same lane computation.
+  // Tag overlay trip IDs so we can style them differently.
+  const OVERLAY_PREFIX = '__overlay__';
+
+  let mergedActivities = $derived.by((): Activity[] => {
+    if (!overlayActivities?.length) return activities;
+    return [...activities, ...overlayActivities];
+  });
+
+  let overlayTripIds = $derived.by((): Set<string> => {
+    const ids = new Set<string>();
+    if (!overlayActivities?.length) return ids;
+    for (const a of overlayActivities) {
+      if (a.tripId) ids.add(a.tripId);
+    }
+    // Also mark standalone overlay activities (no trip) — they get synthetic trip IDs
+    // from computeTripLanes, so we track by activity ID prefix
+    return ids;
+  });
+
+  function isOverlayActivity(a: Activity): boolean {
+    return a.id.startsWith('overlay-');
+  }
   const MAX_LANES = 4;
 
-  // Trip lookup
+  // Trip lookup — includes overlay trip colors from overlayCalendars
   let tripLookup = $derived.by(() => {
     const map = new Map<string, { name: string; color: string }>();
     for (const t of trips) map.set(t.id, { name: t.name, color: t.color });
+
+    // Add overlay trips — use the overlay calendar's color for all their trips
+    if (overlayActivities?.length && overlayCalendars?.length) {
+      const colorMap = new Map<string, string>();
+      for (const c of overlayCalendars) if (c.visible) colorMap.set(c.email, c.color);
+      for (const a of overlayActivities) {
+        if (a.tripId && !map.has(a.tripId)) {
+          const color = colorMap.get(a.userId) ?? '#999';
+          // Extract trip name from synthetic ID: "overlay-trip-TripName"
+          const name = a.tripId.replace(/^overlay-trip-/, '');
+          map.set(a.tripId, { name, color });
+        }
+      }
+    }
     return map;
   });
 
@@ -44,7 +86,7 @@
   let weeks = $derived(getWeeksForRange(rangeStart, rangeEnd));
 
   // Global trip lane assignment
-  let tripLanes = $derived(computeTripLanes(activities, tripLookup, ACTIVITY_COLORS, MAX_LANES));
+  let tripLanes = $derived(computeTripLanes(mergedActivities, tripLookup, ACTIVITY_COLORS, MAX_LANES));
 
   // Month labels
   let weekMonthLabels = $derived(
@@ -287,6 +329,7 @@
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
                 {@const hasActivity = seg.dayActivities.length > 0}
+                {@const isOverlay = seg.tripLane.activities.length > 0 && isOverlayActivity(seg.tripLane.activities[0])}
                 <div
                   class="bar-segment"
                   class:is-trip-start={seg.isTripStart}
@@ -294,6 +337,7 @@
                   class:is-trip={seg.tripLane.tripId !== null}
                   class:has-activity-start={seg.hasActivityStart && seg.tripLane.tripId !== null}
                   class:no-activity={seg.tripLane.tripId !== null && !hasActivity}
+                  class:is-overlay={isOverlay}
                   style="background: {seg.tripLane.color};"
                   onclick={(e) => handleBarClick(seg.tripLane, e)}
                   onmouseenter={(e) => handleBarEnter(seg.tripLane, e)}
@@ -508,6 +552,10 @@
   }
 
   .bar-slot-empty { height: 18px; }
+
+  .bar-segment.is-overlay {
+    opacity: 0.45;
+  }
 
   .bar-label {
     font-size: 0.6rem;

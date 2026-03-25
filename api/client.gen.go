@@ -117,6 +117,42 @@ type ClientInterface interface {
 
 	UpdateActivity(ctx context.Context, id string, body UpdateActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetPublicProfile request
+	GetPublicProfile(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdatePublicProfileWithBody request with any body
+	UpdatePublicProfileWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdatePublicProfile(ctx context.Context, body UpdatePublicProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListShareLinks request
+	ListShareLinks(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateShareLinkWithBody request with any body
+	CreateShareLinkWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateShareLink(ctx context.Context, body CreateShareLinkJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteShareLink request
+	DeleteShareLink(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListSharedWithMe request
+	ListSharedWithMe(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetSharedActivities request
+	GetSharedActivities(ctx context.Context, email string, params *GetSharedActivitiesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListShares request
+	ListShares(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateShareWithBody request with any body
+	CreateShareWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateShare(ctx context.Context, body CreateShareJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteShare request
+	DeleteShare(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListTrips request
 	ListTrips(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -244,6 +280,162 @@ func (c *Client) UpdateActivityWithBody(ctx context.Context, id string, contentT
 
 func (c *Client) UpdateActivity(ctx context.Context, id string, body UpdateActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateActivityRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetPublicProfile(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetPublicProfileRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdatePublicProfileWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdatePublicProfileRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdatePublicProfile(ctx context.Context, body UpdatePublicProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdatePublicProfileRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListShareLinks(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListShareLinksRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateShareLinkWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateShareLinkRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateShareLink(ctx context.Context, body CreateShareLinkJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateShareLinkRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteShareLink(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteShareLinkRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListSharedWithMe(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListSharedWithMeRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetSharedActivities(ctx context.Context, email string, params *GetSharedActivitiesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSharedActivitiesRequest(c.Server, email, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListShares(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListSharesRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateShareWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateShareRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateShare(ctx context.Context, body CreateShareJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateShareRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteShare(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteShareRequest(c.Server, id)
 	if err != nil {
 		return nil, err
 	}
@@ -636,6 +828,390 @@ func NewUpdateActivityRequestWithBody(server string, id string, contentType stri
 	return req, nil
 }
 
+// NewGetPublicProfileRequest generates requests for GetPublicProfile
+func NewGetPublicProfileRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/public-profile")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdatePublicProfileRequest calls the generic UpdatePublicProfile builder with application/json body
+func NewUpdatePublicProfileRequest(server string, body UpdatePublicProfileJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdatePublicProfileRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewUpdatePublicProfileRequestWithBody generates requests for UpdatePublicProfile with any type of body
+func NewUpdatePublicProfileRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/public-profile")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListShareLinksRequest generates requests for ListShareLinks
+func NewListShareLinksRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/share-links")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateShareLinkRequest calls the generic CreateShareLink builder with application/json body
+func NewCreateShareLinkRequest(server string, body CreateShareLinkJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateShareLinkRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateShareLinkRequestWithBody generates requests for CreateShareLink with any type of body
+func NewCreateShareLinkRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/share-links")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteShareLinkRequest generates requests for DeleteShareLink
+func NewDeleteShareLinkRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/share-links/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListSharedWithMeRequest generates requests for ListSharedWithMe
+func NewListSharedWithMeRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/shared-with-me")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetSharedActivitiesRequest generates requests for GetSharedActivities
+func NewGetSharedActivitiesRequest(server string, email string, params *GetSharedActivitiesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "email", email, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/shared-with-me/%s/activities", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Month != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "month", *params.Month, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.From != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "from", *params.From, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.To != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "to", *params.To, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListSharesRequest generates requests for ListShares
+func NewListSharesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/shares")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateShareRequest calls the generic CreateShare builder with application/json body
+func NewCreateShareRequest(server string, body CreateShareJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateShareRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateShareRequestWithBody generates requests for CreateShare with any type of body
+func NewCreateShareRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/shares")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteShareRequest generates requests for DeleteShare
+func NewDeleteShareRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/shares/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListTripsRequest generates requests for ListTrips
 func NewListTripsRequest(server string) (*http.Request, error) {
 	var err error
@@ -854,6 +1430,42 @@ type ClientWithResponsesInterface interface {
 
 	UpdateActivityWithResponse(ctx context.Context, id string, body UpdateActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateActivityResponse, error)
 
+	// GetPublicProfileWithResponse request
+	GetPublicProfileWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetPublicProfileResponse, error)
+
+	// UpdatePublicProfileWithBodyWithResponse request with any body
+	UpdatePublicProfileWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdatePublicProfileResponse, error)
+
+	UpdatePublicProfileWithResponse(ctx context.Context, body UpdatePublicProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdatePublicProfileResponse, error)
+
+	// ListShareLinksWithResponse request
+	ListShareLinksWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListShareLinksResponse, error)
+
+	// CreateShareLinkWithBodyWithResponse request with any body
+	CreateShareLinkWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateShareLinkResponse, error)
+
+	CreateShareLinkWithResponse(ctx context.Context, body CreateShareLinkJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateShareLinkResponse, error)
+
+	// DeleteShareLinkWithResponse request
+	DeleteShareLinkWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteShareLinkResponse, error)
+
+	// ListSharedWithMeWithResponse request
+	ListSharedWithMeWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListSharedWithMeResponse, error)
+
+	// GetSharedActivitiesWithResponse request
+	GetSharedActivitiesWithResponse(ctx context.Context, email string, params *GetSharedActivitiesParams, reqEditors ...RequestEditorFn) (*GetSharedActivitiesResponse, error)
+
+	// ListSharesWithResponse request
+	ListSharesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListSharesResponse, error)
+
+	// CreateShareWithBodyWithResponse request with any body
+	CreateShareWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateShareResponse, error)
+
+	CreateShareWithResponse(ctx context.Context, body CreateShareJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateShareResponse, error)
+
+	// DeleteShareWithResponse request
+	DeleteShareWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteShareResponse, error)
+
 	// ListTripsWithResponse request
 	ListTripsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListTripsResponse, error)
 
@@ -1032,6 +1644,242 @@ func (r UpdateActivityResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r UpdateActivityResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetPublicProfileResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *PublicProfile
+	JSON401      *Unauthorized
+}
+
+// Status returns HTTPResponse.Status
+func (r GetPublicProfileResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetPublicProfileResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdatePublicProfileResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *PublicProfile
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdatePublicProfileResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdatePublicProfileResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListShareLinksResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]ShareLink
+	JSON401      *Unauthorized
+}
+
+// Status returns HTTPResponse.Status
+func (r ListShareLinksResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListShareLinksResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateShareLinkResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *ShareLink
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateShareLinkResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateShareLinkResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteShareLinkResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OkResponse
+	JSON401      *Unauthorized
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteShareLinkResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteShareLinkResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListSharedWithMeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]SharedWithMeEntry
+	JSON401      *Unauthorized
+}
+
+// Status returns HTTPResponse.Status
+func (r ListSharedWithMeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListSharedWithMeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetSharedActivitiesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SharedCalendarResponse
+	JSON401      *Unauthorized
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r GetSharedActivitiesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetSharedActivitiesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListSharesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]Share
+	JSON401      *Unauthorized
+}
+
+// Status returns HTTPResponse.Status
+func (r ListSharesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListSharesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateShareResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *Share
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateShareResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateShareResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteShareResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OkResponse
+	JSON401      *Unauthorized
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteShareResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteShareResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -1218,6 +2066,120 @@ func (c *ClientWithResponses) UpdateActivityWithResponse(ctx context.Context, id
 		return nil, err
 	}
 	return ParseUpdateActivityResponse(rsp)
+}
+
+// GetPublicProfileWithResponse request returning *GetPublicProfileResponse
+func (c *ClientWithResponses) GetPublicProfileWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetPublicProfileResponse, error) {
+	rsp, err := c.GetPublicProfile(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetPublicProfileResponse(rsp)
+}
+
+// UpdatePublicProfileWithBodyWithResponse request with arbitrary body returning *UpdatePublicProfileResponse
+func (c *ClientWithResponses) UpdatePublicProfileWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdatePublicProfileResponse, error) {
+	rsp, err := c.UpdatePublicProfileWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdatePublicProfileResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdatePublicProfileWithResponse(ctx context.Context, body UpdatePublicProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdatePublicProfileResponse, error) {
+	rsp, err := c.UpdatePublicProfile(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdatePublicProfileResponse(rsp)
+}
+
+// ListShareLinksWithResponse request returning *ListShareLinksResponse
+func (c *ClientWithResponses) ListShareLinksWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListShareLinksResponse, error) {
+	rsp, err := c.ListShareLinks(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListShareLinksResponse(rsp)
+}
+
+// CreateShareLinkWithBodyWithResponse request with arbitrary body returning *CreateShareLinkResponse
+func (c *ClientWithResponses) CreateShareLinkWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateShareLinkResponse, error) {
+	rsp, err := c.CreateShareLinkWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateShareLinkResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateShareLinkWithResponse(ctx context.Context, body CreateShareLinkJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateShareLinkResponse, error) {
+	rsp, err := c.CreateShareLink(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateShareLinkResponse(rsp)
+}
+
+// DeleteShareLinkWithResponse request returning *DeleteShareLinkResponse
+func (c *ClientWithResponses) DeleteShareLinkWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteShareLinkResponse, error) {
+	rsp, err := c.DeleteShareLink(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteShareLinkResponse(rsp)
+}
+
+// ListSharedWithMeWithResponse request returning *ListSharedWithMeResponse
+func (c *ClientWithResponses) ListSharedWithMeWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListSharedWithMeResponse, error) {
+	rsp, err := c.ListSharedWithMe(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListSharedWithMeResponse(rsp)
+}
+
+// GetSharedActivitiesWithResponse request returning *GetSharedActivitiesResponse
+func (c *ClientWithResponses) GetSharedActivitiesWithResponse(ctx context.Context, email string, params *GetSharedActivitiesParams, reqEditors ...RequestEditorFn) (*GetSharedActivitiesResponse, error) {
+	rsp, err := c.GetSharedActivities(ctx, email, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetSharedActivitiesResponse(rsp)
+}
+
+// ListSharesWithResponse request returning *ListSharesResponse
+func (c *ClientWithResponses) ListSharesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListSharesResponse, error) {
+	rsp, err := c.ListShares(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListSharesResponse(rsp)
+}
+
+// CreateShareWithBodyWithResponse request with arbitrary body returning *CreateShareResponse
+func (c *ClientWithResponses) CreateShareWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateShareResponse, error) {
+	rsp, err := c.CreateShareWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateShareResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateShareWithResponse(ctx context.Context, body CreateShareJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateShareResponse, error) {
+	rsp, err := c.CreateShare(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateShareResponse(rsp)
+}
+
+// DeleteShareWithResponse request returning *DeleteShareResponse
+func (c *ClientWithResponses) DeleteShareWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteShareResponse, error) {
+	rsp, err := c.DeleteShare(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteShareResponse(rsp)
 }
 
 // ListTripsWithResponse request returning *ListTripsResponse
@@ -1525,6 +2487,378 @@ func ParseUpdateActivityResponse(rsp *http.Response) (*UpdateActivityResponse, e
 			return nil, err
 		}
 		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetPublicProfileResponse parses an HTTP response from a GetPublicProfileWithResponse call
+func ParseGetPublicProfileResponse(rsp *http.Response) (*GetPublicProfileResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetPublicProfileResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PublicProfile
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdatePublicProfileResponse parses an HTTP response from a UpdatePublicProfileWithResponse call
+func ParseUpdatePublicProfileResponse(rsp *http.Response) (*UpdatePublicProfileResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdatePublicProfileResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PublicProfile
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListShareLinksResponse parses an HTTP response from a ListShareLinksWithResponse call
+func ParseListShareLinksResponse(rsp *http.Response) (*ListShareLinksResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListShareLinksResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []ShareLink
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateShareLinkResponse parses an HTTP response from a CreateShareLinkWithResponse call
+func ParseCreateShareLinkResponse(rsp *http.Response) (*CreateShareLinkResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateShareLinkResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ShareLink
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteShareLinkResponse parses an HTTP response from a DeleteShareLinkWithResponse call
+func ParseDeleteShareLinkResponse(rsp *http.Response) (*DeleteShareLinkResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteShareLinkResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OkResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListSharedWithMeResponse parses an HTTP response from a ListSharedWithMeWithResponse call
+func ParseListSharedWithMeResponse(rsp *http.Response) (*ListSharedWithMeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListSharedWithMeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []SharedWithMeEntry
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetSharedActivitiesResponse parses an HTTP response from a GetSharedActivitiesWithResponse call
+func ParseGetSharedActivitiesResponse(rsp *http.Response) (*GetSharedActivitiesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetSharedActivitiesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SharedCalendarResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListSharesResponse parses an HTTP response from a ListSharesWithResponse call
+func ParseListSharesResponse(rsp *http.Response) (*ListSharesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListSharesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []Share
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateShareResponse parses an HTTP response from a CreateShareWithResponse call
+func ParseCreateShareResponse(rsp *http.Response) (*CreateShareResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateShareResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Share
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteShareResponse parses an HTTP response from a DeleteShareWithResponse call
+func ParseDeleteShareResponse(rsp *http.Response) (*DeleteShareResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteShareResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OkResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest Unauthorized

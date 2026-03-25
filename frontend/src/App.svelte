@@ -24,8 +24,22 @@
   import DayView from './components/DayView.svelte';
   import YearView from './components/YearView.svelte';
   import ActivityModal from './components/ActivityModal.svelte';
+  import SharePanel from './components/SharePanel.svelte';
+  import SharedCalendarView from './components/SharedCalendarView.svelte';
+  import OverlaySidebar from './components/OverlaySidebar.svelte';
+  import {
+    listSharedWithMe,
+    fetchSharedWithMeActivities,
+    type OverlayCalendar,
+    type SharedWithMeEntry,
+    type ActivityType as AType,
+  } from './lib/api';
 
   type View = 'month' | 'year' | 'day' | 'agenda';
+
+  // Check if we're viewing someone else's shared calendar: /view/{email}
+  const viewMatch = window.location.pathname.match(/^\/view\/([^/]+)/);
+  const viewEmail = viewMatch ? decodeURIComponent(viewMatch[1]) : null;
 
   let auth = $state<AuthStatus>({ loggedIn: false });
   let activities = $state<Activity[]>([]);
@@ -48,6 +62,19 @@
 
   // Trip edit state
   let editingTrip = $state<TripSummary | null>(null);
+
+  // Share panel state
+  let showSharePanel = $state(false);
+
+  // Overlay state
+  const OVERLAY_COLORS = ['#e07b53', '#5cbcb6', '#c75ca2', '#d4a843', '#8b6cc1', '#c95454', '#5a8f5a'];
+  let overlayCalendars = $state<OverlayCalendar[]>([]);
+
+  let visibleOverlayActivities = $derived(
+    overlayCalendars
+      .filter(c => c.visible)
+      .flatMap(c => c.activities)
+  );
 
   // View refs
   let monthView = $state<MonthView>();
@@ -120,6 +147,7 @@
       auth = await getAuthStatus();
       if (auth.loggedIn) {
         await refreshActivities();
+        await loadOverlays();
       }
     } catch {
       error = 'Failed to connect to server';
@@ -229,6 +257,45 @@
   async function refreshActivities() {
     activities = await listActivities();
     tripsCache = await listTrips();
+  }
+
+  async function loadOverlays() {
+    try {
+      const entries = await listSharedWithMe();
+      // Preserve existing visibility state
+      const prevState = new Map(overlayCalendars.map(c => [c.email, c.visible]));
+
+      overlayCalendars = await Promise.all(entries.map(async (entry, i) => {
+        const data = await fetchSharedWithMeActivities(entry.ownerEmail);
+        // Map SharedActivity to Activity shape for views
+        const acts: Activity[] = data.activities.map((a, j) => ({
+          id: `overlay-${entry.ownerEmail}-${j}`,
+          userId: entry.ownerEmail,
+          title: a.title || a.location || String(a.type),
+          type: (a.type as AType),
+          startDate: a.startDate,
+          endDate: a.endDate,
+          location: a.location,
+          tripId: a.tripName ? `overlay-trip-${a.tripName}` : undefined,
+          source: 'manual' as const,
+          createdAt: '',
+        }));
+        return {
+          email: entry.ownerEmail,
+          color: OVERLAY_COLORS[i % OVERLAY_COLORS.length],
+          visible: prevState.get(entry.ownerEmail) ?? false,
+          activities: acts,
+        };
+      }));
+    } catch {
+      // Overlay loading failure is non-fatal
+    }
+  }
+
+  function toggleOverlay(email: string) {
+    overlayCalendars = overlayCalendars.map(c =>
+      c.email === email ? { ...c, visible: !c.visible } : c
+    );
   }
 
   async function handleLogin() {
@@ -454,6 +521,8 @@
       <p>Sign in to manage your travel plans</p>
       <button onclick={handleLogin}>Sign in with Google</button>
     </div>
+  {:else if viewEmail}
+    <SharedCalendarView email={viewEmail} />
   {:else}
     <nav class="view-tabs">
       {#each views as v}
@@ -464,6 +533,7 @@
         >{v.label}</button>
       {/each}
       <div class="tab-spacer"></div>
+      <button class="share-btn" onclick={() => showSharePanel = true} title="Sharing settings">Share</button>
       <button class="add-btn" onclick={openQuickAdd} title="New activity (n)">+ Add</button>
       {#if currentView === 'month' || currentView === 'day' || currentView === 'year'}
         <button class="today-btn" onclick={scrollCurrentViewToToday}>Today</button>
@@ -523,12 +593,16 @@
       <p class="error">{error}</p>
     {/if}
 
+    <OverlaySidebar overlays={overlayCalendars} ontoggle={toggleOverlay} />
+
     {#if currentView === 'month'}
       <MonthView
         bind:this={monthView}
         {activities}
         trips={tripsCache}
         {ghostDates}
+        overlayActivities={visibleOverlayActivities}
+        {overlayCalendars}
         initialDate={focusDate}
         onedit={handleEdit}
         ondayclick={handleDayClick}
@@ -556,6 +630,8 @@
         bind:this={dayView}
         {activities}
         trips={tripsCache}
+        overlayActivities={visibleOverlayActivities}
+        {overlayCalendars}
         initialDate={focusDate}
         onedit={handleEdit}
         ondayclick={handleDayClick}
@@ -563,7 +639,7 @@
         onfocusdate={handleFocusDate}
       />
     {:else if currentView === 'agenda'}
-      <AgendaView {activities} trips={tripsCache} onedit={handleEdit} onedittrip={handleEditTrip} />
+      <AgendaView {activities} trips={tripsCache} overlayActivities={visibleOverlayActivities} {overlayCalendars} onedit={handleEdit} onedittrip={handleEditTrip} />
     {/if}
   {/if}
 
@@ -586,6 +662,10 @@
       ondelete={modalMode === 'edit' ? handleDelete : undefined}
       onchange={handleModalChange}
     />
+  {/if}
+
+  {#if showSharePanel}
+    <SharePanel onclose={() => showSharePanel = false} />
   {/if}
 
   {#if editingTrip}
@@ -691,6 +771,23 @@
   }
 
   .tab-spacer { flex: 1; }
+
+  .share-btn {
+    padding: 0.3rem 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: white;
+    font-size: 0.8rem;
+    cursor: pointer;
+    color: #555;
+    margin-bottom: 2px;
+    margin-right: 0.5rem;
+  }
+
+  .share-btn:hover {
+    background: #f5f5f5;
+    color: #333;
+  }
 
   .add-btn {
     padding: 0.3rem 0.75rem;

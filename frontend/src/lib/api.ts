@@ -152,6 +152,155 @@ export async function deleteTrip(id: string): Promise<void> {
   if (!res.ok) throw new Error(`Failed to delete trip: ${res.statusText}`);
 }
 
+// --- Share Links ---
+
+export type ShareLink = components['schemas']['ShareLink'];
+export type CreateShareLinkRequest = components['schemas']['CreateShareLinkRequest'];
+
+export async function listShareLinks(): Promise<ShareLink[]> {
+  const res = await fetch(`${API_BASE}/share-links`);
+  if (!res.ok) throw new Error(`Failed to list share links: ${res.statusText}`);
+  return res.json();
+}
+
+export async function createShareLink(req: CreateShareLinkRequest): Promise<ShareLink> {
+  const res = await fetch(`${API_BASE}/share-links`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || res.statusText);
+  }
+  return res.json();
+}
+
+export async function deleteShareLink(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/share-links/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`Failed to delete share link: ${res.statusText}`);
+}
+
+// --- User-to-User Shares ---
+
+export type Share = components['schemas']['Share'];
+export type CreateShareRequest = components['schemas']['CreateShareRequest'];
+export type SharedWithMeEntry = components['schemas']['SharedWithMeEntry'];
+
+export async function listShares(): Promise<Share[]> {
+  const res = await fetch(`${API_BASE}/shares`);
+  if (!res.ok) throw new Error(`Failed to list shares: ${res.statusText}`);
+  return res.json();
+}
+
+export async function createShare(req: CreateShareRequest): Promise<Share> {
+  const res = await fetch(`${API_BASE}/shares`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || res.statusText);
+  }
+  return res.json();
+}
+
+export async function deleteShare(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/shares/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`Failed to delete share: ${res.statusText}`);
+}
+
+export async function listSharedWithMe(): Promise<SharedWithMeEntry[]> {
+  const res = await fetch(`${API_BASE}/shared-with-me`);
+  if (!res.ok) throw new Error(`Failed to list shared calendars: ${res.statusText}`);
+  return res.json();
+}
+
+// --- Public Profile ---
+
+export type PublicProfile = components['schemas']['PublicProfile'];
+export type UpdatePublicProfileRequest = components['schemas']['UpdatePublicProfileRequest'];
+
+export async function getPublicProfile(): Promise<PublicProfile> {
+  const res = await fetch(`${API_BASE}/public-profile`);
+  if (!res.ok) throw new Error(`Failed to get public profile: ${res.statusText}`);
+  return res.json();
+}
+
+export async function updatePublicProfile(req: UpdatePublicProfileRequest): Promise<PublicProfile> {
+  const res = await fetch(`${API_BASE}/public-profile`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || res.statusText);
+  }
+  return res.json();
+}
+
+// --- Shared Calendar (authenticated: view another user's calendar) ---
+
+export async function fetchSharedWithMeCalendar(email: string): Promise<SharedCalendarResponse> {
+  const res = await fetch(`${API_BASE}/shared-with-me/${encodeURIComponent(email)}/activities`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || res.statusText);
+  }
+  return res.json();
+}
+
+export async function fetchSharedWithMeActivities(email: string): Promise<SharedCalendarResponse> {
+  const res = await fetch(`${API_BASE}/shared-with-me/${encodeURIComponent(email)}/activities`);
+  if (!res.ok) throw new Error(`Failed to fetch shared activities: ${res.statusText}`);
+  return res.json();
+}
+
+// Overlay calendar: a shared calendar with its activities loaded
+export interface OverlayCalendar {
+  email: string;
+  color: string;
+  visible: boolean;
+  activities: Activity[];
+}
+
+// --- Public Dashboard ---
+
+export async function fetchPublicDashboard(handle: string): Promise<SharedCalendarResponse> {
+  const res = await fetch(`/public/${handle}.json`);
+  if (res.status === 404) throw new Error('Public profile not found');
+  if (!res.ok) throw new Error(`Failed to load public dashboard: ${res.statusText}`);
+  return res.json();
+}
+
+// --- Shared Calendar (public link view) ---
+
+export interface SharedActivity {
+  title?: string;
+  type: ActivityType;
+  startDate: string;
+  endDate: string;
+  location?: string;
+  tripName?: string;
+  tripColor?: string;
+}
+
+export interface SharedCalendarResponse {
+  label: string;
+  ownerEmail?: string;
+  activities: SharedActivity[];
+}
+
+export async function fetchSharedCalendar(token: string): Promise<SharedCalendarResponse> {
+  const res = await fetch(`/shared/${token}.json`);
+  if (res.status === 410) throw new Error('This share link has expired');
+  if (res.status === 404) throw new Error('Share link not found');
+  if (!res.ok) throw new Error(`Failed to load shared calendar: ${res.statusText}`);
+  return res.json();
+}
+
 // --- Helpers ---
 
 export const ACTIVITY_COLORS: Record<ActivityType, string> = {

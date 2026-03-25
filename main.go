@@ -44,6 +44,7 @@ const appName = "travel-calendar"
 const cliName = "travel"
 
 var app *appbase.App
+var activityServer *travelapp.ActivityServer
 
 func setup() error {
 	var err error
@@ -71,9 +72,21 @@ func setup() error {
 	if err != nil {
 		return err
 	}
+	shareLinks, err := travelapp.NewShareLinkStore(app.DB())
+	if err != nil {
+		return err
+	}
+	shares, err := travelapp.NewShareStore(app.DB())
+	if err != nil {
+		return err
+	}
+	publicProfiles, err := travelapp.NewPublicProfileStore(app.DB())
+	if err != nil {
+		return err
+	}
 
 	// Register API routes
-	activityServer := travelapp.NewActivityServer(activities, trips, parseHistory)
+	activityServer = travelapp.NewActivityServer(activities, trips, parseHistory, shareLinks, shares, publicProfiles)
 	api.HandlerFromMux(activityServer, app.Server().Router())
 
 	return nil
@@ -92,8 +105,27 @@ func main() {
 		}
 		fileServer := http.FileServer(http.FS(distFS))
 
+		// Shared calendar JSON endpoint (unauthenticated — outside /api/ prefix)
+		// The SPA serves at /shared/{token} and fetches data from /shared/{token}.json
+		r.Get("/shared/{token}.json", activityServer.HandleSharedCalendar)
+
+		// Public dashboard (unauthenticated — outside /api/ prefix)
+		r.Get("/public/{handle}.json", activityServer.HandlePublicDashboard)
+
+		// Public dashboard frontend (separate entry point, no login required)
+		r.Get("/public/*", func(w http.ResponseWriter, r *http.Request) {
+			r.URL.Path = "/public.html"
+			fileServer.ServeHTTP(w, r)
+		})
+
 		// Serve static assets (JS, CSS) directly
 		r.Handle("/assets/*", fileServer)
+
+		// Shared calendar view: separate entry point, no login required
+		r.Get("/shared/*", func(w http.ResponseWriter, r *http.Request) {
+			r.URL.Path = "/shared.html"
+			fileServer.ServeHTTP(w, r)
+		})
 
 		// Root: login page if unauthenticated, SPA if authenticated
 		r.Get("/*", app.LoginPage(func(w http.ResponseWriter, r *http.Request) {
@@ -127,6 +159,7 @@ func main() {
 		RunE:  listActivities,
 	}
 	listCmd.Flags().String("month", "", "Filter by month (e.g. 2026-04)")
+	listCmd.Flags().String("user", "", "View another user's shared calendar (email)")
 	cli.AddCommand(listCmd)
 
 	checkCmd := &cobra.Command{
@@ -135,6 +168,7 @@ func main() {
 		Args:  cobra.ExactArgs(1),
 		RunE:  checkDate,
 	}
+	checkCmd.Flags().String("user", "", "Check another user's shared calendar (email)")
 	cli.AddCommand(checkCmd)
 
 	updateCmd := &cobra.Command{
@@ -167,6 +201,130 @@ func main() {
 		RunE:  deleteActivity,
 	}
 	cli.AddCommand(delCmd)
+
+	// --- Trip commands ---
+
+	tripCmd := &cobra.Command{
+		Use:   "trip",
+		Short: "Manage trips",
+	}
+
+	tripListCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List trips",
+		RunE:  listTripsCmd,
+	}
+	tripCmd.AddCommand(tripListCmd)
+	cli.AddCommand(tripCmd)
+
+	// --- Share link commands ---
+
+	shareLinkCmd := &cobra.Command{
+		Use:   "share-link",
+		Short: "Manage share links",
+	}
+
+	shareLinkCreateCmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a new share link",
+		RunE:  createShareLink,
+	}
+	shareLinkCreateCmd.Flags().String("label", "", "Friendly name for this link")
+	shareLinkCreateCmd.Flags().String("expires", "", "Expiry date-time (RFC3339, e.g. 2026-06-01T00:00:00Z)")
+	shareLinkCreateCmd.Flags().String("from", "", "Only share activities from this date (YYYY-MM-DD)")
+	shareLinkCreateCmd.Flags().String("to", "", "Only share activities to this date (YYYY-MM-DD)")
+	shareLinkCreateCmd.Flags().String("trip-ids", "", "Comma-separated trip IDs to include")
+	shareLinkCreateCmd.Flags().Bool("show-titles", false, "Include activity titles in shared view")
+	shareLinkCmd.AddCommand(shareLinkCreateCmd)
+
+	shareLinkListCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List share links",
+		RunE:  listShareLinks,
+	}
+	shareLinkCmd.AddCommand(shareLinkListCmd)
+
+	shareLinkDeleteCmd := &cobra.Command{
+		Use:   "delete [id-prefix]",
+		Short: "Revoke a share link",
+		Args:  cobra.ExactArgs(1),
+		RunE:  deleteShareLink,
+	}
+	shareLinkCmd.AddCommand(shareLinkDeleteCmd)
+
+	cli.AddCommand(shareLinkCmd)
+
+	// --- User-to-user share commands ---
+
+	shareCmd := &cobra.Command{
+		Use:   "share",
+		Short: "Manage user-to-user sharing",
+	}
+
+	shareAddCmd := &cobra.Command{
+		Use:   "add [email]",
+		Short: "Share your calendar with a user",
+		Args:  cobra.ExactArgs(1),
+		RunE:  shareAdd,
+	}
+	shareAddCmd.Flags().Bool("show-titles", false, "Include activity titles in shared view")
+	shareCmd.AddCommand(shareAddCmd)
+
+	shareListCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List shares you've created",
+		RunE:  shareList,
+	}
+	shareCmd.AddCommand(shareListCmd)
+
+	shareRemoveCmd := &cobra.Command{
+		Use:   "remove [id-prefix]",
+		Short: "Revoke a share",
+		Args:  cobra.ExactArgs(1),
+		RunE:  shareRemove,
+	}
+	shareCmd.AddCommand(shareRemoveCmd)
+
+	shareListSharedCmd := &cobra.Command{
+		Use:   "list-shared",
+		Short: "List calendars shared with you",
+		RunE:  shareListShared,
+	}
+	shareCmd.AddCommand(shareListSharedCmd)
+
+	cli.AddCommand(shareCmd)
+
+	// --- Public profile commands ---
+
+	publicCmd := &cobra.Command{
+		Use:   "public",
+		Short: "Manage your public dashboard",
+	}
+
+	publicEnableCmd := &cobra.Command{
+		Use:   "enable",
+		Short: "Enable your public dashboard",
+		RunE:  publicEnable,
+	}
+	publicEnableCmd.Flags().String("handle", "", "URL slug (required, e.g. michael)")
+	publicEnableCmd.MarkFlagRequired("handle")
+	publicCmd.AddCommand(publicEnableCmd)
+
+	publicDisableCmd := &cobra.Command{
+		Use:   "disable",
+		Short: "Disable your public dashboard",
+		RunE:  publicDisable,
+	}
+	publicCmd.AddCommand(publicDisableCmd)
+
+	publicStatusCmd := &cobra.Command{
+		Use:   "status",
+		Short: "Show public dashboard status",
+		RunE:  publicStatus,
+	}
+	publicCmd.AddCommand(publicStatusCmd)
+
+	cli.AddCommand(publicCmd)
 
 	cli.Execute()
 }
@@ -429,6 +587,13 @@ func listActivities(cmd *cobra.Command, args []string) error {
 	defer cleanup()
 
 	month, _ := cmd.Flags().GetString("month")
+	user, _ := cmd.Flags().GetString("user")
+
+	// --user flag: query another user's shared calendar
+	if user != "" {
+		return listSharedActivities(client, user, month)
+	}
+
 	params := &api.ListActivitiesParams{}
 	if month != "" {
 		params.Month = &month
@@ -466,6 +631,54 @@ func listActivities(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func listSharedActivities(client *api.ClientWithResponses, email, month string) error {
+	params := &api.GetSharedActivitiesParams{}
+	if month != "" {
+		params.Month = &month
+	}
+
+	resp, err := client.GetSharedActivitiesWithResponse(context.Background(), email, params)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+	}
+
+	cal := resp.JSON200
+	fmt.Printf("Shared by: %s\n\n", email)
+
+	if len(cal.Activities) == 0 {
+		fmt.Println("No activities.")
+		return nil
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "DATES\tTYPE\tLOCATION\tTITLE\tTRIP\n")
+	for _, a := range cal.Activities {
+		dates := a.StartDate.Format("2006-01-02")
+		endStr := a.EndDate.Format("2006-01-02")
+		if endStr != dates {
+			dates = dates + " -> " + endStr
+		}
+		loc := ""
+		if a.Location != nil {
+			loc = *a.Location
+		}
+		title := ""
+		if a.Title != nil {
+			title = *a.Title
+		}
+		trip := ""
+		if a.TripName != nil {
+			trip = *a.TripName
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", dates, a.Type, loc, title, trip)
+	}
+	w.Flush()
+	return nil
+}
+
 func checkDate(cmd *cobra.Command, args []string) error {
 	client, cleanup, err := apiClient(cmd)
 	if err != nil {
@@ -477,6 +690,39 @@ func checkDate(cmd *cobra.Command, args []string) error {
 	d, perr := time.Parse("2006-01-02", dateStr)
 	if perr != nil {
 		return fmt.Errorf("invalid date %q (expected YYYY-MM-DD)", dateStr)
+	}
+
+	user, _ := cmd.Flags().GetString("user")
+
+	// --user flag: check another user's shared calendar for this date
+	if user != "" {
+		from := openapi_types.Date{Time: d}
+		to := openapi_types.Date{Time: d}
+		params := &api.GetSharedActivitiesParams{From: &from, To: &to}
+		resp, err := client.GetSharedActivitiesWithResponse(context.Background(), user, params)
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode() != http.StatusOK {
+			return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+		}
+		cal := resp.JSON200
+		fmt.Printf("%s (%s's calendar):\n", dateStr, user)
+		for _, a := range cal.Activities {
+			loc := ""
+			if a.Location != nil {
+				loc = "  @ " + *a.Location
+			}
+			title := string(a.Type)
+			if a.Title != nil {
+				title = *a.Title
+			}
+			fmt.Printf("  - %s [%s]%s\n", title, a.Type, loc)
+		}
+		if len(cal.Activities) == 0 {
+			fmt.Println("  No activities")
+		}
+		return nil
 	}
 
 	resp, err := client.CheckDateWithResponse(context.Background(), openapi_types.Date{Time: d})
@@ -611,5 +857,434 @@ func deleteActivity(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Deleted: %s (%s to %s) [%s]\n", a.Title, a.StartDate.Format("2006-01-02"), a.EndDate.Format("2006-01-02"), a.Type)
+	return nil
+}
+
+// --- Trip CLI commands ---
+
+func listTripsCmd(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.ListTripsWithResponse(context.Background())
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+	}
+
+	trips := *resp.JSON200
+	if len(trips) == 0 {
+		fmt.Println("No trips.")
+		return nil
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "ID\tNAME\tDATES\tLOCATIONS\tACTIVITIES\n")
+	for _, t := range trips {
+		dates := t.StartDate.Format("2006-01-02") + " -> " + t.EndDate.Format("2006-01-02")
+		locs := ""
+		if t.Locations != nil {
+			locs = strings.Join(*t.Locations, ", ")
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\n", t.Id[:8], t.Name, dates, locs, t.ActivityCount)
+	}
+	w.Flush()
+	return nil
+}
+
+// --- Share link CLI commands ---
+
+func createShareLink(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	req := api.CreateShareLinkRequest{}
+	if v, _ := cmd.Flags().GetString("label"); v != "" {
+		req.Label = &v
+	}
+	if v, _ := cmd.Flags().GetString("expires"); v != "" {
+		t, perr := time.Parse(time.RFC3339, v)
+		if perr != nil {
+			return fmt.Errorf("invalid expiry %q (expected RFC3339, e.g. 2026-06-01T00:00:00Z)", v)
+		}
+		req.ExpiresAt = &t
+	}
+	if v, _ := cmd.Flags().GetString("from"); v != "" {
+		d, perr := time.Parse("2006-01-02", v)
+		if perr != nil {
+			return fmt.Errorf("invalid from date %q (expected YYYY-MM-DD)", v)
+		}
+		req.FromDate = &openapi_types.Date{Time: d}
+	}
+	if v, _ := cmd.Flags().GetString("to"); v != "" {
+		d, perr := time.Parse("2006-01-02", v)
+		if perr != nil {
+			return fmt.Errorf("invalid to date %q (expected YYYY-MM-DD)", v)
+		}
+		req.ToDate = &openapi_types.Date{Time: d}
+	}
+	if v, _ := cmd.Flags().GetString("trip-ids"); v != "" {
+		req.TripIds = &v
+	}
+	if v, _ := cmd.Flags().GetBool("show-titles"); v {
+		req.ShowTitle = &v
+	}
+
+	resp, err := client.CreateShareLinkWithResponse(context.Background(), req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode() != http.StatusCreated {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+	}
+
+	link := resp.JSON201
+	fmt.Printf("Created share link: %s (%s)\n", link.Label, link.Id[:8])
+	fmt.Printf("  Token: %s\n", link.Token)
+	fmt.Printf("  URL:   /shared/%s\n", link.Token)
+	if link.ExpiresAt != nil {
+		fmt.Printf("  Expires: %s\n", link.ExpiresAt.Format(time.RFC3339))
+	}
+	if link.FromDate != nil {
+		fmt.Printf("  From: %s\n", link.FromDate.Format("2006-01-02"))
+	}
+	if link.ToDate != nil {
+		fmt.Printf("  To: %s\n", link.ToDate.Format("2006-01-02"))
+	}
+	if link.ShowTitle {
+		fmt.Println("  Titles: visible")
+	}
+	return nil
+}
+
+func listShareLinks(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.ListShareLinksWithResponse(context.Background())
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+	}
+
+	links := *resp.JSON200
+	if len(links) == 0 {
+		fmt.Println("No share links. Create one with: travel share-link create --label \"For team\"")
+		return nil
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "ID\tLABEL\tTOKEN\tEXPIRES\tTITLES\n")
+	for _, l := range links {
+		expires := "never"
+		if l.ExpiresAt != nil {
+			expires = l.ExpiresAt.Format("2006-01-02")
+		}
+		titles := "hidden"
+		if l.ShowTitle {
+			titles = "visible"
+		}
+		tokenPreview := l.Token
+		if len(tokenPreview) > 12 {
+			tokenPreview = tokenPreview[:12] + "..."
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", l.Id[:8], l.Label, tokenPreview, expires, titles)
+	}
+	w.Flush()
+	return nil
+}
+
+func deleteShareLink(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	// Resolve by prefix
+	listResp, err := client.ListShareLinksWithResponse(context.Background())
+	if err != nil {
+		return err
+	}
+	if listResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", listResp.StatusCode(), string(listResp.Body))
+	}
+
+	prefix := args[0]
+	var matches []api.ShareLink
+	for _, l := range *listResp.JSON200 {
+		if strings.HasPrefix(l.Id, prefix) {
+			matches = append(matches, l)
+		}
+	}
+	if len(matches) == 0 {
+		return fmt.Errorf("no share link found matching %q", prefix)
+	}
+	if len(matches) > 1 {
+		fmt.Fprintf(os.Stderr, "Ambiguous prefix %q matches %d links:\n", prefix, len(matches))
+		for _, l := range matches {
+			fmt.Fprintf(os.Stderr, "  %s  %s\n", l.Id[:8], l.Label)
+		}
+		return fmt.Errorf("provide a longer prefix")
+	}
+
+	delResp, err := client.DeleteShareLinkWithResponse(context.Background(), matches[0].Id)
+	if err != nil {
+		return err
+	}
+	if delResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", delResp.StatusCode(), string(delResp.Body))
+	}
+
+	fmt.Printf("Deleted share link: %s (%s)\n", matches[0].Label, matches[0].Id[:8])
+	return nil
+}
+
+// --- User-to-user share CLI commands ---
+
+func shareAdd(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	email := args[0]
+	showTitles, _ := cmd.Flags().GetBool("show-titles")
+
+	req := api.CreateShareRequest{Email: email}
+	if showTitles {
+		req.ShowTitle = &showTitles
+	}
+
+	resp, err := client.CreateShareWithResponse(context.Background(), req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode() != http.StatusCreated {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+	}
+
+	sh := resp.JSON201
+	fmt.Printf("Shared calendar with %s (%s)\n", sh.SharedWith, sh.Id[:8])
+	if sh.ShowTitle {
+		fmt.Println("  Titles: visible")
+	}
+	return nil
+}
+
+func shareList(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.ListSharesWithResponse(context.Background())
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+	}
+
+	shares := *resp.JSON200
+	if len(shares) == 0 {
+		fmt.Println("No shares. Share with: travel share add user@example.com")
+		return nil
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "ID\tSHARED WITH\tTITLES\n")
+	for _, sh := range shares {
+		titles := "hidden"
+		if sh.ShowTitle {
+			titles = "visible"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\n", sh.Id[:8], sh.SharedWith, titles)
+	}
+	w.Flush()
+	return nil
+}
+
+func shareRemove(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	listResp, err := client.ListSharesWithResponse(context.Background())
+	if err != nil {
+		return err
+	}
+	if listResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", listResp.StatusCode(), string(listResp.Body))
+	}
+
+	prefix := args[0]
+	var matches []api.Share
+	for _, sh := range *listResp.JSON200 {
+		if strings.HasPrefix(sh.Id, prefix) {
+			matches = append(matches, sh)
+		}
+	}
+	if len(matches) == 0 {
+		return fmt.Errorf("no share found matching %q", prefix)
+	}
+	if len(matches) > 1 {
+		fmt.Fprintf(os.Stderr, "Ambiguous prefix %q matches %d shares:\n", prefix, len(matches))
+		for _, sh := range matches {
+			fmt.Fprintf(os.Stderr, "  %s  %s\n", sh.Id[:8], sh.SharedWith)
+		}
+		return fmt.Errorf("provide a longer prefix")
+	}
+
+	delResp, err := client.DeleteShareWithResponse(context.Background(), matches[0].Id)
+	if err != nil {
+		return err
+	}
+	if delResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", delResp.StatusCode(), string(delResp.Body))
+	}
+
+	fmt.Printf("Revoked share with %s (%s)\n", matches[0].SharedWith, matches[0].Id[:8])
+	return nil
+}
+
+func shareListShared(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.ListSharedWithMeWithResponse(context.Background())
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+	}
+
+	entries := *resp.JSON200
+	if len(entries) == 0 {
+		fmt.Println("No calendars shared with you.")
+		return nil
+	}
+
+	fmt.Println("Calendars shared with you:")
+	for _, e := range entries {
+		fmt.Printf("  %s\n", e.OwnerEmail)
+	}
+	fmt.Println("\nView with: travel list --user <email>")
+	return nil
+}
+
+// --- Public profile CLI commands ---
+
+func publicEnable(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	handle, _ := cmd.Flags().GetString("handle")
+
+	resp, err := client.UpdatePublicProfileWithResponse(context.Background(), api.UpdatePublicProfileRequest{
+		Handle:  handle,
+		Enabled: true,
+	})
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+	}
+
+	fmt.Printf("Public dashboard enabled at /public/%s\n", resp.JSON200.Handle)
+	return nil
+}
+
+func publicDisable(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	// Get current profile first to preserve handle
+	getResp, err := client.GetPublicProfileWithResponse(context.Background())
+	if err != nil {
+		return err
+	}
+	if getResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", getResp.StatusCode(), string(getResp.Body))
+	}
+
+	handle := getResp.JSON200.Handle
+	if handle == "" {
+		fmt.Println("No public profile configured.")
+		return nil
+	}
+
+	resp, err := client.UpdatePublicProfileWithResponse(context.Background(), api.UpdatePublicProfileRequest{
+		Handle:  handle,
+		Enabled: false,
+	})
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+	}
+
+	fmt.Println("Public dashboard disabled.")
+	return nil
+}
+
+func publicStatus(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.GetPublicProfileWithResponse(context.Background())
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+	}
+
+	p := resp.JSON200
+	if p.Handle == "" {
+		fmt.Println("Public dashboard: not configured")
+		fmt.Println("Enable with: travel public enable --handle <your-handle>")
+		return nil
+	}
+
+	status := "disabled"
+	if p.Enabled {
+		status = "enabled"
+	}
+	fmt.Printf("Public dashboard: %s\n", status)
+	fmt.Printf("  Handle: %s\n", p.Handle)
+	fmt.Printf("  URL:    /public/%s\n", p.Handle)
 	return nil
 }

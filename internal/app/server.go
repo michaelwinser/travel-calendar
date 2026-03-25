@@ -2,10 +2,13 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/michaelwinser/appbase"
 	"github.com/michaelwinser/appbase/server"
 	"github.com/michaelwinser/travel-calendar/api"
@@ -24,14 +27,17 @@ var tripColors = []string{
 
 // ActivityServer implements the generated ServerInterface.
 type ActivityServer struct {
-	store        *ActivityStore
-	trips        *TripStore
-	parseHistory *ParseHistoryStore
+	store          *ActivityStore
+	trips          *TripStore
+	parseHistory   *ParseHistoryStore
+	shareLinks     *ShareLinkStore
+	shares         *ShareStore
+	publicProfiles *PublicProfileStore
 }
 
 // NewActivityServer creates a new server with all dependencies.
-func NewActivityServer(store *ActivityStore, trips *TripStore, parseHistory *ParseHistoryStore) *ActivityServer {
-	return &ActivityServer{store: store, trips: trips, parseHistory: parseHistory}
+func NewActivityServer(store *ActivityStore, trips *TripStore, parseHistory *ParseHistoryStore, shareLinks *ShareLinkStore, shares *ShareStore, publicProfiles *PublicProfileStore) *ActivityServer {
+	return &ActivityServer{store: store, trips: trips, parseHistory: parseHistory, shareLinks: shareLinks, shares: shares, publicProfiles: publicProfiles}
 }
 
 func (s *ActivityServer) ListActivities(w http.ResponseWriter, r *http.Request, params api.ListActivitiesParams) {
@@ -513,6 +519,471 @@ func (s *ActivityServer) DeleteTrip(w http.ResponseWriter, r *http.Request, id s
 	server.RespondJSON(w, http.StatusOK, api.OkResponse{Ok: ptr("true")})
 }
 
+// --- Share Link handlers ---
+
+func (s *ActivityServer) ListShareLinks(w http.ResponseWriter, r *http.Request) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	links, err := s.shareLinks.ListByUser(userID)
+	if err != nil {
+		server.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	result := make([]api.ShareLink, len(links))
+	for i, l := range links {
+		result[i] = shareLinkToAPI(l)
+	}
+	server.RespondJSON(w, http.StatusOK, result)
+}
+
+func (s *ActivityServer) CreateShareLink(w http.ResponseWriter, r *http.Request) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	var req api.CreateShareLinkRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		server.RespondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	label := ""
+	if req.Label != nil {
+		label = *req.Label
+	}
+	expiresAt := ""
+	if req.ExpiresAt != nil {
+		expiresAt = req.ExpiresAt.Format(time.RFC3339)
+	}
+	fromDate := ""
+	if req.FromDate != nil {
+		fromDate = req.FromDate.Format("2006-01-02")
+	}
+	toDate := ""
+	if req.ToDate != nil {
+		toDate = req.ToDate.Format("2006-01-02")
+	}
+	tripIDs := ""
+	if req.TripIds != nil {
+		tripIDs = *req.TripIds
+	}
+	showTitle := false
+	if req.ShowTitle != nil {
+		showTitle = *req.ShowTitle
+	}
+
+	ownerEmail := appbase.Email(r)
+	link, err := s.shareLinks.Create(userID, ownerEmail, label, expiresAt, fromDate, toDate, tripIDs, showTitle)
+	if err != nil {
+		server.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	server.RespondJSON(w, http.StatusCreated, shareLinkToAPI(*link))
+}
+
+func (s *ActivityServer) DeleteShareLink(w http.ResponseWriter, r *http.Request, id string) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	link, err := s.shareLinks.Get(id)
+	if err != nil || link == nil || link.UserID != userID {
+		server.RespondError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	if err := s.shareLinks.Delete(id); err != nil {
+		server.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	server.RespondJSON(w, http.StatusOK, api.OkResponse{Ok: ptr("true")})
+}
+
+// HandleSharedCalendar serves the public shared calendar endpoint (no auth required).
+// Expects the route pattern /shared/{token}.json
+func (s *ActivityServer) HandleSharedCalendar(w http.ResponseWriter, r *http.Request) {
+	token := r.PathValue("token")
+	if token == "" {
+		// Fallback: extract from path, stripping .json suffix
+		token = strings.TrimPrefix(r.URL.Path, "/shared/")
+		token = strings.TrimSuffix(token, ".json")
+	}
+	if token == "" {
+		server.RespondError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	link, err := s.shareLinks.GetByToken(token)
+	if err != nil {
+		server.RespondError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if link == nil {
+		server.RespondError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	// Check expiry
+	if link.ExpiresAt != "" {
+		expiry, err := time.Parse(time.RFC3339, link.ExpiresAt)
+		if err == nil && time.Now().After(expiry) {
+			server.RespondError(w, http.StatusGone, "this share link has expired")
+			return
+		}
+	}
+
+	// Query activities with filters
+	var activities []Activity
+	if link.FromDate != "" && link.ToDate != "" {
+		activities, err = s.store.ListRange(link.UserID, link.FromDate, link.ToDate)
+	} else {
+		activities, err = s.store.List(link.UserID)
+	}
+	if err != nil {
+		server.RespondError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Filter by trip IDs if specified
+	if link.TripIDs != "" {
+		tripIDSet := map[string]bool{}
+		for _, id := range strings.Split(link.TripIDs, ",") {
+			tripIDSet[strings.TrimSpace(id)] = true
+		}
+		filtered := activities[:0]
+		for _, a := range activities {
+			if tripIDSet[a.TripID] {
+				filtered = append(filtered, a)
+			}
+		}
+		activities = filtered
+	}
+
+	// Build trip lookup and convert to shared activities
+	tripMap := s.buildTripMap(link.UserID)
+	shared := make([]api.SharedActivity, len(activities))
+	for i, a := range activities {
+		shared[i] = entityToSharedActivity(a, link.ShowTitle, tripMap)
+	}
+
+	server.RespondJSON(w, http.StatusOK, api.SharedCalendarResponse{
+		Label:      link.Label,
+		OwnerEmail: &link.OwnerEmail,
+		Activities: shared,
+	})
+}
+
+// --- User-to-user share handlers ---
+
+func (s *ActivityServer) ListShares(w http.ResponseWriter, r *http.Request) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	shares, err := s.shares.ListByOwner(userID)
+	if err != nil {
+		server.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	result := make([]api.Share, len(shares))
+	for i, sh := range shares {
+		result[i] = shareToAPI(sh)
+	}
+	server.RespondJSON(w, http.StatusOK, result)
+}
+
+func (s *ActivityServer) CreateShare(w http.ResponseWriter, r *http.Request) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	var req api.CreateShareRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		server.RespondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Email == "" {
+		server.RespondError(w, http.StatusBadRequest, "email is required")
+		return
+	}
+
+	ownerEmail := appbase.Email(r)
+	if req.Email == ownerEmail {
+		server.RespondError(w, http.StatusBadRequest, "cannot share with yourself")
+		return
+	}
+
+	// Check for duplicate
+	existing, _ := s.shares.FindByOwnerAndRecipient(ownerEmail, req.Email)
+	if existing != nil {
+		server.RespondError(w, http.StatusBadRequest, "already shared with this user")
+		return
+	}
+
+	showTitle := false
+	if req.ShowTitle != nil {
+		showTitle = *req.ShowTitle
+	}
+
+	sh, err := s.shares.Create(userID, ownerEmail, req.Email, showTitle)
+	if err != nil {
+		server.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	server.RespondJSON(w, http.StatusCreated, shareToAPI(*sh))
+}
+
+func (s *ActivityServer) DeleteShare(w http.ResponseWriter, r *http.Request, id string) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	sh, err := s.shares.Get(id)
+	if err != nil || sh == nil || sh.OwnerUserID != userID {
+		server.RespondError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	if err := s.shares.Delete(id); err != nil {
+		server.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	server.RespondJSON(w, http.StatusOK, api.OkResponse{Ok: ptr("true")})
+}
+
+func (s *ActivityServer) ListSharedWithMe(w http.ResponseWriter, r *http.Request) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	email := appbase.Email(r)
+	shares, err := s.shares.ListByRecipient(email)
+	if err != nil {
+		server.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	result := make([]api.SharedWithMeEntry, len(shares))
+	for i, sh := range shares {
+		result[i] = api.SharedWithMeEntry{
+			ShareId:    sh.ID,
+			OwnerEmail: sh.OwnerEmail,
+		}
+	}
+	server.RespondJSON(w, http.StatusOK, result)
+}
+
+func (s *ActivityServer) GetSharedActivities(w http.ResponseWriter, r *http.Request, email string, params api.GetSharedActivitiesParams) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	myEmail := appbase.Email(r)
+	share, err := s.shares.FindByOwnerAndRecipient(email, myEmail)
+	if err != nil {
+		server.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if share == nil {
+		server.RespondError(w, http.StatusNotFound, "no share found from this user")
+		return
+	}
+
+	// Query the owner's activities with optional filters
+	var activities []Activity
+	if params.Month != nil {
+		t, perr := time.Parse("2006-01", *params.Month)
+		if perr != nil {
+			server.RespondError(w, http.StatusBadRequest, "invalid month (expected YYYY-MM)")
+			return
+		}
+		from := t.Format("2006-01-02")
+		to := t.AddDate(0, 1, -1).Format("2006-01-02")
+		activities, err = s.store.ListRange(share.OwnerUserID, from, to)
+	} else if params.From != nil && params.To != nil {
+		activities, err = s.store.ListRange(share.OwnerUserID, params.From.Format("2006-01-02"), params.To.Format("2006-01-02"))
+	} else {
+		activities, err = s.store.List(share.OwnerUserID)
+	}
+	if err != nil {
+		server.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	tripMap := s.buildTripMap(share.OwnerUserID)
+	shared := make([]api.SharedActivity, len(activities))
+	for i, a := range activities {
+		shared[i] = entityToSharedActivity(a, share.ShowTitle, tripMap)
+	}
+
+	server.RespondJSON(w, http.StatusOK, api.SharedCalendarResponse{
+		Label:      share.OwnerEmail + "'s calendar",
+		OwnerEmail: &share.OwnerEmail,
+		Activities: shared,
+	})
+}
+
+// --- Public profile handlers ---
+
+func (s *ActivityServer) GetPublicProfile(w http.ResponseWriter, r *http.Request) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	p, err := s.publicProfiles.GetByUserID(userID)
+	if err != nil {
+		server.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if p == nil {
+		// Return empty/default profile
+		server.RespondJSON(w, http.StatusOK, api.PublicProfile{Handle: "", Enabled: false})
+		return
+	}
+
+	server.RespondJSON(w, http.StatusOK, api.PublicProfile{Handle: p.Handle, Enabled: p.Enabled})
+}
+
+func (s *ActivityServer) UpdatePublicProfile(w http.ResponseWriter, r *http.Request) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	var req api.UpdatePublicProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		server.RespondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// Validate handle
+	if err := validateHandle(req.Handle); err != nil {
+		server.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Check handle uniqueness
+	existing, _ := s.publicProfiles.GetByHandle(req.Handle)
+	if existing != nil && existing.UserID != userID {
+		server.RespondError(w, http.StatusBadRequest, "handle is already taken")
+		return
+	}
+
+	p, err := s.publicProfiles.GetByUserID(userID)
+	if err != nil {
+		server.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if p == nil {
+		// Create new profile
+		p = &PublicProfile{
+			ID:        uuid.New().String(),
+			UserID:    userID,
+			Handle:    req.Handle,
+			Enabled:   req.Enabled,
+			CreatedAt: time.Now().Format(time.RFC3339),
+		}
+		if err := s.publicProfiles.Create(p); err != nil {
+			server.RespondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	} else {
+		p.Handle = req.Handle
+		p.Enabled = req.Enabled
+		if err := s.publicProfiles.Update(p); err != nil {
+			server.RespondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+
+	server.RespondJSON(w, http.StatusOK, api.PublicProfile{Handle: p.Handle, Enabled: p.Enabled})
+}
+
+// HandlePublicDashboard serves the public "Where is X" dashboard (no auth).
+func (s *ActivityServer) HandlePublicDashboard(w http.ResponseWriter, r *http.Request) {
+	handle := r.PathValue("handle")
+	if handle == "" {
+		handle = strings.TrimPrefix(r.URL.Path, "/public/")
+		handle = strings.TrimSuffix(handle, ".json")
+	}
+	isJSON := strings.HasSuffix(r.URL.Path, ".json")
+
+	p, err := s.publicProfiles.GetByHandle(handle)
+	if err != nil {
+		server.RespondError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if p == nil || !p.Enabled {
+		if isJSON {
+			server.RespondError(w, http.StatusNotFound, "not found")
+		} else {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte("<html><body><p style='text-align:center;padding:3rem;color:#999'>Public profile not found.</p></body></html>"))
+		}
+		return
+	}
+
+	// Query -2 weeks to +4 weeks of activities
+	now := time.Now()
+	rangeStart := now.AddDate(0, 0, -14)
+	rangeEnd := now.AddDate(0, 0, 28)
+	from := rangeStart.Format("2006-01-02")
+	to := rangeEnd.Format("2006-01-02")
+
+	activities, err := s.store.ListRange(p.UserID, from, to)
+	if err != nil {
+		server.RespondError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	tripMap := s.buildTripMap(p.UserID)
+
+	// Privacy filter: strip titles and notes, keep location + type + trip info
+	shared := make([]api.SharedActivity, len(activities))
+	for i, a := range activities {
+		shared[i] = entityToSharedActivity(a, false, tripMap)
+	}
+
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+
+	if isJSON {
+		server.RespondJSON(w, http.StatusOK, api.SharedCalendarResponse{
+			Label:      "Where is " + p.Handle + "?",
+			OwnerEmail: nil,
+			Activities: shared,
+		})
+		return
+	}
+
+	// Serve the public frontend entry point
+	// This is handled by the /public/{handle} route serving public.html
+	// If we get here for a non-JSON request, it means the frontend isn't built yet
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("<html><body><p>Public dashboard frontend not available. Use /public/" + p.Handle + ".json for data.</p></body></html>"))
+}
+
+
 // --- helpers ---
 
 func requireUser(w http.ResponseWriter, r *http.Request) string {
@@ -548,6 +1019,85 @@ func entityToAPI(a Activity) api.Activity {
 		act.TripId = &a.TripID
 	}
 	return act
+}
+
+func shareLinkToAPI(l ShareLink) api.ShareLink {
+	createdAt, _ := time.Parse(time.RFC3339, l.CreatedAt)
+	link := api.ShareLink{
+		Id:        l.ID,
+		Token:     l.Token,
+		Label:     l.Label,
+		ShowTitle: l.ShowTitle,
+		CreatedAt: createdAt,
+	}
+	if l.ExpiresAt != "" {
+		t, _ := time.Parse(time.RFC3339, l.ExpiresAt)
+		link.ExpiresAt = &t
+	}
+	if l.FromDate != "" {
+		d, _ := time.Parse("2006-01-02", l.FromDate)
+		link.FromDate = &openapi_types.Date{Time: d}
+	}
+	if l.ToDate != "" {
+		d, _ := time.Parse("2006-01-02", l.ToDate)
+		link.ToDate = &openapi_types.Date{Time: d}
+	}
+	if l.TripIDs != "" {
+		link.TripIds = &l.TripIDs
+	}
+	return link
+}
+
+func shareToAPI(sh Share) api.Share {
+	createdAt, _ := time.Parse(time.RFC3339, sh.CreatedAt)
+	return api.Share{
+		Id:         sh.ID,
+		OwnerEmail: sh.OwnerEmail,
+		SharedWith: sh.SharedWith,
+		ShowTitle:  sh.ShowTitle,
+		CreatedAt:  createdAt,
+	}
+}
+
+func entityToSharedActivity(a Activity, showTitle bool, tripMap map[string]Trip) api.SharedActivity {
+	startDate, _ := time.Parse("2006-01-02", a.StartDate)
+	endDate, _ := time.Parse("2006-01-02", a.EndDate)
+	sa := api.SharedActivity{
+		Type:      api.SharedActivityType(a.Type),
+		StartDate: openapi_types.Date{Time: startDate},
+		EndDate:   openapi_types.Date{Time: endDate},
+	}
+	if a.Location != "" {
+		sa.Location = &a.Location
+	}
+	if showTitle {
+		sa.Title = &a.Title
+	}
+	if t, ok := tripMap[a.TripID]; ok {
+		sa.TripName = &t.Name
+		sa.TripColor = &t.Color
+	}
+	return sa
+}
+
+// buildTripMap returns a map of trip ID to Trip for the given user.
+func (s *ActivityServer) buildTripMap(userID string) map[string]Trip {
+	tripMap := map[string]Trip{}
+	if trips, err := s.trips.List(userID); err == nil {
+		for _, t := range trips {
+			tripMap[t.ID] = t
+		}
+	}
+	return tripMap
+}
+
+var handleRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$`)
+
+func validateHandle(h string) error {
+	if !handleRe.MatchString(h) {
+		return fmt.Errorf("handle must be 3-30 chars, lowercase alphanumeric and hyphens")
+	}
+	return nil
 }
 
 func ptr(s string) *string { return &s }

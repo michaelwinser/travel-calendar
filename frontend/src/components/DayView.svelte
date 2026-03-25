@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { ACTIVITY_COLORS, type Activity, type TripSummary } from '../lib/api';
+  import { ACTIVITY_COLORS, type Activity, type TripSummary, type OverlayCalendar } from '../lib/api';
   import {
     today, addDays, stringToDate, hasConflict,
     monthLabel, minDate, maxDate,
@@ -9,6 +9,8 @@
   interface Props {
     activities: Activity[];
     trips: TripSummary[];
+    overlayActivities?: Activity[];
+    overlayCalendars?: OverlayCalendar[];
     initialDate?: string;
     onedit: (activity: Activity) => void;
     ondayclick: (date: string) => void;
@@ -16,7 +18,27 @@
     onfocusdate?: (date: string) => void;
   }
 
-  let { activities, trips, initialDate, onedit, ondayclick, ondragselect, onfocusdate }: Props = $props();
+  let { activities, trips, overlayActivities, overlayCalendars, initialDate, onedit, ondayclick, ondragselect, onfocusdate }: Props = $props();
+
+  // Build per-day overlay lookup
+  let overlayByDay = $derived.by(() => {
+    const map = new Map<string, { location: string; color: string; ownerEmail: string }[]>();
+    if (!overlayActivities?.length || !overlayCalendars?.length) return map;
+    const colorMap = new Map<string, string>();
+    for (const c of overlayCalendars) if (c.visible) colorMap.set(c.email, c.color);
+    for (const a of overlayActivities) {
+      const color = colorMap.get(a.userId) ?? '#999';
+      const start = stringToDate(a.startDate);
+      const end = stringToDate(a.endDate);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const ds = d.toISOString().slice(0, 10);
+        const item = { location: a.location ?? '', color, ownerEmail: a.userId };
+        const list = map.get(ds);
+        if (list) list.push(item); else map.set(ds, [item]);
+      }
+    }
+    return map;
+  });
 
   // Trip lookup
   function tripFor(activity: Activity): TripSummary | undefined {
@@ -316,6 +338,14 @@
             </div>
           {/each}
         {/if}
+
+        {#if overlayByDay.has(dateStr)}
+          {#each overlayByDay.get(dateStr)! as item}
+            <div class="overlay-chip" style="border-left-color: {item.color};" title={item.ownerEmail}>
+              <span class="overlay-loc">{item.location || item.ownerEmail}</span>
+            </div>
+          {/each}
+        {/if}
       </div>
     </div>
   {/each}
@@ -485,5 +515,21 @@
     font-size: 0.65rem;
     text-transform: capitalize;
     flex-shrink: 0;
+  }
+
+  .overlay-chip {
+    display: inline-flex;
+    align-items: center;
+    border-left: 3px solid;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.7rem;
+    color: #888;
+    opacity: 0.75;
+  }
+
+  .overlay-loc {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 </style>

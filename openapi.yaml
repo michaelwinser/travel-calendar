@@ -191,6 +191,45 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /api/public-profile:
+    get:
+      operationId: getPublicProfile
+      summary: Get the authenticated user's public profile settings
+      security:
+        - session: []
+      responses:
+        '200':
+          description: Public profile (may not exist yet)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      operationId: updatePublicProfile
+      summary: Create or update public profile settings
+      security:
+        - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePublicProfileRequest'
+      responses:
+        '200':
+          description: Updated public profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicProfile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /api/trips:
     get:
       operationId: listTrips
@@ -231,6 +270,197 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /api/share-links:
+    get:
+      operationId: listShareLinks
+      summary: List share links created by the authenticated user
+      security:
+        - session: []
+      responses:
+        '200':
+          description: List of share links
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ShareLink'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      operationId: createShareLink
+      summary: Create a new share link
+      security:
+        - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateShareLinkRequest'
+      responses:
+        '201':
+          description: Created share link
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareLink'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/share-links/{id}:
+    delete:
+      operationId: deleteShareLink
+      summary: Revoke a share link
+      security:
+        - session: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/shares:
+    get:
+      operationId: listShares
+      summary: List calendar shares created by the authenticated user
+      security:
+        - session: []
+      responses:
+        '200':
+          description: List of shares
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Share'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      operationId: createShare
+      summary: Share calendar with another user by email
+      security:
+        - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateShareRequest'
+      responses:
+        '201':
+          description: Created share
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Share'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/shares/{id}:
+    delete:
+      operationId: deleteShare
+      summary: Revoke a share
+      security:
+        - session: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/shared-with-me:
+    get:
+      operationId: listSharedWithMe
+      summary: List calendars shared with the authenticated user
+      security:
+        - session: []
+      responses:
+        '200':
+          description: List of shares where current user is the recipient
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SharedWithMeEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/shared-with-me/{email}/activities:
+    get:
+      operationId: getSharedActivities
+      summary: Get privacy-filtered activities from a user who shared with you
+      security:
+        - session: []
+      parameters:
+        - name: email
+          in: path
+          required: true
+          description: Email of the user who shared their calendar
+          schema:
+            type: string
+        - name: month
+          in: query
+          description: Filter by month (YYYY-MM)
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}$'
+        - name: from
+          in: query
+          description: Filter start (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          description: Filter end (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Privacy-filtered activities
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedCalendarResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /api/trips/{id}:
     put:
@@ -509,6 +739,163 @@ components:
           type: string
         color:
           type: string
+
+    ShareLink:
+      type: object
+      required: [id, token, label, showTitle, createdAt]
+      properties:
+        id:
+          type: string
+        token:
+          type: string
+          description: URL-safe token for accessing the shared calendar
+        label:
+          type: string
+          description: User-friendly name for this link
+        expiresAt:
+          type: string
+          format: date-time
+          description: When this link expires (empty = never)
+        fromDate:
+          type: string
+          format: date
+          description: Only share activities starting from this date
+        toDate:
+          type: string
+          format: date
+          description: Only share activities ending before this date
+        tripIds:
+          type: string
+          description: Comma-separated trip IDs to filter by (empty = all)
+        showTitle:
+          type: boolean
+          description: Whether activity titles are visible to viewers
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateShareLinkRequest:
+      type: object
+      properties:
+        label:
+          type: string
+          description: User-friendly name (auto-generated if omitted)
+        expiresAt:
+          type: string
+          format: date-time
+        fromDate:
+          type: string
+          format: date
+        toDate:
+          type: string
+          format: date
+        tripIds:
+          type: string
+          description: Comma-separated trip IDs to filter by
+        showTitle:
+          type: boolean
+          description: Whether activity titles are visible (default false)
+
+    SharedActivity:
+      type: object
+      required: [type, startDate, endDate]
+      properties:
+        title:
+          type: string
+          description: Included only if showTitle is enabled on the share
+        type:
+          type: string
+          enum: [travel, stay, conference, vacation, commitment]
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        location:
+          type: string
+        tripName:
+          type: string
+          description: Trip name for context (not the ID)
+        tripColor:
+          type: string
+          description: Trip hex color
+
+    SharedCalendarResponse:
+      type: object
+      required: [label, activities]
+      properties:
+        label:
+          type: string
+          description: Share link label or sharer description
+        ownerEmail:
+          type: string
+          description: Email of the calendar owner
+        activities:
+          type: array
+          items:
+            $ref: '#/components/schemas/SharedActivity'
+
+    Share:
+      type: object
+      required: [id, ownerEmail, sharedWith, showTitle, createdAt]
+      properties:
+        id:
+          type: string
+        ownerEmail:
+          type: string
+          description: Email of the user who created this share
+        sharedWith:
+          type: string
+          description: Email of the recipient
+        showTitle:
+          type: boolean
+          description: Whether activity titles are visible to the recipient
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateShareRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          description: Email of the user to share with
+        showTitle:
+          type: boolean
+          description: Whether activity titles are visible (default false)
+
+    SharedWithMeEntry:
+      type: object
+      required: [shareId, ownerEmail]
+      properties:
+        shareId:
+          type: string
+        ownerEmail:
+          type: string
+          description: Email of the person who shared with you
+
+    PublicProfile:
+      type: object
+      required: [handle, enabled]
+      properties:
+        handle:
+          type: string
+          description: URL slug for the public page (e.g. michael)
+        enabled:
+          type: boolean
+          description: Whether the public page is active
+
+    UpdatePublicProfileRequest:
+      type: object
+      required: [handle, enabled]
+      properties:
+        handle:
+          type: string
+          description: URL slug (lowercase alphanumeric + hyphens, 3-30 chars)
+        enabled:
+          type: boolean
 
     OkResponse:
       type: object
