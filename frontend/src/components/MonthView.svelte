@@ -286,12 +286,14 @@
               {#if seg}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
+                {@const hasActivity = seg.dayActivities.length > 0}
                 <div
                   class="bar-segment"
                   class:is-trip-start={seg.isTripStart}
                   class:is-trip-end={seg.isTripEnd}
                   class:is-trip={seg.tripLane.tripId !== null}
                   class:has-activity-start={seg.hasActivityStart && seg.tripLane.tripId !== null}
+                  class:no-activity={seg.tripLane.tripId !== null && !hasActivity}
                   style="background: {seg.tripLane.color};"
                   onclick={(e) => handleBarClick(seg.tripLane, e)}
                   onmouseenter={(e) => handleBarEnter(seg.tripLane, e)}
@@ -486,6 +488,10 @@
 
   .bar-segment.is-trip {
     height: 26px;
+  }
+
+  .bar-segment.no-activity {
+    opacity: 0.4;
   }
 
   .bar-segment.has-activity-start {
