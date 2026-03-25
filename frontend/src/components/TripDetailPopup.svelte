@@ -2,16 +2,18 @@
   import { ACTIVITY_COLORS, type Activity } from '../lib/api';
 
   interface Props {
+    tripId?: string | null;
     tripName: string;
     color: string;
     activities: Activity[];
     x: number;
     y: number;
     onedit: (activity: Activity) => void;
+    onedittrip?: (tripId: string) => void;
     onclose: () => void;
   }
 
-  let { tripName, color, activities, x, y, onedit, onclose }: Props = $props();
+  let { tripId, tripName, color, activities, x, y, onedit, onedittrip, onclose }: Props = $props();
 
   function formatDates(a: Activity): string {
     if (a.startDate === a.endDate) return a.startDate;
@@ -35,6 +37,11 @@
     <div class="popup-header" style="border-left: 4px solid {color};">
       <span class="popup-title">{tripName}</span>
       <span class="popup-count">{activities.length} {activities.length === 1 ? 'activity' : 'activities'}</span>
+      {#if onedittrip && tripId}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <span class="popup-edit" onclick={() => { onclose(); onedittrip!(tripId!); }}>Edit trip</span>
+      {/if}
     </div>
     <div class="popup-list">
       {#each sorted as activity (activity.id)}
@@ -91,6 +98,17 @@
   .popup-count {
     font-size: 0.7rem;
     color: #999;
+  }
+
+  .popup-edit {
+    font-size: 0.7rem;
+    color: #3b82f6;
+    cursor: pointer;
+    margin-left: auto;
+  }
+
+  .popup-edit:hover {
+    text-decoration: underline;
   }
 
   .popup-list {

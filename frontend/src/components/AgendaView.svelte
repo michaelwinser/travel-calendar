@@ -5,9 +5,10 @@
     activities: Activity[];
     trips: TripSummary[];
     onedit: (activity: Activity) => void;
+    onedittrip?: (tripId: string) => void;
   }
 
-  let { activities, trips, onedit }: Props = $props();
+  let { activities, trips, onedit, onedittrip }: Props = $props();
 
   interface AgendaGroup {
     tripId: string | null;
@@ -82,11 +83,16 @@
     {#each groups as group}
       {#if group.tripId}
         <!-- Trip group -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div class="trip-header" style="border-left: 4px solid {group.tripColor};">
           <span class="trip-name">{group.tripName}</span>
           <span class="trip-dates">{formatDateRange(group.startDate, group.endDate)}</span>
           {#if group.locations.length > 0}
             <span class="trip-locations">{group.locations.join(', ')}</span>
+          {/if}
+          {#if onedittrip && group.tripId}
+            <button class="trip-edit-btn" onclick={() => onedittrip!(group.tripId!)}>Edit</button>
           {/if}
         </div>
         {#each group.activities as activity (activity.id)}
@@ -166,7 +172,28 @@
   .trip-locations {
     font-size: 0.75rem;
     color: #aaa;
+  }
+
+  .trip-edit-btn {
     margin-left: auto;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    font-size: 0.7rem;
+    color: #888;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .trip-header:hover .trip-edit-btn {
+    opacity: 1;
+  }
+
+  .trip-edit-btn:hover {
+    color: #333;
+    border-color: #999;
   }
 
   .activity-row {

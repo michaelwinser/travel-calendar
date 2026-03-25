@@ -11,12 +11,15 @@
     deleteActivity,
     listTrips,
     createTrip,
+    updateTrip,
+    deleteTrip,
     type Activity,
     type ActivityType,
     type AuthStatus,
     type TripSummary,
   } from './lib/api';
   import AgendaView from './components/AgendaView.svelte';
+  import TripEditModal from './components/TripEditModal.svelte';
   import MonthView from './components/MonthView.svelte';
   import DayView from './components/DayView.svelte';
   import YearView from './components/YearView.svelte';
@@ -42,6 +45,9 @@
   let modalActivity = $state<Activity | null>(null);
   let modalPrefill = $state<{ startDate?: string; endDate?: string }>({});
   let ghostDates = $state<{ startDate: string; endDate: string; type: ActivityType } | null>(null);
+
+  // Trip edit state
+  let editingTrip = $state<TripSummary | null>(null);
 
   // View refs
   let monthView = $state<MonthView>();
@@ -380,6 +386,37 @@
     }
   }
 
+  // --- Trip management ---
+
+  function handleEditTrip(tripId: string) {
+    const trip = tripsCache.find(t => t.id === tripId);
+    if (trip) editingTrip = trip;
+  }
+
+  async function handleTripUpdate(data: { name: string; color: string }) {
+    if (!editingTrip) return;
+    try {
+      await updateTrip(editingTrip.id, data);
+      editingTrip = null;
+      await refreshActivities();
+      error = '';
+    } catch (e: any) {
+      error = e.message || 'Failed to update trip';
+    }
+  }
+
+  async function handleTripDelete() {
+    if (!editingTrip) return;
+    try {
+      await deleteTrip(editingTrip.id);
+      editingTrip = null;
+      await refreshActivities();
+      error = '';
+    } catch (e: any) {
+      error = e.message || 'Failed to delete trip';
+    }
+  }
+
   function handleFocusDate(date: string) {
     focusDate = date;
   }
@@ -498,6 +535,7 @@
         ondragselect={handleDragSelect}
         onresize={handleResize}
         onmove={handleMove}
+        onedittrip={handleEditTrip}
         onfocusdate={handleFocusDate}
       />
     {:else if currentView === 'year'}
@@ -510,6 +548,7 @@
         ondayclick={handleDayClick}
         ondragselect={handleDragSelect}
         onswitchtomonth={handleSwitchToMonth}
+        onedittrip={handleEditTrip}
         onfocusdate={handleFocusDate}
       />
     {:else if currentView === 'day'}
@@ -524,7 +563,7 @@
         onfocusdate={handleFocusDate}
       />
     {:else if currentView === 'agenda'}
-      <AgendaView {activities} trips={tripsCache} onedit={handleEdit} />
+      <AgendaView {activities} trips={tripsCache} onedit={handleEdit} onedittrip={handleEditTrip} />
     {/if}
   {/if}
 
@@ -545,6 +584,16 @@
       oncancel={closeModal}
       ondelete={modalMode === 'edit' ? handleDelete : undefined}
       onchange={handleModalChange}
+    />
+  {/if}
+
+  {#if editingTrip}
+    <TripEditModal
+      name={editingTrip.name}
+      color={editingTrip.color}
+      onsubmit={handleTripUpdate}
+      ondelete={handleTripDelete}
+      oncancel={() => editingTrip = null}
     />
   {/if}
 </main>

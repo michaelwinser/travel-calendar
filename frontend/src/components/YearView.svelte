@@ -16,10 +16,11 @@
     ondayclick: (date: string) => void;
     ondragselect: (startDate: string, endDate: string) => void;
     onswitchtomonth: (date: string) => void;
+    onedittrip?: (tripId: string) => void;
     onfocusdate?: (date: string) => void;
   }
 
-  let { activities, trips, initialDate, onedit, ondayclick, ondragselect, onswitchtomonth, onfocusdate }: Props = $props();
+  let { activities, trips, initialDate, onedit, ondayclick, ondragselect, onswitchtomonth, onedittrip, onfocusdate }: Props = $props();
 
   const MAX_BAR_LANES = 3;
 
@@ -271,12 +272,14 @@
 <!-- Trip detail popup -->
 {#if popupBar}
   <TripDetailPopup
+    tripId={popupBar.tripId}
     tripName={popupBar.tripName}
     color={popupBar.color}
     activities={popupBar.activities}
     x={popupX}
     y={popupY}
     {onedit}
+    {onedittrip}
     onclose={() => popupBar = null}
   />
 {/if}

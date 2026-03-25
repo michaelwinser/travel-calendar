@@ -21,10 +21,11 @@
     ondragselect: (startDate: string, endDate: string) => void;
     onresize?: (activityId: string, startDate: string, endDate: string) => void;
     onmove?: (activityId: string, startDate: string, endDate: string) => void;
+    onedittrip?: (tripId: string) => void;
     onfocusdate?: (date: string) => void;
   }
 
-  let { activities, trips, ghostDates, initialDate, onedit, ondayclick, ondragselect, onresize, onmove, onfocusdate }: Props = $props();
+  let { activities, trips, ghostDates, initialDate, onedit, ondayclick, ondragselect, onresize, onmove, onedittrip, onfocusdate }: Props = $props();
 
   const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const MAX_LANES = 4;
@@ -337,12 +338,14 @@
 
 {#if popupTripLane}
   <TripDetailPopup
+    tripId={popupTripLane.tripId}
     tripName={popupTripLane.tripName}
     color={popupTripLane.color}
     activities={popupTripLane.activities}
     x={popupX}
     y={popupY}
     {onedit}
+    {onedittrip}
     onclose={() => popupTripLane = null}
   />
 {/if}
