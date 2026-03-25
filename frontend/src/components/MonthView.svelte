@@ -435,13 +435,11 @@
   .day-number { font-size: 0.75rem; color: #888; }
 
   .today-number {
-    background: #3b82f6;
-    color: white;
+    color: #3b82f6;
+    font-weight: 700;
+    outline: 2px solid #3b82f6;
+    outline-offset: 1px;
     border-radius: 50%;
-    padding: 1px 4px;
-    font-weight: 600;
-    font-size: 0.7rem;
-    line-height: 1;
   }
 
   .bar-slots {
