@@ -1,0 +1,38 @@
+frontend/src/lib/date-utils.ts
+  b0f886ff0414f142 615,618-622,635,637-640,645-647,649
+frontend/src/components/MonthView.svelte
+  b0f886ff0414f142 290-291,293,300,302-303,472,478,485-493,515,518-519,524
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "41700371ac10f0920aeaf2edf8ad55a43a8fa5df",
+  "prompts": {
+    "b0f886ff0414f142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "40c9da77-12ca-4865-a9f1-4575816a6d33",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 38,
+      "total_deletions": 30,
+      "accepted_lines": 38,
+      "overriden_lines": 0
+    },
+    "db0ccec4fd040162": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f91b5184-5d36-475e-a387-fb6a0cd69653",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 364,
+      "overriden_lines": 0
+    }
+  }
+}
