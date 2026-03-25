@@ -516,6 +516,7 @@
       <DayView
         bind:this={dayView}
         {activities}
+        trips={tripsCache}
         initialDate={focusDate}
         onedit={handleEdit}
         ondayclick={handleDayClick}

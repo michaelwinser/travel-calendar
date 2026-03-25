@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { ACTIVITY_COLORS, type Activity } from '../lib/api';
+  import { ACTIVITY_COLORS, type Activity, type TripSummary } from '../lib/api';
   import {
     today, addDays, stringToDate, hasConflict,
     monthLabel, minDate, maxDate,
@@ -8,6 +8,7 @@
 
   interface Props {
     activities: Activity[];
+    trips: TripSummary[];
     initialDate?: string;
     onedit: (activity: Activity) => void;
     ondayclick: (date: string) => void;
@@ -15,7 +16,27 @@
     onfocusdate?: (date: string) => void;
   }
 
-  let { activities, initialDate, onedit, ondayclick, ondragselect, onfocusdate }: Props = $props();
+  let { activities, trips, initialDate, onedit, ondayclick, ondragselect, onfocusdate }: Props = $props();
+
+  // Trip lookup
+  function tripFor(activity: Activity): TripSummary | undefined {
+    if (!activity.tripId) return undefined;
+    return trips.find(t => t.id === activity.tripId);
+  }
+
+  // Find the trip(s) active on a given date
+  function tripsOnDate(dateStr: string, dayActs: Activity[]): TripSummary[] {
+    const tripIds = new Set<string>();
+    const result: TripSummary[] = [];
+    for (const a of dayActs) {
+      if (a.tripId && !tripIds.has(a.tripId)) {
+        tripIds.add(a.tripId);
+        const t = trips.find(tr => tr.id === a.tripId);
+        if (t) result.push(t);
+      }
+    }
+    return result;
+  }
 
   const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -237,6 +258,7 @@
     {@const dayActs = dateActivities.get(dateStr) ?? []}
     {@const conflict = dayActs.length > 1 && hasConflict(dateStr, activities)}
     {@const label = dateMonthLabels.get(dateStr)}
+    {@const dayTrips = tripsOnDate(dateStr, dayActs)}
 
     {#if label}
       <div class="month-divider">
@@ -252,7 +274,9 @@
       class:weekend={info.isWeekend}
       class:conflict={conflict}
       class:has-activities={dayActs.length > 0}
+      class:has-trip={dayTrips.length > 0}
       class:drag-selected={isInDragRange(dateStr)}
+      style={dayTrips.length === 1 ? `border-left: 4px solid ${dayTrips[0].color};` : ''}
       data-date={dateStr}
       onmousedown={(e) => handleDayMouseDown(dateStr, e)}
       onmouseenter={() => handleDayMouseEnter(dateStr)}
@@ -263,17 +287,27 @@
       </div>
 
       <div class="activities-col">
+        {#if dayTrips.length > 0}
+          <div class="trip-labels">
+            {#each dayTrips as trip}
+              <span class="trip-badge" style="color: {trip.color};">{trip.name}</span>
+            {/each}
+          </div>
+        {/if}
+
         {#if dayActs.length === 0}
           <span class="home-label">Home</span>
         {:else}
           {#each dayActs as activity (activity.id)}
+            {@const trip = tripFor(activity)}
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <div
               class="activity-chip"
+              style={trip ? `border-left: 3px solid ${trip.color};` : ''}
               onclick={(e) => { e.stopPropagation(); onedit(activity); }}
             >
-              <span class="chip-dot" style="background: {ACTIVITY_COLORS[activity.type]}"></span>
+              <span class="chip-dot" style="background: {trip ? trip.color : ACTIVITY_COLORS[activity.type]}"></span>
               <span class="chip-title">{activity.title}</span>
               {#if activity.location}
                 <span class="chip-location">{activity.location}</span>
@@ -384,6 +418,23 @@
     gap: 2px;
     padding: 0.1rem 0.5rem 0.1rem 0;
     min-height: 0;
+  }
+
+  .day-row.has-trip {
+    padding-left: 0;
+  }
+
+  .trip-labels {
+    display: flex;
+    gap: 0.4rem;
+    padding: 0 0 2px;
+  }
+
+  .trip-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
   }
 
   .home-label {
