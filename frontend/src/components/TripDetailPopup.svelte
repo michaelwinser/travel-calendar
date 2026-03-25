@@ -40,7 +40,7 @@
       {#if onedittrip && tripId}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <span class="popup-edit" onclick={() => { onclose(); onedittrip!(tripId!); }}>Edit trip</span>
+        <span class="popup-edit" onclick={() => { const id = tripId!; onclose(); onedittrip!(id); }}>Edit trip</span>
       {/if}
     </div>
     <div class="popup-list">
