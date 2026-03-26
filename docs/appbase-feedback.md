@@ -132,6 +132,20 @@ appbase logout --app travel-calendar   # cleanup
 
 A corresponding `appbase logout --app NAME` (or extending the existing logout) would clean up.
 
+### 8. Store OAuth access/refresh tokens in session for Google API access
+
+**Context:** The OAuth flow extracts access_token and refresh_token from the Google callback but only persists the user's email in the session. The tokens are discarded. This means apps can't make Google API calls (Calendar, Drive, etc.) on behalf of the user.
+
+**What's needed:**
+1. Extend Session to store access_token, refresh_token, token_expires_at, scopes
+2. Persist tokens in the OAuth callback (both SQL and Firestore backends)
+3. Token refresh mechanism for expired access tokens
+4. `AccessToken(r *http.Request)` accessor for application code
+
+**Motivation:** travel-calendar #52 (Google Calendar import/export) is blocked on this. The OAuth infrastructure is 90% there — just need to keep the tokens.
+
+**Filed as:** [appbase #27](https://github.com/michaelwinser/appbase/issues/27)
+
 ## Notes
 
 (none yet)
