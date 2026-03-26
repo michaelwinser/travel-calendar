@@ -19,6 +19,8 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/csv"
+	"encoding/json"
 	"embed"
 	"fmt"
 	"io/fs"
@@ -165,6 +167,7 @@ func main() {
 	listCmd.Flags().String("month", "", "Filter by month (e.g. 2026-04)")
 	listCmd.Flags().String("user", "", "View another user's shared calendar (email)")
 	listCmd.Flags().Bool("conflicts", false, "Show conflict indicators")
+	listCmd.Flags().Bool("json", false, "Output as JSON")
 	cli.AddCommand(listCmd)
 
 	checkCmd := &cobra.Command{
@@ -389,6 +392,26 @@ func main() {
 	namedCmd.AddCommand(namedBackfillCmd)
 
 	cli.AddCommand(namedCmd)
+
+	// --- Import/Export ---
+
+	exportCmd := &cobra.Command{
+		Use:   "export",
+		Short: "Export all data (activities, trips, places)",
+		RunE:  exportData,
+	}
+	exportCmd.Flags().String("format", "json", "Export format: json or csv")
+	exportCmd.Flags().StringP("output", "o", "", "Output file (default: stdout)")
+	cli.AddCommand(exportCmd)
+
+	importCmd := &cobra.Command{
+		Use:   "import [file]",
+		Short: "Import data from a file",
+		Args:  cobra.ExactArgs(1),
+		RunE:  importData,
+	}
+	importCmd.Flags().Bool("dry-run", false, "Preview what would be imported")
+	cli.AddCommand(importCmd)
 
 	cli.Execute()
 }
@@ -677,6 +700,14 @@ func listActivities(cmd *cobra.Command, args []string) error {
 	}
 
 	items := *resp.JSON200
+
+	jsonOutput, _ := cmd.Flags().GetBool("json")
+	if jsonOutput {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(items)
+	}
+
 	if len(items) == 0 {
 		fmt.Println("No activities. Add one with: travel add \"Trip\" --from 2026-04-01 --loc Paris")
 		return nil
@@ -2081,5 +2112,491 @@ func namedClear(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Removed named location \"%s\".\n", name)
+	return nil
+}
+
+// --- Export/Import ---
+
+// ExportData is the versioned backup format.
+type ExportData struct {
+	Version    int              `json:"version"`
+	ExportedAt string           `json:"exportedAt"`
+	Trips      []ExportTrip     `json:"trips"`
+	Places     []ExportPlace    `json:"places"`
+	Activities []ExportActivity `json:"activities"`
+}
+
+type ExportTrip struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
+type ExportPlace struct {
+	Name      string  `json:"name"`
+	Aliases   []string `json:"aliases,omitempty"`
+	City      string  `json:"city,omitempty"`
+	Country   string  `json:"country,omitempty"`
+	Latitude  float64 `json:"latitude,omitempty"`
+	Longitude float64 `json:"longitude,omitempty"`
+	Timezone  string  `json:"timezone,omitempty"`
+	Kind      string  `json:"kind,omitempty"`
+}
+
+type ExportActivity struct {
+	Title     string `json:"title"`
+	Type      string `json:"type"`
+	StartDate string `json:"startDate"`
+	EndDate   string `json:"endDate"`
+	Location  string `json:"location,omitempty"`
+	Notes     string `json:"notes,omitempty"`
+	TripName  string `json:"tripName,omitempty"`
+	PlaceName string `json:"placeName,omitempty"`
+}
+
+func exportData(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	format, _ := cmd.Flags().GetString("format")
+	output, _ := cmd.Flags().GetString("output")
+
+	// Fetch all data
+	actsResp, err := client.ListActivitiesWithResponse(context.Background(), &api.ListActivitiesParams{})
+	if err != nil {
+		return err
+	}
+	if actsResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("activities: %d %s", actsResp.StatusCode(), string(actsResp.Body))
+	}
+
+	tripsResp, err := client.ListTripsWithResponse(context.Background())
+	if err != nil {
+		return err
+	}
+	if tripsResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("trips: %d %s", tripsResp.StatusCode(), string(tripsResp.Body))
+	}
+
+	placesResp, err := client.ListPlacesWithResponse(context.Background())
+	if err != nil {
+		return err
+	}
+	if placesResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("places: %d %s", placesResp.StatusCode(), string(placesResp.Body))
+	}
+
+	activities := *actsResp.JSON200
+	apiTrips := *tripsResp.JSON200
+	apiPlaces := *placesResp.JSON200
+
+	// Build lookup maps: ID → name
+	tripNames := map[string]string{}
+	for _, t := range apiTrips {
+		tripNames[t.Id] = t.Name
+	}
+	placeNames := map[string]string{}
+	for _, p := range apiPlaces {
+		placeNames[p.Id] = p.Name
+	}
+
+	// Build export data
+	data := ExportData{
+		Version:    1,
+		ExportedAt: time.Now().Format(time.RFC3339),
+	}
+
+	for _, t := range apiTrips {
+		data.Trips = append(data.Trips, ExportTrip{
+			Name:  t.Name,
+			Color: t.Color,
+		})
+	}
+
+	for _, p := range apiPlaces {
+		ep := ExportPlace{
+			Name:    p.Name,
+			Kind:    string(p.Kind),
+		}
+		if p.Aliases != nil {
+			ep.Aliases = *p.Aliases
+		}
+		if p.City != nil {
+			ep.City = *p.City
+		}
+		if p.Country != nil {
+			ep.Country = *p.Country
+		}
+		if p.Latitude != nil {
+			ep.Latitude = *p.Latitude
+		}
+		if p.Longitude != nil {
+			ep.Longitude = *p.Longitude
+		}
+		if p.Timezone != nil {
+			ep.Timezone = *p.Timezone
+		}
+		data.Places = append(data.Places, ep)
+	}
+
+	for _, a := range activities {
+		ea := ExportActivity{
+			Title:     a.Title,
+			Type:      string(a.Type),
+			StartDate: a.StartDate.Format("2006-01-02"),
+			EndDate:   a.EndDate.Format("2006-01-02"),
+		}
+		if a.Location != nil {
+			ea.Location = *a.Location
+		}
+		if a.Notes != nil {
+			ea.Notes = *a.Notes
+		}
+		if a.TripId != nil && *a.TripId != "" {
+			ea.TripName = tripNames[*a.TripId]
+		}
+		if a.PlaceId != nil && *a.PlaceId != "" {
+			ea.PlaceName = placeNames[*a.PlaceId]
+		}
+		data.Activities = append(data.Activities, ea)
+	}
+
+	// Output
+	var w *os.File
+	if output != "" {
+		w, err = os.Create(output)
+		if err != nil {
+			return err
+		}
+		defer w.Close()
+	} else {
+		w = os.Stdout
+	}
+
+	switch format {
+	case "json":
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(data); err != nil {
+			return err
+		}
+	case "csv":
+		return exportCSV(w, data)
+	default:
+		return fmt.Errorf("unknown format %q (use json or csv)", format)
+	}
+
+	if output != "" {
+		fmt.Fprintf(os.Stderr, "Exported %d activities, %d trips, %d places to %s\n",
+			len(data.Activities), len(data.Trips), len(data.Places), output)
+	}
+	return nil
+}
+
+func exportCSV(w *os.File, data ExportData) error {
+	cw := csv.NewWriter(w)
+	defer cw.Flush()
+
+	cw.Write([]string{"title", "type", "startDate", "endDate", "location", "notes", "trip"})
+	for _, a := range data.Activities {
+		cw.Write([]string{a.Title, a.Type, a.StartDate, a.EndDate, a.Location, a.Notes, a.TripName})
+	}
+	return nil
+}
+
+func importData(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	dryRun, _ := cmd.Flags().GetBool("dry-run")
+	filePath := args[0]
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("reading file: %w", err)
+	}
+
+	// Detect format by extension or content
+	if strings.HasSuffix(filePath, ".csv") {
+		return importCSV(client, string(data), dryRun)
+	}
+
+	// JSON import
+	var export ExportData
+	if err := json.Unmarshal(data, &export); err != nil {
+		return fmt.Errorf("parsing JSON: %w", err)
+	}
+
+	fmt.Printf("Import: %d activities, %d trips, %d places (version %d, exported %s)\n",
+		len(export.Activities), len(export.Trips), len(export.Places), export.Version, export.ExportedAt)
+
+	if dryRun {
+		fmt.Println("(dry run — no changes made)")
+		return nil
+	}
+
+	// 1. Create trips (by name, skip if exists)
+	tripIDs := map[string]string{} // name → ID
+	existingTrips, _ := client.ListTripsWithResponse(context.Background())
+	if existingTrips != nil && existingTrips.JSON200 != nil {
+		for _, t := range *existingTrips.JSON200 {
+			tripIDs[t.Name] = t.Id
+		}
+	}
+
+	tripsCreated := 0
+	for _, t := range export.Trips {
+		if _, exists := tripIDs[t.Name]; exists {
+			continue
+		}
+		color := t.Color
+		resp, err := client.CreateTripWithResponse(context.Background(), api.CreateTripRequest{
+			Name:  t.Name,
+			Color: &color,
+		})
+		if err == nil && resp.StatusCode() == http.StatusCreated && resp.JSON201 != nil {
+			tripIDs[t.Name] = resp.JSON201.Id
+			tripsCreated++
+		}
+	}
+
+	// 2. Create places (by name, skip if exists)
+	placeIDs := map[string]string{} // name → ID
+	existingPlaces, _ := client.ListPlacesWithResponse(context.Background())
+	if existingPlaces != nil && existingPlaces.JSON200 != nil {
+		for _, p := range *existingPlaces.JSON200 {
+			placeIDs[p.Name] = p.Id
+		}
+	}
+
+	placesCreated := 0
+	for _, p := range export.Places {
+		if _, exists := placeIDs[p.Name]; exists {
+			continue
+		}
+		req := api.CreatePlaceRequest{Name: p.Name}
+		if p.City != "" {
+			req.City = &p.City
+		}
+		if p.Country != "" {
+			req.Country = &p.Country
+		}
+		if p.Latitude != 0 {
+			req.Latitude = &p.Latitude
+		}
+		if p.Longitude != 0 {
+			req.Longitude = &p.Longitude
+		}
+		if p.Timezone != "" {
+			req.Timezone = &p.Timezone
+		}
+		if p.Kind != "" {
+			k := api.CreatePlaceRequestKind(p.Kind)
+			req.Kind = &k
+		}
+		if len(p.Aliases) > 0 {
+			req.Aliases = &p.Aliases
+		}
+
+		resp, err := client.CreatePlaceWithResponse(context.Background(), req)
+		if err == nil && resp.StatusCode() == http.StatusCreated && resp.JSON201 != nil {
+			placeIDs[p.Name] = resp.JSON201.Id
+			placesCreated++
+		}
+	}
+
+	// 3. Create activities
+	activitiesCreated := 0
+	for _, a := range export.Activities {
+		startDate, err := time.Parse("2006-01-02", a.StartDate)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  Skipping %q: invalid start date %q\n", a.Title, a.StartDate)
+			continue
+		}
+
+		req := api.CreateActivityRequest{
+			Title:     a.Title,
+			Type:      api.CreateActivityRequestType(a.Type),
+			StartDate: openapi_types.Date{Time: startDate},
+		}
+
+		if a.EndDate != "" && a.EndDate != a.StartDate {
+			endDate, err := time.Parse("2006-01-02", a.EndDate)
+			if err == nil {
+				req.EndDate = &openapi_types.Date{Time: endDate}
+			}
+		}
+		if a.Location != "" {
+			req.Location = &a.Location
+		}
+		if a.Notes != "" {
+			req.Notes = &a.Notes
+		}
+		if a.TripName != "" {
+			if id, ok := tripIDs[a.TripName]; ok {
+				req.TripId = &id
+			}
+		}
+		if a.PlaceName != "" {
+			if id, ok := placeIDs[a.PlaceName]; ok {
+				req.PlaceId = &id
+			}
+		}
+
+		resp, err := client.CreateActivityWithResponse(context.Background(), req)
+		if err == nil && resp.StatusCode() == http.StatusCreated {
+			activitiesCreated++
+		} else {
+			errMsg := ""
+			if err != nil {
+				errMsg = err.Error()
+			} else if resp != nil {
+				errMsg = string(resp.Body)
+			}
+			fmt.Fprintf(os.Stderr, "  Failed to import %q: %s\n", a.Title, errMsg)
+		}
+	}
+
+	fmt.Printf("Imported: %d activities, %d trips, %d places\n", activitiesCreated, tripsCreated, placesCreated)
+	return nil
+}
+
+func importCSV(client *api.ClientWithResponses, data string, dryRun bool) error {
+	r := csv.NewReader(strings.NewReader(data))
+
+	// Read header
+	header, err := r.Read()
+	if err != nil {
+		return fmt.Errorf("reading CSV header: %w", err)
+	}
+
+	// Map column names to indices
+	colIdx := map[string]int{}
+	for i, h := range header {
+		colIdx[strings.ToLower(strings.TrimSpace(h))] = i
+	}
+
+	// Require at least title and startDate
+	if _, ok := colIdx["title"]; !ok {
+		if _, ok := colIdx["startdate"]; !ok {
+			return fmt.Errorf("CSV must have at least 'title' and 'startDate' columns")
+		}
+	}
+
+	col := func(row []string, name string) string {
+		if idx, ok := colIdx[name]; ok && idx < len(row) {
+			return strings.TrimSpace(row[idx])
+		}
+		return ""
+	}
+
+	// Read all rows
+	var rows [][]string
+	for {
+		record, err := r.Read()
+		if err != nil {
+			break
+		}
+		rows = append(rows, record)
+	}
+
+	fmt.Printf("CSV: %d rows to import\n", len(rows))
+	if dryRun {
+		for i, row := range rows {
+			if i >= 10 {
+				fmt.Printf("  ... and %d more\n", len(rows)-10)
+				break
+			}
+			fmt.Printf("  %s | %s | %s | %s\n", col(row, "title"), col(row, "type"), col(row, "startdate"), col(row, "location"))
+		}
+		fmt.Println("(dry run — no changes made)")
+		return nil
+	}
+
+	// Build trip lookup for implicit creation
+	tripIDs := map[string]string{}
+	existingTrips, _ := client.ListTripsWithResponse(context.Background())
+	if existingTrips != nil && existingTrips.JSON200 != nil {
+		for _, t := range *existingTrips.JSON200 {
+			tripIDs[t.Name] = t.Id
+		}
+	}
+
+	created := 0
+	for _, row := range rows {
+		title := col(row, "title")
+		actType := col(row, "type")
+		startStr := col(row, "startdate")
+		endStr := col(row, "enddate")
+		location := col(row, "location")
+		notes := col(row, "notes")
+		tripName := col(row, "trip")
+
+		if title == "" || startStr == "" {
+			continue
+		}
+		if actType == "" {
+			actType = "stay"
+		}
+
+		startDate, err := time.Parse("2006-01-02", startStr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  Skipping %q: invalid date %q\n", title, startStr)
+			continue
+		}
+
+		req := api.CreateActivityRequest{
+			Title:     title,
+			Type:      api.CreateActivityRequestType(actType),
+			StartDate: openapi_types.Date{Time: startDate},
+		}
+
+		if endStr != "" && endStr != startStr {
+			if ed, err := time.Parse("2006-01-02", endStr); err == nil {
+				req.EndDate = &openapi_types.Date{Time: ed}
+			}
+		}
+		if location != "" {
+			req.Location = &location
+		}
+		if notes != "" {
+			req.Notes = &notes
+		}
+
+		// Implicit trip creation
+		if tripName != "" {
+			if id, ok := tripIDs[tripName]; ok {
+				req.TripId = &id
+			} else {
+				tripResp, err := client.CreateTripWithResponse(context.Background(), api.CreateTripRequest{Name: tripName})
+				if err == nil && tripResp.StatusCode() == http.StatusCreated && tripResp.JSON201 != nil {
+					tripIDs[tripName] = tripResp.JSON201.Id
+					req.TripId = &tripResp.JSON201.Id
+				}
+			}
+		}
+
+		// Resolve location to place
+		if location != "" {
+			placeID := resolveLocationToPlace(client, location)
+			if placeID != "" {
+				req.PlaceId = &placeID
+			}
+		}
+
+		resp, err := client.CreateActivityWithResponse(context.Background(), req)
+		if err == nil && resp.StatusCode() == http.StatusCreated {
+			created++
+		} else {
+			fmt.Fprintf(os.Stderr, "  Failed: %q\n", title)
+		}
+	}
+
+	fmt.Printf("Imported %d activities.\n", created)
 	return nil
 }
