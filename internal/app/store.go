@@ -20,6 +20,7 @@ type Trip struct {
 	UserID    string `json:"userId"    store:"user_id,index"`
 	Name      string `json:"name"      store:"name"`
 	Color     string `json:"color"     store:"color"`
+	Key       string `json:"key"       store:"key"`
 	CreatedAt string `json:"createdAt" store:"created_at"`
 }
 
@@ -37,6 +38,7 @@ type Activity struct {
 	PlaceID            string `json:"placeId"            store:"place_id"`
 	OriginPlaceID      string `json:"originPlaceId"      store:"origin_place_id"`
 	DestinationPlaceID string `json:"destinationPlaceId" store:"destination_place_id"`
+	Key                string `json:"key"                store:"key"`
 	Source             string `json:"source"             store:"source"`
 	CreatedAt          string `json:"createdAt"          store:"created_at"`
 }
@@ -73,6 +75,7 @@ func (s *TripStore) Create(userID, name, color string) (*Trip, error) {
 		UserID:    userID,
 		Name:      name,
 		Color:     color,
+		Key:       tripKey(name),
 		CreatedAt: time.Now().Format(time.RFC3339),
 	}
 	if err := s.coll.Create(t); err != nil {
@@ -126,6 +129,7 @@ func (s *ActivityStore) Create(userID, title, actType, startDate, endDate, locat
 		PlaceID:            placeID,
 		OriginPlaceID:      originPlaceID,
 		DestinationPlaceID: destPlaceID,
+		Key:                activityKey(actType, startDate, title),
 		Source:              "manual",
 		CreatedAt:          time.Now().Format(time.RFC3339),
 	}
@@ -354,6 +358,7 @@ type Place struct {
 	Longitude  float64 `json:"longitude"  store:"longitude"`
 	Timezone   string  `json:"timezone"   store:"timezone"`
 	Kind       string  `json:"kind"       store:"kind"`
+	Key        string  `json:"key"        store:"key"`
 	UsageCount int     `json:"usageCount" store:"usage_count"`
 	CreatedAt  string  `json:"createdAt"  store:"created_at"`
 }
@@ -533,6 +538,41 @@ func (s *PublicProfileStore) Create(p *PublicProfile) error {
 // Update saves changes to an existing profile.
 func (s *PublicProfileStore) Update(p *PublicProfile) error {
 	return s.coll.Update(p.ID, p)
+}
+
+// --- Key generation ---
+
+// Slug converts a string to a URL-safe lowercase slug.
+func Slug(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	prevDash := false
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			prevDash = false
+		} else if !prevDash && b.Len() > 0 {
+			b.WriteByte('-')
+			prevDash = true
+		}
+	}
+	result := b.String()
+	return strings.TrimRight(result, "-")
+}
+
+// activityKey computes a portable identity key for an activity.
+func activityKey(actType, startDate, title string) string {
+	return actType + "/" + startDate + "/" + Slug(title)
+}
+
+// tripKey computes a portable identity key for a trip.
+func tripKey(name string) string {
+	return "trip/" + Slug(name)
+}
+
+// placeKey computes a portable identity key for a place.
+func placeKey(name string) string {
+	return "place/" + Slug(name)
 }
 
 func validateType(t string) error {

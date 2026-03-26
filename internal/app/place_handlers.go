@@ -67,6 +67,7 @@ func (s *ActivityServer) CreatePlace(w http.ResponseWriter, r *http.Request) {
 		Longitude: derefFloat(req.Longitude),
 		Timezone:  derefStr(req.Timezone),
 		Kind:      kind,
+		Key:       placeKey(req.Name),
 		CreatedAt: time.Now().Format(time.RFC3339),
 	}
 

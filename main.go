@@ -411,6 +411,7 @@ func main() {
 		RunE:  importData,
 	}
 	importCmd.Flags().Bool("dry-run", false, "Preview what would be imported")
+	importCmd.Flags().String("mode", "merge", "Import mode: merge (skip duplicates) or replace (wipe and restore)")
 	cli.AddCommand(importCmd)
 
 	infoCmd := &cobra.Command{
@@ -2134,22 +2135,25 @@ type ExportData struct {
 }
 
 type ExportTrip struct {
+	Key   string `json:"key"`
 	Name  string `json:"name"`
 	Color string `json:"color"`
 }
 
 type ExportPlace struct {
-	Name      string  `json:"name"`
+	Key       string   `json:"key"`
+	Name      string   `json:"name"`
 	Aliases   []string `json:"aliases,omitempty"`
-	City      string  `json:"city,omitempty"`
-	Country   string  `json:"country,omitempty"`
-	Latitude  float64 `json:"latitude,omitempty"`
-	Longitude float64 `json:"longitude,omitempty"`
-	Timezone  string  `json:"timezone,omitempty"`
-	Kind      string  `json:"kind,omitempty"`
+	City      string   `json:"city,omitempty"`
+	Country   string   `json:"country,omitempty"`
+	Latitude  float64  `json:"latitude,omitempty"`
+	Longitude float64  `json:"longitude,omitempty"`
+	Timezone  string   `json:"timezone,omitempty"`
+	Kind      string   `json:"kind,omitempty"`
 }
 
 type ExportActivity struct {
+	Key       string `json:"key"`
 	Title     string `json:"title"`
 	Type      string `json:"type"`
 	StartDate string `json:"startDate"`
@@ -2211,12 +2215,14 @@ func exportData(cmd *cobra.Command, args []string) error {
 
 	// Build export data
 	data := ExportData{
-		Version:    1,
+		Version:    2,
 		ExportedAt: time.Now().Format(time.RFC3339),
 	}
 
 	for _, t := range apiTrips {
+		key := "trip/" + travelapp.Slug(t.Name)
 		data.Trips = append(data.Trips, ExportTrip{
+			Key:   key,
 			Name:  t.Name,
 			Color: t.Color,
 		})
@@ -2224,6 +2230,7 @@ func exportData(cmd *cobra.Command, args []string) error {
 
 	for _, p := range apiPlaces {
 		ep := ExportPlace{
+			Key:     "place/" + travelapp.Slug(p.Name),
 			Name:    p.Name,
 			Kind:    string(p.Kind),
 		}
@@ -2249,10 +2256,12 @@ func exportData(cmd *cobra.Command, args []string) error {
 	}
 
 	for _, a := range activities {
+		startStr := a.StartDate.Format("2006-01-02")
 		ea := ExportActivity{
+			Key:       string(a.Type) + "/" + startStr + "/" + travelapp.Slug(a.Title),
 			Title:     a.Title,
 			Type:      string(a.Type),
-			StartDate: a.StartDate.Format("2006-01-02"),
+			StartDate: startStr,
 			EndDate:   a.EndDate.Format("2006-01-02"),
 		}
 		if a.Location != nil {
@@ -2321,14 +2330,19 @@ func importData(cmd *cobra.Command, args []string) error {
 	defer cleanup()
 
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
+	mode, _ := cmd.Flags().GetString("mode")
 	filePath := args[0]
+
+	if mode != "merge" && mode != "replace" {
+		return fmt.Errorf("invalid mode %q (use merge or replace)", mode)
+	}
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("reading file: %w", err)
 	}
 
-	// Detect format by extension or content
+	// Detect format by extension
 	if strings.HasSuffix(filePath, ".csv") {
 		return importCSV(client, string(data), dryRun)
 	}
@@ -2339,27 +2353,64 @@ func importData(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("parsing JSON: %w", err)
 	}
 
-	fmt.Printf("Import: %d activities, %d trips, %d places (version %d, exported %s)\n",
-		len(export.Activities), len(export.Trips), len(export.Places), export.Version, export.ExportedAt)
+	fmt.Printf("Import (%s): %d activities, %d trips, %d places (version %d)\n",
+		mode, len(export.Activities), len(export.Trips), len(export.Places), export.Version)
 
 	if dryRun {
 		fmt.Println("(dry run — no changes made)")
 		return nil
 	}
 
-	// 1. Create trips (by name, skip if exists)
+	// In replace mode, delete all existing data first
+	if mode == "replace" {
+		fmt.Println("Deleting existing data...")
+		deleteAllData(client)
+	}
+
+	// Build existing key sets for merge dedup
+	existingTripKeys := map[string]string{} // key → ID
+	existingPlaceKeys := map[string]string{}
+	existingActivityKeys := map[string]bool{}
 	tripIDs := map[string]string{} // name → ID
-	existingTrips, _ := client.ListTripsWithResponse(context.Background())
-	if existingTrips != nil && existingTrips.JSON200 != nil {
-		for _, t := range *existingTrips.JSON200 {
-			tripIDs[t.Name] = t.Id
+
+	if mode == "merge" {
+		// Load existing trips
+		if resp, err := client.ListTripsWithResponse(context.Background()); err == nil && resp.JSON200 != nil {
+			for _, t := range *resp.JSON200 {
+				key := "trip/" + travelapp.Slug(t.Name)
+				existingTripKeys[key] = t.Id
+				tripIDs[t.Name] = t.Id
+			}
+		}
+		// Load existing places
+		if resp, err := client.ListPlacesWithResponse(context.Background()); err == nil && resp.JSON200 != nil {
+			for _, p := range *resp.JSON200 {
+				key := "place/" + travelapp.Slug(p.Name)
+				existingPlaceKeys[key] = p.Id
+			}
+		}
+		// Load existing activities and compute keys
+		if resp, err := client.ListActivitiesWithResponse(context.Background(), &api.ListActivitiesParams{}); err == nil && resp.JSON200 != nil {
+			for _, a := range *resp.JSON200 {
+				key := string(a.Type) + "/" + a.StartDate.Format("2006-01-02") + "/" + travelapp.Slug(a.Title)
+				existingActivityKeys[key] = true
+			}
 		}
 	}
 
-	tripsCreated := 0
+	// 1. Import trips
+	tripsCreated, tripsSkipped := 0, 0
 	for _, t := range export.Trips {
-		if _, exists := tripIDs[t.Name]; exists {
-			continue
+		key := t.Key
+		if key == "" {
+			key = "trip/" + travelapp.Slug(t.Name)
+		}
+		if mode == "merge" {
+			if id, exists := existingTripKeys[key]; exists {
+				tripIDs[t.Name] = id
+				tripsSkipped++
+				continue
+			}
 		}
 		color := t.Color
 		resp, err := client.CreateTripWithResponse(context.Background(), api.CreateTripRequest{
@@ -2372,19 +2423,20 @@ func importData(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// 2. Create places (by name, skip if exists)
+	// 2. Import places
 	placeIDs := map[string]string{} // name → ID
-	existingPlaces, _ := client.ListPlacesWithResponse(context.Background())
-	if existingPlaces != nil && existingPlaces.JSON200 != nil {
-		for _, p := range *existingPlaces.JSON200 {
-			placeIDs[p.Name] = p.Id
-		}
-	}
-
-	placesCreated := 0
+	placesCreated, placesSkipped := 0, 0
 	for _, p := range export.Places {
-		if _, exists := placeIDs[p.Name]; exists {
-			continue
+		key := p.Key
+		if key == "" {
+			key = "place/" + travelapp.Slug(p.Name)
+		}
+		if mode == "merge" {
+			if id, exists := existingPlaceKeys[key]; exists {
+				placeIDs[p.Name] = id
+				placesSkipped++
+				continue
+			}
 		}
 		req := api.CreatePlaceRequest{Name: p.Name}
 		if p.City != "" {
@@ -2409,7 +2461,6 @@ func importData(cmd *cobra.Command, args []string) error {
 		if len(p.Aliases) > 0 {
 			req.Aliases = &p.Aliases
 		}
-
 		resp, err := client.CreatePlaceWithResponse(context.Background(), req)
 		if err == nil && resp.StatusCode() == http.StatusCreated && resp.JSON201 != nil {
 			placeIDs[p.Name] = resp.JSON201.Id
@@ -2417,12 +2468,21 @@ func importData(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// 3. Create activities
-	activitiesCreated := 0
+	// 3. Import activities
+	activitiesCreated, activitiesSkipped := 0, 0
 	for _, a := range export.Activities {
+		key := a.Key
+		if key == "" {
+			key = a.Type + "/" + a.StartDate + "/" + travelapp.Slug(a.Title)
+		}
+		if mode == "merge" && existingActivityKeys[key] {
+			activitiesSkipped++
+			continue
+		}
+
 		startDate, err := time.Parse("2006-01-02", a.StartDate)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  Skipping %q: invalid start date %q\n", a.Title, a.StartDate)
+			fmt.Fprintf(os.Stderr, "  Skipping %q: invalid date %q\n", a.Title, a.StartDate)
 			continue
 		}
 
@@ -2431,11 +2491,9 @@ func importData(cmd *cobra.Command, args []string) error {
 			Type:      api.CreateActivityRequestType(a.Type),
 			StartDate: openapi_types.Date{Time: startDate},
 		}
-
 		if a.EndDate != "" && a.EndDate != a.StartDate {
-			endDate, err := time.Parse("2006-01-02", a.EndDate)
-			if err == nil {
-				req.EndDate = &openapi_types.Date{Time: endDate}
+			if ed, err := time.Parse("2006-01-02", a.EndDate); err == nil {
+				req.EndDate = &openapi_types.Date{Time: ed}
 			}
 		}
 		if a.Location != "" {
@@ -2465,12 +2523,39 @@ func importData(cmd *cobra.Command, args []string) error {
 			} else if resp != nil {
 				errMsg = string(resp.Body)
 			}
-			fmt.Fprintf(os.Stderr, "  Failed to import %q: %s\n", a.Title, errMsg)
+			fmt.Fprintf(os.Stderr, "  Failed: %q (%s)\n", a.Title, errMsg)
 		}
 	}
 
-	fmt.Printf("Imported: %d activities, %d trips, %d places\n", activitiesCreated, tripsCreated, placesCreated)
+	if mode == "merge" {
+		fmt.Printf("Created: %d activities, %d trips, %d places\n", activitiesCreated, tripsCreated, placesCreated)
+		fmt.Printf("Skipped: %d activities, %d trips, %d places (already exist)\n", activitiesSkipped, tripsSkipped, placesSkipped)
+	} else {
+		fmt.Printf("Imported: %d activities, %d trips, %d places\n", activitiesCreated, tripsCreated, placesCreated)
+	}
 	return nil
+}
+
+// deleteAllData removes all activities, trips, and places for a clean replace import.
+func deleteAllData(client *api.ClientWithResponses) {
+	// Delete activities
+	if resp, err := client.ListActivitiesWithResponse(context.Background(), &api.ListActivitiesParams{}); err == nil && resp.JSON200 != nil {
+		for _, a := range *resp.JSON200 {
+			client.DeleteActivityWithResponse(context.Background(), a.Id)
+		}
+	}
+	// Delete trips
+	if resp, err := client.ListTripsWithResponse(context.Background()); err == nil && resp.JSON200 != nil {
+		for _, t := range *resp.JSON200 {
+			client.DeleteTripWithResponse(context.Background(), t.Id)
+		}
+	}
+	// Delete places
+	if resp, err := client.ListPlacesWithResponse(context.Background()); err == nil && resp.JSON200 != nil {
+		for _, p := range *resp.JSON200 {
+			client.DeletePlaceWithResponse(context.Background(), p.Id)
+		}
+	}
 }
 
 func importCSV(client *api.ClientWithResponses, data string, dryRun bool) error {
