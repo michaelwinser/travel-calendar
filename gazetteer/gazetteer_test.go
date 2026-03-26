@@ -112,12 +112,13 @@ func TestPrefixSearch_PopulationRanking(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	results := g.PrefixSearch("san", 10)
+	// Use a longer prefix to avoid exact-match boosts interfering
+	results := g.PrefixSearch("sant", 10)
 	if len(results) < 2 {
-		t.Fatal("not enough results for 'san'")
+		t.Fatal("not enough results for 'sant'")
 	}
 
-	// Results should be sorted by population descending
+	// Among prefix-only matches, results should be sorted by population descending
 	for i := 1; i < len(results); i++ {
 		if results[i].City.Population > results[i-1].City.Population {
 			t.Errorf("result %d (pop %d) > result %d (pop %d) — not sorted by population",
@@ -184,6 +185,55 @@ func TestPrefixSearch_AirportIATA(t *testing.T) {
 		if !found {
 			t.Errorf("%q: expected %q in results, got %v", tt.query, tt.want, results[0].City.Name)
 		}
+	}
+}
+
+func TestPrefixSearch_CommonAbbreviations(t *testing.T) {
+	g, err := Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		query string
+		want  string
+	}{
+		{"nyc", "New York City"},
+		{"sf", "San Francisco"},
+		{"la", "Los Angeles"},
+	}
+
+	for _, tt := range tests {
+		results := g.PrefixSearch(tt.query, 5)
+		if len(results) == 0 {
+			t.Errorf("no results for %q", tt.query)
+			continue
+		}
+		found := false
+		for _, r := range results {
+			if r.City.Name == tt.want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("%q: expected %q in results, got %q", tt.query, tt.want, results[0].City.Name)
+		}
+	}
+}
+
+func TestExactSearch_NYC(t *testing.T) {
+	g, err := Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c := g.ExactSearch("NYC")
+	if c == nil {
+		t.Fatal("ExactSearch('NYC') returned nil")
+	}
+	if c.Name != "New York City" {
+		t.Errorf("got %q, want New York City", c.Name)
 	}
 }
 

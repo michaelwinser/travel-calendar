@@ -345,6 +345,15 @@ func main() {
 		RunE:  showPlaceCmd,
 	}
 	placesCmd.AddCommand(placesShowCmd)
+
+	placesBackfillCmd := &cobra.Command{
+		Use:   "backfill",
+		Short: "Auto-link existing activities to Places via gazetteer",
+		RunE:  placesBackfill,
+	}
+	placesBackfillCmd.Flags().Bool("dry-run", false, "Show what would be linked without making changes")
+	placesCmd.AddCommand(placesBackfillCmd)
+
 	cli.AddCommand(placesCmd)
 
 	cli.Execute()
@@ -1473,4 +1482,176 @@ func resolveLocationToPlace(client *api.ClientWithResponses, loc string) string 
 	}
 	fmt.Printf("  Place: %s%s (new)\n", p.Name, extra)
 	return p.Id
+}
+
+// --- Places backfill ---
+
+func placesBackfill(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	dryRun, _ := cmd.Flags().GetBool("dry-run")
+
+	// Fetch all activities
+	resp, err := client.ListActivitiesWithResponse(context.Background(), &api.ListActivitiesParams{})
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+	}
+
+	// Find activities without placeId, group by location string
+	type group struct {
+		location   string
+		activities []api.Activity
+	}
+	groups := map[string]*group{}
+	var unlinkedCount int
+
+	for _, a := range *resp.JSON200 {
+		if a.PlaceId != nil && *a.PlaceId != "" {
+			continue // already linked
+		}
+		loc := ""
+		if a.Location != nil {
+			loc = *a.Location
+		}
+		if loc == "" {
+			continue
+		}
+		unlinkedCount++
+		if g, ok := groups[loc]; ok {
+			g.activities = append(g.activities, a)
+		} else {
+			groups[loc] = &group{location: loc, activities: []api.Activity{a}}
+		}
+	}
+
+	if unlinkedCount == 0 {
+		fmt.Println("All activities are already linked to places.")
+		return nil
+	}
+
+	fmt.Printf("Found %d unlinked activities across %d unique locations.\n\n", unlinkedCount, len(groups))
+
+	linked := 0
+	skipped := 0
+	placesCreated := 0
+
+	for loc, g := range groups {
+		// Resolve the location string
+		resolveResp, err := client.ResolvePlacesWithResponse(context.Background(), api.PlaceResolveRequest{Text: loc})
+		if err != nil || resolveResp.StatusCode() != http.StatusOK || resolveResp.JSON200 == nil {
+			fmt.Printf("  %-30s  → resolve failed, skipping\n", loc)
+			skipped += len(g.activities)
+			continue
+		}
+
+		result := resolveResp.JSON200
+		var placeID string
+		var placeName string
+
+		if result.Exact != nil {
+			// Exact match in user's places
+			placeID = result.Exact.Id
+			placeName = result.Exact.Name + " (existing)"
+		} else if len(result.Suggestions) > 0 {
+			best := result.Suggestions[0]
+
+			// Only auto-link if confidence is high enough
+			if best.Score < 0.7 {
+				fmt.Printf("  %-30s  → low confidence (%.0f%%), skipping\n", loc, best.Score*100)
+				skipped += len(g.activities)
+				continue
+			}
+
+			if best.Source == api.User && best.Place != nil {
+				placeID = best.Place.Id
+				placeName = best.Place.Name + " (matched)"
+			} else {
+				// Create a new place from gazetteer
+				if dryRun {
+					extra := ""
+					if best.Country != nil {
+						extra = ", " + *best.Country
+					}
+					fmt.Printf("  %-30s  → would create \"%s%s\" and link %d activities\n", loc, best.Name, extra, len(g.activities))
+					linked += len(g.activities)
+					continue
+				}
+
+				req := api.CreatePlaceRequest{
+					Name: loc,
+					City: &best.Name,
+				}
+				if best.Country != nil {
+					req.Country = best.Country
+				}
+				if best.Latitude != nil {
+					req.Latitude = best.Latitude
+				}
+				if best.Longitude != nil {
+					req.Longitude = best.Longitude
+				}
+				if best.Timezone != nil {
+					req.Timezone = best.Timezone
+				}
+				kind := api.CreatePlaceRequestKindCity
+				req.Kind = &kind
+
+				createResp, err := client.CreatePlaceWithResponse(context.Background(), req)
+				if err != nil || createResp.StatusCode() != http.StatusCreated || createResp.JSON201 == nil {
+					errMsg := ""
+					if err != nil {
+						errMsg = err.Error()
+					} else if createResp != nil {
+						errMsg = fmt.Sprintf("status %d: %s", createResp.StatusCode(), string(createResp.Body))
+					}
+					fmt.Printf("  %-30s  → failed to create place (%s), skipping\n", loc, errMsg)
+					skipped += len(g.activities)
+					continue
+				}
+				placeID = createResp.JSON201.Id
+				extra := ""
+				if best.Country != nil {
+					extra = ", " + *best.Country
+				}
+				placeName = best.Name + extra + " (new)"
+				placesCreated++
+			}
+		} else {
+			fmt.Printf("  %-30s  → no matches, skipping\n", loc)
+			skipped += len(g.activities)
+			continue
+		}
+
+		if dryRun {
+			fmt.Printf("  %-30s  → would link %d activities to \"%s\"\n", loc, len(g.activities), placeName)
+			linked += len(g.activities)
+			continue
+		}
+
+		// Link all activities in this group to the place
+		for _, a := range g.activities {
+			_, err := client.UpdateActivityWithResponse(context.Background(), a.Id, api.UpdateActivityRequest{
+				PlaceId: &placeID,
+			})
+			if err == nil {
+				linked++
+			} else {
+				skipped++
+			}
+		}
+
+		fmt.Printf("  %-30s  → %s (%d activities)\n", loc, placeName, len(g.activities))
+	}
+
+	fmt.Printf("\nDone%s. Linked: %d, Skipped: %d, Places created: %d\n",
+		map[bool]string{true: " (dry run)", false: ""}[dryRun],
+		linked, skipped, placesCreated)
+	return nil
 }

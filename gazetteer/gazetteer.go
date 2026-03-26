@@ -19,6 +19,9 @@ var citiesCSV string
 //go:embed airports.csv
 var airportsCSV string
 
+//go:embed aliases.txt
+var aliasesTxt string
+
 // City represents a city from the gazetteer.
 type City struct {
 	Name       string
@@ -170,6 +173,30 @@ func load(citiesData, airportsData string) (*Gazetteer, error) {
 		}
 	}
 
+	// Add common abbreviations from aliases.txt.
+	// Build a quick lookup from lowercase name → city index.
+	nameToIdx := map[string]int{}
+	for _, entry := range index {
+		if _, exists := nameToIdx[entry.lower]; !exists {
+			nameToIdx[entry.lower] = entry.cityIdx
+		}
+	}
+	for _, line := range strings.Split(aliasesTxt, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		abbrev := strings.ToLower(strings.TrimSpace(parts[0]))
+		cityName := strings.ToLower(strings.TrimSpace(parts[1]))
+		if idx, ok := nameToIdx[cityName]; ok {
+			index = append(index, nameEntry{lower: abbrev, cityIdx: idx})
+		}
+	}
+
 	sort.Slice(index, func(i, j int) bool {
 		return index[i].lower < index[j].lower
 	})
@@ -199,12 +226,16 @@ func (g *Gazetteer) PrefixSearch(query string, limit int) []Result {
 
 	// Scan forward while prefix matches
 	seen := map[int]bool{}
+	exactMatch := map[int]bool{} // cities where query == an indexed name exactly
 	var matched []int
 
 	for i := start; i < len(g.nameIndex); i++ {
 		entry := g.nameIndex[i]
 		if !strings.HasPrefix(entry.lower, lower) {
 			break
+		}
+		if entry.lower == lower {
+			exactMatch[entry.cityIdx] = true
 		}
 		if seen[entry.cityIdx] {
 			continue
@@ -213,8 +244,12 @@ func (g *Gazetteer) PrefixSearch(query string, limit int) []Result {
 		matched = append(matched, entry.cityIdx)
 	}
 
-	// Sort by population descending
+	// Sort: exact name matches first (by population), then prefix matches (by population)
 	sort.Slice(matched, func(i, j int) bool {
+		ei, ej := exactMatch[matched[i]], exactMatch[matched[j]]
+		if ei != ej {
+			return ei // exact matches come first
+		}
 		return g.cities[matched[i]].Population > g.cities[matched[j]].Population
 	})
 

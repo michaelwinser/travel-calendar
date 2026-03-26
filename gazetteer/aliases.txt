@@ -1,0 +1,20 @@
+# Common city abbreviations and nicknames.
+# Format: abbreviation : city name (as it appears in the gazetteer)
+# One entry per line. Case-insensitive. Blank lines and # comments are ignored.
+
+NYC : New York City
+SF : San Francisco
+LA : Los Angeles
+DC : Washington
+Philly : Philadelphia
+Vegas : Las Vegas
+NOLA : New Orleans
+BOS : Boston
+CHI : Chicago
+ATL : Atlanta
+DFW : Dallas
+MSP : Minneapolis
+SEA : Seattle
+PDX : Portland
+DEN : Denver
+DTW : Detroit
