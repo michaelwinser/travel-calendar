@@ -12,6 +12,7 @@ import (
 	"github.com/michaelwinser/appbase"
 	"github.com/michaelwinser/appbase/server"
 	"github.com/michaelwinser/travel-calendar/api"
+	"github.com/michaelwinser/travel-calendar/gazetteer"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -133,6 +134,11 @@ func (s *ActivityServer) CreateActivity(w http.ResponseWriter, r *http.Request) 
 	// Link to parse history if provided
 	if req.ParseHistoryId != nil && *req.ParseHistoryId != "" && s.parseHistory != nil {
 		s.parseHistory.MarkAccepted(*req.ParseHistoryId, a.ID)
+	}
+
+	// Track place usage
+	if a.PlaceID != "" {
+		s.places.IncrementUsage(a.PlaceID)
 	}
 
 	server.RespondJSON(w, http.StatusCreated, entityToAPI(*a))
@@ -353,7 +359,7 @@ func (s *ActivityServer) CheckDate(w http.ResponseWriter, r *http.Request, date 
 		Date:        date,
 		Location:    location,
 		Activities:  activities,
-		HasConflict: detectConflict(items),
+		HasConflict: detectConflict(items, s.places, userID),
 	})
 }
 
@@ -1005,17 +1011,21 @@ func (s *ActivityServer) HandlePublicDashboard(w http.ResponseWriter, r *http.Re
 // --- conflict detection ---
 
 // detectConflict determines whether a set of activities on the same day
-// represent a scheduling conflict. It uses three layers:
-//  1. Place identity: same placeId = same location (no conflict)
-//  2. Travel bridging: travel-type activities connect locations
-//  3. String fallback: different location strings = conflict
+// represent a scheduling conflict. Layers:
+//  1. Place identity: same placeId = same location
+//  2. Distance: places within 50km = same area
+//  3. Travel bridging: route travel connects locations
+//  4. String fallback: different location strings = conflict
+
+const conflictDistanceThresholdKm = 50.0
+
 // locKey identifies a location by either placeID or lowercase string.
 type locKey struct {
 	placeID string
 	locStr  string
 }
 
-func detectConflict(items []Activity) bool {
+func detectConflict(items []Activity, places *PlaceStore, userID string) bool {
 	allLocs := map[locKey]bool{}
 	var routeTravelActivities []Activity
 
@@ -1024,9 +1034,6 @@ func detectConflict(items []Activity) bool {
 			continue
 		}
 
-		// Travel activities with route-style locations (A → B) are potential bridges.
-		// Travel activities with plain locations (e.g., "Seattle") are treated like
-		// any other activity for conflict purposes.
 		if a.Type == TypeTravel {
 			loc := a.Location
 			if strings.Contains(loc, "→") || strings.Contains(loc, "->") ||
@@ -1044,20 +1051,109 @@ func detectConflict(items []Activity) bool {
 		return false
 	}
 
+	// Check distance between places — merge nearby locations.
+	if places != nil {
+		coordMap := loadPlaceCoords(allLocs, places)
+		if len(coordMap) >= 2 {
+			allLocs = mergeNearbyLocations(allLocs, coordMap, conflictDistanceThresholdKm)
+			if len(allLocs) <= 1 {
+				return false
+			}
+		}
+	}
+
+	// Fuzzy string matching via gazetteer — merge locations that resolve to the same city.
+	// Handles "Milan" vs "Milan, IT" both resolving to the same gazetteer entry.
+	allLocs = mergeByGazetteer(allLocs)
+	if len(allLocs) <= 1 {
+		return false
+	}
+
 	// Check if route-style travel activities bridge the conflicting locations.
 	if len(routeTravelActivities) > 0 {
-		// Try structured origin/destination graph
 		if buildTravelGraph(routeTravelActivities, allLocs) {
 			return false
 		}
-
-		// Fallback: route-style travel (e.g., "EWR → CDG") bridges exactly 2 locations
 		if len(allLocs) <= 2 {
 			return false
 		}
 	}
 
 	return true
+}
+
+type coords struct {
+	lat, lng float64
+}
+
+// loadPlaceCoords fetches coordinates for all locKeys that have a placeID.
+func loadPlaceCoords(locs map[locKey]bool, places *PlaceStore) map[locKey]coords {
+	result := map[locKey]coords{}
+	for k := range locs {
+		if k.placeID == "" {
+			continue
+		}
+		p, err := places.Get(k.placeID)
+		if err != nil || p == nil {
+			continue
+		}
+		if gazetteer.HasCoordinates(p.Latitude, p.Longitude) {
+			result[k] = coords{lat: p.Latitude, lng: p.Longitude}
+		}
+	}
+	return result
+}
+
+// mergeNearbyLocations collapses locations that are within the distance threshold
+// into a single representative location, reducing the set.
+func mergeNearbyLocations(locs map[locKey]bool, coordMap map[locKey]coords, thresholdKm float64) map[locKey]bool {
+	keys := make([]locKey, 0, len(locs))
+	for k := range locs {
+		keys = append(keys, k)
+	}
+
+	// Union-Find to merge nearby locations
+	parent := map[locKey]locKey{}
+	for _, k := range keys {
+		parent[k] = k
+	}
+	var find func(locKey) locKey
+	find = func(k locKey) locKey {
+		if parent[k] != k {
+			parent[k] = find(parent[k])
+		}
+		return parent[k]
+	}
+	union := func(a, b locKey) {
+		ra, rb := find(a), find(b)
+		if ra != rb {
+			parent[ra] = rb
+		}
+	}
+
+	// Check all pairs with coordinates
+	for i := 0; i < len(keys); i++ {
+		ci, okI := coordMap[keys[i]]
+		if !okI {
+			continue
+		}
+		for j := i + 1; j < len(keys); j++ {
+			cj, okJ := coordMap[keys[j]]
+			if !okJ {
+				continue
+			}
+			if gazetteer.HaversineKm(ci.lat, ci.lng, cj.lat, cj.lng) <= thresholdKm {
+				union(keys[i], keys[j])
+			}
+		}
+	}
+
+	// Collect unique roots
+	roots := map[locKey]bool{}
+	for _, k := range keys {
+		roots[find(k)] = true
+	}
+	return roots
 }
 
 // buildTravelGraph checks whether travel activities connect all non-travel locations
@@ -1132,6 +1228,99 @@ func buildTravelGraph(travels []Activity, locs map[locKey]bool) bool {
 		}
 	}
 	return true
+}
+
+// mergeByGazetteer resolves location strings against the gazetteer and merges
+// locations that resolve to the same city. Handles cases like "Milan" and
+// "Milan, IT" both resolving to the same gazetteer entry.
+func mergeByGazetteer(locs map[locKey]bool) map[locKey]bool {
+	gaz, err := gazetteer.Get()
+	if err != nil {
+		return locs
+	}
+
+	keys := make([]locKey, 0, len(locs))
+	for k := range locs {
+		keys = append(keys, k)
+	}
+
+	// Resolve each location string to a canonical gazetteer city name.
+	// Use the top result from an exact search, falling back to prefix search.
+	type resolved struct {
+		cityName string
+		country  string
+	}
+
+	resolutions := map[locKey]*resolved{}
+	for _, k := range keys {
+		str := k.locStr
+		if str == "" {
+			continue
+		}
+		// Strip common suffixes like ", IT", ", US" to get the base name
+		base := str
+		if idx := strings.Index(str, ","); idx > 0 {
+			base = strings.TrimSpace(str[:idx])
+		}
+
+		// Try exact match first
+		if c := gaz.ExactSearch(base); c != nil {
+			resolutions[k] = &resolved{cityName: strings.ToLower(c.Name), country: c.Country}
+			continue
+		}
+		// Try prefix search — use top result if high confidence
+		results := gaz.PrefixSearch(base, 1)
+		if len(results) > 0 && results[0].Score >= 0.8 {
+			c := results[0].City
+			resolutions[k] = &resolved{cityName: strings.ToLower(c.Name), country: c.Country}
+		}
+	}
+
+	if len(resolutions) < 2 {
+		return locs
+	}
+
+	// Union-Find: merge locations that resolved to the same city+country
+	parent := map[locKey]locKey{}
+	for _, k := range keys {
+		parent[k] = k
+	}
+	var find func(locKey) locKey
+	find = func(k locKey) locKey {
+		if parent[k] != k {
+			parent[k] = find(parent[k])
+		}
+		return parent[k]
+	}
+	union := func(a, b locKey) {
+		ra, rb := find(a), find(b)
+		if ra != rb {
+			parent[ra] = rb
+		}
+	}
+
+	// Compare all pairs
+	for i := 0; i < len(keys); i++ {
+		ri := resolutions[keys[i]]
+		if ri == nil {
+			continue
+		}
+		for j := i + 1; j < len(keys); j++ {
+			rj := resolutions[keys[j]]
+			if rj == nil {
+				continue
+			}
+			if ri.cityName == rj.cityName && ri.country == rj.country {
+				union(keys[i], keys[j])
+			}
+		}
+	}
+
+	roots := map[locKey]bool{}
+	for _, k := range keys {
+		roots[find(k)] = true
+	}
+	return roots
 }
 
 // --- helpers ---

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -343,17 +344,18 @@ func (s *ShareStore) Delete(id string) error {
 
 // Place represents a structured location with optional geographic data.
 type Place struct {
-	ID        string  `json:"id"        store:"id,pk"`
-	UserID    string  `json:"userId"    store:"user_id,index"`
-	Name      string  `json:"name"      store:"name"`
-	Aliases   string  `json:"aliases"   store:"aliases"`    // JSON-encoded []string
-	City      string  `json:"city"      store:"city"`
-	Country   string  `json:"country"   store:"country"`
-	Latitude  float64 `json:"latitude"  store:"latitude"`
-	Longitude float64 `json:"longitude" store:"longitude"`
-	Timezone  string  `json:"timezone"  store:"timezone"`
-	Kind      string  `json:"kind"      store:"kind"`
-	CreatedAt string  `json:"createdAt" store:"created_at"`
+	ID         string  `json:"id"         store:"id,pk"`
+	UserID     string  `json:"userId"     store:"user_id,index"`
+	Name       string  `json:"name"       store:"name"`
+	Aliases    string  `json:"aliases"    store:"aliases"`    // JSON-encoded []string
+	City       string  `json:"city"       store:"city"`
+	Country    string  `json:"country"    store:"country"`
+	Latitude   float64 `json:"latitude"   store:"latitude"`
+	Longitude  float64 `json:"longitude"  store:"longitude"`
+	Timezone   string  `json:"timezone"   store:"timezone"`
+	Kind       string  `json:"kind"       store:"kind"`
+	UsageCount int     `json:"usageCount" store:"usage_count"`
+	CreatedAt  string  `json:"createdAt"  store:"created_at"`
 }
 
 // PlaceStore handles place persistence.
@@ -393,6 +395,16 @@ func (s *PlaceStore) Update(p *Place) error {
 // Delete removes a place.
 func (s *PlaceStore) Delete(id string) error {
 	return s.coll.Delete(id)
+}
+
+// IncrementUsage bumps the usage count for a place.
+func (s *PlaceStore) IncrementUsage(id string) {
+	p, err := s.Get(id)
+	if err != nil || p == nil {
+		return
+	}
+	p.UsageCount++
+	s.Update(p)
 }
 
 // FindByName returns a user's place with an exact name match (case-insensitive).
@@ -436,6 +448,10 @@ func (s *PlaceStore) SearchByPrefix(userID, prefix string, limit int) ([]Place, 
 			}
 		}
 	}
+	// Sort by usage count descending
+	sort.Slice(matches, func(i, j int) bool {
+		return matches[i].UsageCount > matches[j].UsageCount
+	})
 	if len(matches) > limit {
 		matches = matches[:limit]
 	}

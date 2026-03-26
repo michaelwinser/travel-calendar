@@ -186,9 +186,21 @@ export function hasConflict(dateStr: string, activities: Activity[]): boolean {
 
   if (locKeys.size <= 1) return false;
 
+  // Fuzzy merge: if location strings share a common base name, treat as same.
+  // Handles "Milan" vs "Milan, IT" — strip ", XX" suffixes and compare.
+  const normalized = new Map<string, string[]>();
+  for (const key of locKeys) {
+    // placeId keys aren't strings to normalize
+    if (key.length > 36) continue; // skip placeId-style keys
+    const base = key.includes(',') ? key.split(',')[0].trim() : key;
+    const group = normalized.get(base);
+    if (group) group.push(key);
+    else normalized.set(base, [key]);
+  }
+  // If all location strings share a base name, no conflict
+  if (normalized.size <= 1) return false;
+
   // Check if travel activities bridge the conflicting locations.
-  // Only suppress conflict if travel has route-style location (A → B)
-  // or has origin/destination place IDs — not just any travel activity.
   if (travel.length > 0 && locKeys.size <= 2) {
     for (const t of travel) {
       const loc = t.location ?? '';

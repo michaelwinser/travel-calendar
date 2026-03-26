@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import {
     ACTIVITY_TYPES, ACTIVITY_COLORS,
-    parseActivity,
+    parseActivity, resolvePlaces,
     type ActivityType, type ParseResult, type TripSummary,
   } from '../lib/api';
   import PlaceAutocomplete from './PlaceAutocomplete.svelte';
@@ -51,6 +51,7 @@
   let showTripSuggestions = $state(false);
   let error = $state('');
   let confirmingDelete = $state(false);
+  let locationAnnotation = $state('');
 
   // Quick add state
   let quickText = $state('');
@@ -142,7 +143,30 @@
         if (a.type) type = a.type;
         if (a.startDate) startDate = a.startDate;
         if (a.endDate) endDate = a.endDate;
-        if (a.location) location = a.location;
+        if (a.location) {
+          location = a.location;
+          // Resolve location for annotation
+          try {
+            const resolved = await resolvePlaces(a.location);
+            if (resolved.exact) {
+              placeId = resolved.exact.id;
+              const parts = [resolved.exact.name];
+              if (resolved.exact.country) parts.push(resolved.exact.country);
+              if (resolved.exact.timezone) parts.push(resolved.exact.timezone);
+              locationAnnotation = parts.join(' · ');
+            } else if (resolved.suggestions?.length) {
+              const s = resolved.suggestions[0];
+              const parts = [s.name];
+              if (s.country) parts.push(s.country);
+              if (s.timezone) parts.push(s.timezone);
+              locationAnnotation = parts.join(' · ');
+            } else {
+              locationAnnotation = '';
+            }
+          } catch {
+            locationAnnotation = '';
+          }
+        }
       } catch {
         // Parse failed — leave fields as-is
       }
@@ -257,9 +281,12 @@
         <PlaceAutocomplete
           value={location}
           {placeId}
-          onchange={(v, pid) => { location = v; placeId = pid; }}
+          onchange={(v, pid) => { location = v; placeId = pid; locationAnnotation = ''; }}
           placeholder="e.g. Brussels, Home"
         />
+        {#if locationAnnotation}
+          <span class="location-annotation">{locationAnnotation}</span>
+        {/if}
       </label>
 
       <div class="trip-field">
@@ -318,6 +345,12 @@
 </div>
 
 <style>
+  .location-annotation {
+    font-size: 0.7rem;
+    color: #888;
+    margin-top: 0.15rem;
+  }
+
   .overlay {
     position: fixed;
     inset: 0;

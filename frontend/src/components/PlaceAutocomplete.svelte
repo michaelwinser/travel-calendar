@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { resolvePlaces, createPlace, type PlaceSuggestion, type PlaceResolveResponse } from '../lib/api';
 
   interface Props {
@@ -17,6 +18,26 @@
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let inputEl: HTMLInputElement;
   let lastPropValue = value;
+  let chipSuggestions = $state<PlaceSuggestion[]>([]);
+
+  // Load suggestion chips on mount if there's text but no placeId
+  onMount(async () => {
+    if (value && !placeId) {
+      try {
+        const result = await resolvePlaces(value);
+        const chips: PlaceSuggestion[] = [];
+        if (result.exact) {
+          chips.push({ source: 'user', place: result.exact, name: result.exact.name, score: 1.0 });
+        }
+        for (const s of result.suggestions ?? []) {
+          if (result.exact && s.source === 'user' && s.place?.id === result.exact.id) continue;
+          chips.push(s);
+          if (chips.length >= 3) break;
+        }
+        chipSuggestions = chips;
+      } catch { /* ignore */ }
+    }
+  });
 
   // Sync only when the parent *prop* changes (not when inputValue changes)
   $effect(() => {
@@ -27,6 +48,7 @@
   });
 
   function handleInput() {
+    chipSuggestions = []; // Clear chips when user edits
     // Always propagate text changes to parent; clear place link when editing
     onchange(inputValue, placeId && inputValue !== value ? '' : placeId);
 
@@ -70,6 +92,7 @@
 
   async function selectSuggestion(sug: PlaceSuggestion) {
     showDropdown = false;
+    chipSuggestions = [];
 
     // User explicitly selected this suggestion — use the canonical name
     const displayName = formatSuggestion(sug);
@@ -169,6 +192,16 @@
       {/each}
     </div>
   {/if}
+
+  {#if !showDropdown && !placeId && chipSuggestions.length > 0}
+    <div class="chips">
+      {#each chipSuggestions as chip}
+        <button class="chip" onclick={() => selectSuggestion(chip)}>
+          {formatSuggestion(chip)}
+        </button>
+      {/each}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -245,5 +278,29 @@
     white-space: nowrap;
     margin-left: 0.5rem;
     flex-shrink: 0;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-top: 0.3rem;
+  }
+
+  .chip {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    background: #f8f9fa;
+    color: #555;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .chip:hover {
+    background: #e5e7eb;
+    border-color: #999;
+    color: #333;
   }
 </style>
