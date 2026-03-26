@@ -116,9 +116,11 @@ func main() {
 		// Shared calendar JSON endpoint (unauthenticated — outside /api/ prefix)
 		// The SPA serves at /shared/{token} and fetches data from /shared/{token}.json
 		r.Get("/shared/{token}.json", activityServer.HandleSharedCalendar)
+		r.Get("/shared/{token}/feed.ics", activityServer.HandleSharedFeed)
 
 		// Public dashboard (unauthenticated — outside /api/ prefix)
 		r.Get("/public/{handle}.json", activityServer.HandlePublicDashboard)
+		r.Get("/public/{handle}/feed.ics", activityServer.HandlePublicFeed)
 
 		// Public dashboard frontend (separate entry point, no login required)
 		r.Get("/public/*", func(w http.ResponseWriter, r *http.Request) {
