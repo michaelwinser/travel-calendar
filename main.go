@@ -1482,7 +1482,7 @@ func resolveLocationToPlace(client *api.ClientWithResponses, loc string) string 
 	// Create a new place from the gazetteer suggestion
 	req := api.CreatePlaceRequest{
 		Name: loc, // Preserve user's original input as the place name
-		City: &best.Name,
+		City: cityWithAdmin1(best),
 	}
 	if best.Country != nil {
 		req.Country = best.Country
@@ -1838,15 +1838,7 @@ func namedSet(cmd *cobra.Command, args []string) error {
 			if i >= 5 {
 				break
 			}
-			extra := ""
-			if s.Country != nil {
-				extra = *s.Country
-			}
-			pop := ""
-			if s.Population != nil && *s.Population > 0 {
-				pop = fmt.Sprintf(", pop %dk", *s.Population/1000)
-			}
-			fmt.Printf("  %d. %s (%s%s)\n", i+1, s.Name, extra, pop)
+			fmt.Printf("  %d. %s\n", i+1, formatPlaceSummary(s))
 		}
 		fmt.Println("Specify a more precise location.")
 		return nil
@@ -1856,7 +1848,7 @@ func namedSet(cmd *cobra.Command, args []string) error {
 	best := gazetteerSugs[0]
 	req := api.CreatePlaceRequest{
 		Name: name,
-		City: &best.Name,
+		City: cityWithAdmin1(best),
 	}
 	if best.Country != nil {
 		req.Country = best.Country
@@ -1889,19 +1881,47 @@ func namedSet(cmd *cobra.Command, args []string) error {
 	}
 
 	p := createResp.JSON201
-	extra := ""
-	if p.Country != nil {
-		extra += ", " + *p.Country
-	}
-	if p.Timezone != nil {
-		extra += ", " + *p.Timezone
-	}
-	fmt.Printf("Named \"%s\" → %s%s\n", name, best.Name, extra)
+	fmt.Printf("Named \"%s\" → %s\n", name, formatPlaceSummary(best))
 
 	return namedLinkActivities(client, name, p.Id)
 }
 
 // namedLinkActivities finds activities whose location matches the name and links them.
+// cityWithAdmin1 returns a city string that includes state/province if available.
+// e.g. "Westport, CT" or just "Milan" if no admin1.
+func cityWithAdmin1(s api.PlaceSuggestion) *string {
+	city := s.Name
+	if s.Admin1 != nil && *s.Admin1 != "" {
+		city += ", " + *s.Admin1
+	}
+	return &city
+}
+
+// formatPlaceSummary produces a readable location string from a suggestion.
+// e.g. "Westport, CT, US (America/New_York, pop 26k)"
+func formatPlaceSummary(s api.PlaceSuggestion) string {
+	parts := []string{s.Name}
+	if s.Admin1 != nil && *s.Admin1 != "" {
+		parts = append(parts, *s.Admin1)
+	}
+	if s.Country != nil && *s.Country != "" {
+		parts = append(parts, *s.Country)
+	}
+	result := strings.Join(parts, ", ")
+
+	var meta []string
+	if s.Timezone != nil && *s.Timezone != "" {
+		meta = append(meta, *s.Timezone)
+	}
+	if s.Population != nil && *s.Population > 0 {
+		meta = append(meta, fmt.Sprintf("pop %dk", *s.Population/1000))
+	}
+	if len(meta) > 0 {
+		result += " (" + strings.Join(meta, ", ") + ")"
+	}
+	return result
+}
+
 func namedLinkActivities(client *api.ClientWithResponses, name, placeID string) error {
 	actsResp, err := client.ListActivitiesWithResponse(context.Background(), &api.ListActivitiesParams{})
 	if err != nil {

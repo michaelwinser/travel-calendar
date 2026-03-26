@@ -228,6 +228,9 @@ func (s *ActivityServer) ResolvePlaces(w http.ResponseWriter, r *http.Request) {
 			if c.Country != "" {
 				sug.Country = &c.Country
 			}
+			if c.Admin1 != "" {
+				sug.Admin1 = &c.Admin1
+			}
 			if c.Latitude != 0 || c.Longitude != 0 {
 				sug.Latitude = &c.Latitude
 				sug.Longitude = &c.Longitude

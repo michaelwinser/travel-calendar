@@ -1159,6 +1159,9 @@ components:
           type: string
         country:
           type: string
+        admin1:
+          type: string
+          description: State/province code (e.g. CT, ON)
         latitude:
           type: number
           format: double

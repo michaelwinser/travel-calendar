@@ -577,6 +577,8 @@ export interface components {
             place?: components["schemas"]["Place"];
             name: string;
             country?: string;
+            /** @description State/province code (e.g. CT, ON) */
+            admin1?: string;
             /** Format: double */
             latitude?: number;
             /** Format: double */
