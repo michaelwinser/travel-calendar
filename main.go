@@ -30,6 +30,8 @@ import (
 	"text/tabwriter"
 	"time"
 
+	icalparser "github.com/michaelwinser/travel-calendar/internal/ical"
+
 	"github.com/spf13/cobra"
 
 	"github.com/michaelwinser/appbase"
@@ -413,6 +415,18 @@ func main() {
 	importCmd.Flags().Bool("dry-run", false, "Preview what would be imported")
 	importCmd.Flags().String("mode", "merge", "Import mode: merge (skip duplicates) or replace (wipe and restore)")
 	cli.AddCommand(importCmd)
+
+	importCalCmd := &cobra.Command{
+		Use:   "import-cal [url]",
+		Short: "Import events from a public iCal/ICS calendar URL",
+		Args:  cobra.ExactArgs(1),
+		RunE:  importCalendar,
+	}
+	importCalCmd.Flags().Bool("dry-run", false, "Preview events without importing")
+	importCalCmd.Flags().Bool("all-day-only", false, "Only import all-day events (skip timed events)")
+	importCalCmd.Flags().String("type", "stay", fmt.Sprintf("Activity type for imported events (%s)", strings.Join(travelapp.ValidTypes, ", ")))
+	importCalCmd.Flags().String("trip", "", "Assign imported activities to this trip")
+	cli.AddCommand(importCalCmd)
 
 	infoCmd := &cobra.Command{
 		Use:   "info",
@@ -2708,5 +2722,160 @@ func showInfo(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("App:      %s\n", appName)
+	return nil
+}
+
+// --- Calendar import ---
+
+func importCalendar(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	url := args[0]
+	dryRun, _ := cmd.Flags().GetBool("dry-run")
+	allDayOnly, _ := cmd.Flags().GetBool("all-day-only")
+	actType, _ := cmd.Flags().GetString("type")
+	tripName, _ := cmd.Flags().GetString("trip")
+
+	// Fetch the iCal feed
+	fmt.Printf("Fetching %s ...\n", url)
+	httpResp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("fetching calendar: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != 200 {
+		return fmt.Errorf("server returned %d", httpResp.StatusCode)
+	}
+
+	// Parse iCal
+	events, err := icalparser.Parse(httpResp.Body)
+	if err != nil {
+		return fmt.Errorf("parsing iCal: %w", err)
+	}
+
+	// Filter
+	if allDayOnly {
+		var filtered []icalparser.Event
+		for _, e := range events {
+			if e.AllDay {
+				filtered = append(filtered, e)
+			}
+		}
+		events = filtered
+	}
+
+	if len(events) == 0 {
+		fmt.Println("No events found in calendar.")
+		return nil
+	}
+
+	fmt.Printf("Found %d events.\n\n", len(events))
+
+	// Preview
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "DATES\tTITLE\tLOCATION\n")
+	for _, e := range events {
+		startStr := e.Start.Format("2006-01-02")
+		endStr := e.End.Format("2006-01-02")
+		// For all-day events, DTEND is exclusive — subtract a day for display
+		if e.AllDay && !e.End.IsZero() && e.End.After(e.Start) {
+			endStr = e.End.AddDate(0, 0, -1).Format("2006-01-02")
+		}
+		dates := startStr
+		if endStr != startStr {
+			dates = startStr + " -> " + endStr
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\n", dates, e.Summary, e.Location)
+	}
+	w.Flush()
+
+	if dryRun {
+		fmt.Println("\n(dry run — no changes made)")
+		return nil
+	}
+
+	fmt.Println()
+
+	// Build existing activity keys for merge dedup
+	existingKeys := map[string]bool{}
+	if resp, err := client.ListActivitiesWithResponse(context.Background(), &api.ListActivitiesParams{}); err == nil && resp.JSON200 != nil {
+		for _, a := range *resp.JSON200 {
+			key := string(a.Type) + "/" + a.StartDate.Format("2006-01-02") + "/" + travelapp.Slug(a.Title)
+			existingKeys[key] = true
+		}
+	}
+
+	// Resolve trip if specified
+	var tripID string
+	if tripName != "" {
+		if resp, err := client.ListTripsWithResponse(context.Background()); err == nil && resp.JSON200 != nil {
+			for _, t := range *resp.JSON200 {
+				if strings.EqualFold(t.Name, tripName) {
+					tripID = t.Id
+					break
+				}
+			}
+		}
+		if tripID == "" {
+			// Create the trip
+			resp, err := client.CreateTripWithResponse(context.Background(), api.CreateTripRequest{Name: tripName})
+			if err == nil && resp.StatusCode() == http.StatusCreated && resp.JSON201 != nil {
+				tripID = resp.JSON201.Id
+			}
+		}
+	}
+
+	// Import events
+	created, skipped := 0, 0
+	for _, e := range events {
+		startStr := e.Start.Format("2006-01-02")
+		endStr := e.End.Format("2006-01-02")
+		// Adjust all-day DTEND (exclusive → inclusive)
+		if e.AllDay && !e.End.IsZero() && e.End.After(e.Start) {
+			endStr = e.End.AddDate(0, 0, -1).Format("2006-01-02")
+		}
+
+		key := actType + "/" + startStr + "/" + travelapp.Slug(e.Summary)
+		if existingKeys[key] {
+			skipped++
+			continue
+		}
+
+		req := api.CreateActivityRequest{
+			Title:     e.Summary,
+			Type:      api.CreateActivityRequestType(actType),
+			StartDate: openapi_types.Date{Time: e.Start},
+		}
+		if endStr != startStr {
+			endTime, _ := time.Parse("2006-01-02", endStr)
+			req.EndDate = &openapi_types.Date{Time: endTime}
+		}
+		if e.Location != "" {
+			req.Location = &e.Location
+			// Try to resolve location to a place
+			placeID := resolveLocationToPlace(client, e.Location)
+			if placeID != "" {
+				req.PlaceId = &placeID
+			}
+		}
+		if tripID != "" {
+			req.TripId = &tripID
+		}
+
+		resp, err := client.CreateActivityWithResponse(context.Background(), req)
+		if err == nil && resp.StatusCode() == http.StatusCreated {
+			created++
+			existingKeys[key] = true // prevent dupes within the same feed
+		} else {
+			fmt.Fprintf(os.Stderr, "  Failed: %q\n", e.Summary)
+		}
+	}
+
+	fmt.Printf("Imported %d events, skipped %d (already exist).\n", created, skipped)
 	return nil
 }
