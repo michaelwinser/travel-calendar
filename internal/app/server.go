@@ -338,13 +338,9 @@ func (s *ActivityServer) CheckDate(w http.ResponseWriter, r *http.Request, date 
 	}
 
 	location := "Home"
-	locations := map[string]bool{}
 	for _, a := range items {
-		if a.Location != "" {
-			locations[a.Location] = true
-			if location == "Home" {
-				location = a.Location
-			}
+		if a.Location != "" && location == "Home" {
+			location = a.Location
 		}
 	}
 
@@ -357,7 +353,7 @@ func (s *ActivityServer) CheckDate(w http.ResponseWriter, r *http.Request, date 
 		Date:        date,
 		Location:    location,
 		Activities:  activities,
-		HasConflict: len(locations) > 1,
+		HasConflict: detectConflict(items),
 	})
 }
 
@@ -1005,6 +1001,138 @@ func (s *ActivityServer) HandlePublicDashboard(w http.ResponseWriter, r *http.Re
 	w.Write([]byte("<html><body><p>Public dashboard frontend not available. Use /public/" + p.Handle + ".json for data.</p></body></html>"))
 }
 
+
+// --- conflict detection ---
+
+// detectConflict determines whether a set of activities on the same day
+// represent a scheduling conflict. It uses three layers:
+//  1. Place identity: same placeId = same location (no conflict)
+//  2. Travel bridging: travel-type activities connect locations
+//  3. String fallback: different location strings = conflict
+// locKey identifies a location by either placeID or lowercase string.
+type locKey struct {
+	placeID string
+	locStr  string
+}
+
+func detectConflict(items []Activity) bool {
+	allLocs := map[locKey]bool{}
+	var routeTravelActivities []Activity
+
+	for _, a := range items {
+		if a.Location == "" && a.PlaceID == "" {
+			continue
+		}
+
+		// Travel activities with route-style locations (A → B) are potential bridges.
+		// Travel activities with plain locations (e.g., "Seattle") are treated like
+		// any other activity for conflict purposes.
+		if a.Type == TypeTravel {
+			loc := a.Location
+			if strings.Contains(loc, "→") || strings.Contains(loc, "->") ||
+				(a.OriginPlaceID != "" && a.DestinationPlaceID != "") {
+				routeTravelActivities = append(routeTravelActivities, a)
+				continue
+			}
+		}
+
+		key := locKey{placeID: a.PlaceID, locStr: strings.ToLower(a.Location)}
+		allLocs[key] = true
+	}
+
+	if len(allLocs) <= 1 {
+		return false
+	}
+
+	// Check if route-style travel activities bridge the conflicting locations.
+	if len(routeTravelActivities) > 0 {
+		// Try structured origin/destination graph
+		if buildTravelGraph(routeTravelActivities, allLocs) {
+			return false
+		}
+
+		// Fallback: route-style travel (e.g., "EWR → CDG") bridges exactly 2 locations
+		if len(allLocs) <= 2 {
+			return false
+		}
+	}
+
+	return true
+}
+
+// buildTravelGraph checks whether travel activities connect all non-travel locations
+// into a single connected component using origin/destination place IDs.
+func buildTravelGraph(travels []Activity, locs map[locKey]bool) bool {
+	keys := make([]locKey, 0, len(locs))
+	for k := range locs {
+		keys = append(keys, k)
+	}
+
+	// Union-Find
+	parent := map[locKey]locKey{}
+	for k := range locs {
+		parent[k] = k
+	}
+
+	var find func(locKey) locKey
+	find = func(k locKey) locKey {
+		if parent[k] != k {
+			parent[k] = find(parent[k])
+		}
+		return parent[k]
+	}
+
+	union := func(a, b locKey) {
+		ra, rb := find(a), find(b)
+		if ra != rb {
+			parent[ra] = rb
+		}
+	}
+
+	// For each travel activity with origin/destination, union those locations
+	for _, t := range travels {
+		var originKey, destKey locKey
+		hasOrigin, hasDest := false, false
+
+		if t.OriginPlaceID != "" {
+			originKey = locKey{placeID: t.OriginPlaceID}
+			// Find matching non-travel location
+			for k := range locs {
+				if k.placeID == t.OriginPlaceID {
+					originKey = k
+					hasOrigin = true
+					break
+				}
+			}
+		}
+		if t.DestinationPlaceID != "" {
+			destKey = locKey{placeID: t.DestinationPlaceID}
+			for k := range locs {
+				if k.placeID == t.DestinationPlaceID {
+					destKey = k
+					hasDest = true
+					break
+				}
+			}
+		}
+
+		if hasOrigin && hasDest {
+			union(originKey, destKey)
+		}
+	}
+
+	// Check if all locations are in the same component
+	if len(keys) == 0 {
+		return true
+	}
+	root := find(keys[0])
+	for _, k := range keys[1:] {
+		if find(k) != root {
+			return false
+		}
+	}
+	return true
+}
 
 // --- helpers ---
 

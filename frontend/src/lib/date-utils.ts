@@ -161,32 +161,44 @@ export function getActivityBarsForWeek(
 /** Check if a date has conflicting activities (multiple locations).
  *  Activities within the same trip do not conflict with each other. */
 export function hasConflict(dateStr: string, activities: Activity[]): boolean {
-  const overlapping = activities.filter(a => activityOverlapsDate(a, dateStr) && a.location);
+  const overlapping = activities.filter(a => activityOverlapsDate(a, dateStr));
   if (overlapping.length < 2) return false;
 
-  // Collect locations per source (trip or standalone).
-  // All activities in the same trip are one source.
-  // Each standalone activity is its own source.
-  const sourceLocations: string[] = [];
-  const tripsSeen = new Set<string>();
-  let standaloneIdx = 0;
+  // Separate travel and non-travel activities
+  const nonTravel = overlapping.filter(a => a.type !== 'travel');
+  const travel = overlapping.filter(a => a.type === 'travel');
 
-  for (const a of overlapping) {
+  // Collect effective locations for non-travel activities.
+  // Use placeId if set, otherwise lowercase location string.
+  // Group by trip: all activities in the same trip are one location source.
+  const locKeys = new Set<string>();
+  const tripsSeen = new Set<string>();
+
+  for (const a of nonTravel) {
+    if (!a.location && !a.placeId) continue;
     if (a.tripId) {
-      if (!tripsSeen.has(a.tripId)) {
-        tripsSeen.add(a.tripId);
-        // Use the trip's first activity's location as representative
-        sourceLocations.push(a.location!);
+      if (tripsSeen.has(a.tripId)) continue;
+      tripsSeen.add(a.tripId);
+    }
+    const key = a.placeId || (a.location?.toLowerCase() ?? '');
+    if (key) locKeys.add(key);
+  }
+
+  if (locKeys.size <= 1) return false;
+
+  // Check if travel activities bridge the conflicting locations.
+  // Only suppress conflict if travel has route-style location (A → B)
+  // or has origin/destination place IDs — not just any travel activity.
+  if (travel.length > 0 && locKeys.size <= 2) {
+    for (const t of travel) {
+      const loc = t.location ?? '';
+      if (loc.includes('→') || loc.includes('->') || (t.originPlaceId && t.destinationPlaceId)) {
+        return false;
       }
-      // Skip other activities in the same trip
-    } else {
-      sourceLocations.push(a.location!);
     }
   }
 
-  // Conflict if sources have different locations
-  const uniqueLocations = new Set(sourceLocations);
-  return uniqueLocations.size > 1;
+  return true;
 }
 
 /** Per-day bar segment for rendering inside day cells. */
