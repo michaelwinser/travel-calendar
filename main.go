@@ -164,6 +164,7 @@ func main() {
 	}
 	listCmd.Flags().String("month", "", "Filter by month (e.g. 2026-04)")
 	listCmd.Flags().String("user", "", "View another user's shared calendar (email)")
+	listCmd.Flags().Bool("conflicts", false, "Show conflict indicators")
 	cli.AddCommand(listCmd)
 
 	checkCmd := &cobra.Command{
@@ -681,8 +682,20 @@ func listActivities(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	showConflicts, _ := cmd.Flags().GetBool("conflicts")
+
+	// Build conflict map: activity ID → has conflict
+	conflictIDs := map[string]bool{}
+	if showConflicts {
+		conflictIDs = checkConflictsForActivities(client, items)
+	}
+
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "ID\tDATES\tTYPE\tLOCATION\tTITLE\n")
+	if showConflicts {
+		fmt.Fprintf(w, "ID\tDATES\tTYPE\tLOCATION\tTITLE\t\n")
+	} else {
+		fmt.Fprintf(w, "ID\tDATES\tTYPE\tLOCATION\tTITLE\n")
+	}
 	for _, a := range items {
 		dates := a.StartDate.Format("2006-01-02")
 		endStr := a.EndDate.Format("2006-01-02")
@@ -693,10 +706,63 @@ func listActivities(cmd *cobra.Command, args []string) error {
 		if a.Location != nil {
 			loc = *a.Location
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", a.Id[:8], dates, a.Type, loc, a.Title)
+		marker := ""
+		if showConflicts && conflictIDs[a.Id] {
+			marker = " !"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s%s\n", a.Id[:8], dates, a.Type, loc, a.Title, marker)
 	}
 	w.Flush()
 	return nil
+}
+
+// checkConflictsForActivities calls checkDate for each unique date across
+// the activities and returns a set of activity IDs that participate in conflicts.
+func checkConflictsForActivities(client *api.ClientWithResponses, items []api.Activity) map[string]bool {
+	// Collect unique dates from all activities
+	dates := map[string]bool{}
+	for _, a := range items {
+		start := a.StartDate.Format("2006-01-02")
+		end := a.EndDate.Format("2006-01-02")
+		// Add start, end, and a sample of days in between for multi-day activities
+		d := a.StartDate.Time
+		for !d.After(a.EndDate.Time) {
+			dates[d.Format("2006-01-02")] = true
+			d = d.AddDate(0, 0, 1)
+		}
+		_ = start
+		_ = end
+	}
+
+	// Check each date for conflicts
+	conflictDates := map[string]bool{}
+	for dateStr := range dates {
+		d, err := time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			continue
+		}
+		checkResp, err := client.CheckDateWithResponse(context.Background(), openapi_types.Date{Time: d})
+		if err != nil || checkResp.StatusCode() != http.StatusOK || checkResp.JSON200 == nil {
+			continue
+		}
+		if checkResp.JSON200.HasConflict {
+			conflictDates[dateStr] = true
+		}
+	}
+
+	// Map back to activity IDs
+	result := map[string]bool{}
+	for _, a := range items {
+		d := a.StartDate.Time
+		for !d.After(a.EndDate.Time) {
+			if conflictDates[d.Format("2006-01-02")] {
+				result[a.Id] = true
+				break
+			}
+			d = d.AddDate(0, 0, 1)
+		}
+	}
+	return result
 }
 
 func listSharedActivities(client *api.ClientWithResponses, email, month string) error {
