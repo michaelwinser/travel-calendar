@@ -413,6 +413,13 @@ func main() {
 	importCmd.Flags().Bool("dry-run", false, "Preview what would be imported")
 	cli.AddCommand(importCmd)
 
+	infoCmd := &cobra.Command{
+		Use:   "info",
+		Short: "Show current configuration and connection info",
+		RunE:  showInfo,
+	}
+	cli.AddCommand(infoCmd)
+
 	cli.Execute()
 }
 
@@ -2598,5 +2605,23 @@ func importCSV(client *api.ClientWithResponses, data string, dryRun bool) error 
 	}
 
 	fmt.Printf("Imported %d activities.\n", created)
+	return nil
+}
+
+// --- Info ---
+
+func showInfo(cmd *cobra.Command, args []string) error {
+	serverFlag, _ := cmd.Root().PersistentFlags().GetString("server")
+
+	if appcli.IsLocalMode {
+		fmt.Println("Mode:     local")
+		fmt.Printf("Data:     %s/app.db\n", appcli.LocalDataPath)
+	} else {
+		serverURL := appcli.ResolveServerURL(serverFlag, cliName)
+		fmt.Println("Mode:     remote")
+		fmt.Printf("Server:   %s\n", serverURL)
+	}
+
+	fmt.Printf("App:      %s\n", appName)
 	return nil
 }
