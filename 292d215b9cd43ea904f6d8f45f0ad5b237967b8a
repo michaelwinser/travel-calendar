@@ -1,0 +1,64 @@
+gazetteer/gazetteer_test.go
+  c4b81f6d41e4e10c 1-209
+gazetteer/prepare_airports/main.go
+  c4b81f6d41e4e10c 1-63
+frontend/src/lib/api.ts
+  c4b81f6d41e4e10c 220-249
+docs/prd/places.md
+  db0ccec4fd040162 1-253
+internal/app/store.go
+  c4b81f6d41e4e10c 6,8,27-40,108,116-129,344-464
+internal/app/place_handlers.go
+  c4b81f6d41e4e10c 1-291
+main.go
+  c4b81f6d41e4e10c 87-90,93,333-349,406-410,1317-1476
+docs/design/places-geo.md
+  c4b81f6d41e4e10c 1-599
+gazetteer/gazetteer.go
+  c4b81f6d41e4e10c 1-266
+frontend/src/components/ActivityModal.svelte
+  c4b81f6d41e4e10c 8,17,29,48,179,257-262
+frontend/src/components/PlaceAutocomplete.svelte
+  c4b81f6d41e4e10c 1-249
+frontend/src/App.svelte
+  c4b81f6d41e4e10c 386,402,414,658
+openapi.yaml
+  c4b81f6d41e4e10c 194-334,687-695,726-731,758-763,1041-1175
+gazetteer/prepare/main.go
+  c4b81f6d41e4e10c 1-112
+internal/app/server.go
+  c4b81f6d41e4e10c 36,40-41,114-125,127,204-212,1043-1051
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.19",
+  "base_commit_sha": "292d215b9cd43ea904f6d8f45f0ad5b237967b8a",
+  "prompts": {
+    "c4b81f6d41e4e10c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1068418b-2d23-4075-8b99-24178f7ad113",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 2553,
+      "total_deletions": 77,
+      "accepted_lines": 2504,
+      "overriden_lines": 0
+    },
+    "db0ccec4fd040162": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f91b5184-5d36-475e-a387-fb6a0cd69653",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 617,
+      "overriden_lines": 0
+    }
+  }
+}
