@@ -84,9 +84,13 @@ func setup() error {
 	if err != nil {
 		return err
 	}
+	places, err := travelapp.NewPlaceStore(app.DB())
+	if err != nil {
+		return err
+	}
 
 	// Register API routes
-	activityServer = travelapp.NewActivityServer(activities, trips, parseHistory, shareLinks, shares, publicProfiles)
+	activityServer = travelapp.NewActivityServer(activities, trips, parseHistory, shareLinks, shares, publicProfiles, places)
 	api.HandlerFromMux(activityServer, app.Server().Router())
 
 	return nil
@@ -326,6 +330,23 @@ func main() {
 
 	cli.AddCommand(publicCmd)
 
+	// --- Places commands ---
+
+	placesCmd := &cobra.Command{
+		Use:   "places",
+		Short: "List your places",
+		RunE:  listPlacesCmd,
+	}
+
+	placesShowCmd := &cobra.Command{
+		Use:   "show [name-or-id]",
+		Short: "Show place details",
+		Args:  cobra.ExactArgs(1),
+		RunE:  showPlaceCmd,
+	}
+	placesCmd.AddCommand(placesShowCmd)
+	cli.AddCommand(placesCmd)
+
 	cli.Execute()
 }
 
@@ -382,6 +403,11 @@ func addActivity(cmd *cobra.Command, args []string) error {
 	}
 	if loc != "" {
 		req.Location = &loc
+		// Resolve location to a place
+		placeID := resolveLocationToPlace(client, loc)
+		if placeID != "" {
+			req.PlaceId = &placeID
+		}
 	}
 	if notes != "" {
 		req.Notes = &notes
@@ -1287,4 +1313,164 @@ func publicStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Handle: %s\n", p.Handle)
 	fmt.Printf("  URL:    /public/%s\n", p.Handle)
 	return nil
+}
+
+// --- Places CLI commands ---
+
+func listPlacesCmd(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := client.ListPlacesWithResponse(context.Background())
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+	}
+
+	places := *resp.JSON200
+	if len(places) == 0 {
+		fmt.Println("No places. They are created automatically when you use --loc.")
+		return nil
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "ID\tNAME\tCITY\tCOUNTRY\tTIMEZONE\tKIND\n")
+	for _, p := range places {
+		city := ""
+		if p.City != nil {
+			city = *p.City
+		}
+		country := ""
+		if p.Country != nil {
+			country = *p.Country
+		}
+		tz := ""
+		if p.Timezone != nil {
+			tz = *p.Timezone
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", p.Id[:8], p.Name, city, country, tz, p.Kind)
+	}
+	w.Flush()
+	return nil
+}
+
+func showPlaceCmd(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	// List all and match by name or id prefix
+	listResp, err := client.ListPlacesWithResponse(context.Background())
+	if err != nil {
+		return err
+	}
+	if listResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", listResp.StatusCode(), string(listResp.Body))
+	}
+
+	query := strings.ToLower(args[0])
+	var match *api.Place
+	for _, p := range *listResp.JSON200 {
+		if strings.HasPrefix(p.Id, args[0]) || strings.ToLower(p.Name) == query {
+			match = &p
+			break
+		}
+	}
+	if match == nil {
+		return fmt.Errorf("no place found matching %q", args[0])
+	}
+
+	fmt.Printf("Name:      %s\n", match.Name)
+	fmt.Printf("ID:        %s\n", match.Id)
+	fmt.Printf("Kind:      %s\n", match.Kind)
+	if match.Aliases != nil && len(*match.Aliases) > 0 {
+		fmt.Printf("Aliases:   %s\n", strings.Join(*match.Aliases, ", "))
+	}
+	if match.City != nil {
+		fmt.Printf("City:      %s\n", *match.City)
+	}
+	if match.Country != nil {
+		fmt.Printf("Country:   %s\n", *match.Country)
+	}
+	if match.Latitude != nil && match.Longitude != nil {
+		fmt.Printf("Location:  %.4f, %.4f\n", *match.Latitude, *match.Longitude)
+	}
+	if match.Timezone != nil {
+		fmt.Printf("Timezone:  %s\n", *match.Timezone)
+	}
+	return nil
+}
+
+// resolveLocationToPlace calls the resolve API and either returns an existing place ID
+// or creates a new place from the best gazetteer match. Returns "" if resolution fails.
+func resolveLocationToPlace(client *api.ClientWithResponses, loc string) string {
+	resolveResp, err := client.ResolvePlacesWithResponse(context.Background(), api.PlaceResolveRequest{Text: loc})
+	if err != nil || resolveResp.StatusCode() != http.StatusOK || resolveResp.JSON200 == nil {
+		return ""
+	}
+
+	result := resolveResp.JSON200
+
+	// If there's an exact match in user's places, use it
+	if result.Exact != nil {
+		fmt.Printf("  Place: %s (existing)\n", result.Exact.Name)
+		return result.Exact.Id
+	}
+
+	// Look for the best suggestion to create a place from
+	if len(result.Suggestions) == 0 {
+		return ""
+	}
+
+	best := result.Suggestions[0]
+
+	// If it's a user place suggestion, use it directly
+	if best.Source == api.User && best.Place != nil {
+		fmt.Printf("  Place: %s (matched)\n", best.Place.Name)
+		return best.Place.Id
+	}
+
+	// Create a new place from the gazetteer suggestion
+	req := api.CreatePlaceRequest{
+		Name: loc, // Preserve user's original input as the place name
+		City: &best.Name,
+	}
+	if best.Country != nil {
+		req.Country = best.Country
+	}
+	if best.Latitude != nil {
+		req.Latitude = best.Latitude
+	}
+	if best.Longitude != nil {
+		req.Longitude = best.Longitude
+	}
+	if best.Timezone != nil {
+		req.Timezone = best.Timezone
+	}
+	kind := api.CreatePlaceRequestKindCity
+	req.Kind = &kind
+
+	createResp, err := client.CreatePlaceWithResponse(context.Background(), req)
+	if err != nil || createResp.StatusCode() != http.StatusCreated || createResp.JSON201 == nil {
+		return ""
+	}
+
+	p := createResp.JSON201
+	extra := ""
+	if p.Country != nil {
+		extra = " (" + *p.Country
+		if p.Timezone != nil {
+			extra += ", " + *p.Timezone
+		}
+		extra += ")"
+	}
+	fmt.Printf("  Place: %s%s (new)\n", p.Name, extra)
+	return p.Id
 }

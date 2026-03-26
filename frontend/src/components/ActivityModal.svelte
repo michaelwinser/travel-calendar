@@ -5,6 +5,7 @@
     parseActivity,
     type ActivityType, type ParseResult, type TripSummary,
   } from '../lib/api';
+  import PlaceAutocomplete from './PlaceAutocomplete.svelte';
 
   interface Props {
     mode: 'create' | 'edit';
@@ -13,6 +14,7 @@
     startDate?: string;
     endDate?: string;
     location?: string;
+    placeId?: string;
     notes?: string;
     tripId?: string;
     tripName?: string;
@@ -24,6 +26,7 @@
       startDate: string;
       endDate: string;
       location: string;
+      placeId: string;
       notes: string;
       tripId: string;
       tripName: string;
@@ -42,6 +45,7 @@
   let startDate = $state(props.startDate ?? '');
   let endDate = $state(props.endDate ?? '');
   let location = $state(props.location ?? '');
+  let placeId = $state(props.placeId ?? '');
   let notes = $state(props.notes ?? '');
   let tripName = $state(props.tripName ?? '');
   let showTripSuggestions = $state(false);
@@ -172,6 +176,7 @@
       startDate,
       endDate: endDate || startDate,
       location: location.trim(),
+      placeId,
       notes: notes.trim(),
       tripId: props.tripId ?? '',
       tripName: tripName.trim(),
@@ -249,7 +254,12 @@
 
       <label class={confClass('location')}>
         <span>Location</span>
-        <input type="text" bind:value={location} placeholder="e.g. Brussels, Home" onfocus={handleFieldFocus} />
+        <PlaceAutocomplete
+          value={location}
+          {placeId}
+          onchange={(v, pid) => { location = v; placeId = pid; }}
+          placeholder="e.g. Brussels, Home"
+        />
       </label>
 
       <div class="trip-field">

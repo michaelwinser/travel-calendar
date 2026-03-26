@@ -3,7 +3,9 @@ package app
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,17 +24,20 @@ type Trip struct {
 
 // Activity is the primary planning entity — a span of time with a purpose and location.
 type Activity struct {
-	ID        string `json:"id"        store:"id,pk"`
-	UserID    string `json:"userId"    store:"user_id,index"`
-	Title     string `json:"title"     store:"title"`
-	Type      string `json:"type"      store:"type"`
-	StartDate string `json:"startDate" store:"start_date,index"`
-	EndDate   string `json:"endDate"   store:"end_date"`
-	Location  string `json:"location"  store:"location"`
-	Notes     string `json:"notes"     store:"notes"`
-	TripID    string `json:"tripId"    store:"trip_id"`
-	Source    string `json:"source"    store:"source"`
-	CreatedAt string `json:"createdAt" store:"created_at"`
+	ID                 string `json:"id"                 store:"id,pk"`
+	UserID             string `json:"userId"             store:"user_id,index"`
+	Title              string `json:"title"              store:"title"`
+	Type               string `json:"type"               store:"type"`
+	StartDate          string `json:"startDate"          store:"start_date,index"`
+	EndDate            string `json:"endDate"            store:"end_date"`
+	Location           string `json:"location"           store:"location"`
+	Notes              string `json:"notes"              store:"notes"`
+	TripID             string `json:"tripId"             store:"trip_id"`
+	PlaceID            string `json:"placeId"            store:"place_id"`
+	OriginPlaceID      string `json:"originPlaceId"      store:"origin_place_id"`
+	DestinationPlaceID string `json:"destinationPlaceId" store:"destination_place_id"`
+	Source             string `json:"source"             store:"source"`
+	CreatedAt          string `json:"createdAt"          store:"created_at"`
 }
 
 // Activity types.
@@ -100,7 +105,7 @@ func NewActivityStore(d *db.DB) (*ActivityStore, error) {
 }
 
 // Create adds a new activity.
-func (s *ActivityStore) Create(userID, title, actType, startDate, endDate, location, notes, tripID string) (*Activity, error) {
+func (s *ActivityStore) Create(userID, title, actType, startDate, endDate, location, notes, tripID, placeID, originPlaceID, destPlaceID string) (*Activity, error) {
 	if err := validateType(actType); err != nil {
 		return nil, err
 	}
@@ -108,17 +113,20 @@ func (s *ActivityStore) Create(userID, title, actType, startDate, endDate, locat
 		return nil, err
 	}
 	a := &Activity{
-		ID:        uuid.New().String(),
-		UserID:    userID,
-		Title:     title,
-		Type:      actType,
-		StartDate: startDate,
-		EndDate:   endDate,
-		Location:  location,
-		Notes:     notes,
-		TripID:    tripID,
-		Source:    "manual",
-		CreatedAt: time.Now().Format(time.RFC3339),
+		ID:                 uuid.New().String(),
+		UserID:             userID,
+		Title:              title,
+		Type:               actType,
+		StartDate:          startDate,
+		EndDate:            endDate,
+		Location:           location,
+		Notes:              notes,
+		TripID:             tripID,
+		PlaceID:            placeID,
+		OriginPlaceID:      originPlaceID,
+		DestinationPlaceID: destPlaceID,
+		Source:              "manual",
+		CreatedAt:          time.Now().Format(time.RFC3339),
 	}
 	if err := s.coll.Create(a); err != nil {
 		return nil, err
@@ -331,6 +339,127 @@ func (s *ShareStore) FindByOwnerAndRecipient(ownerEmail, recipientEmail string) 
 // Delete removes a share by ID.
 func (s *ShareStore) Delete(id string) error {
 	return s.coll.Delete(id)
+}
+
+// Place represents a structured location with optional geographic data.
+type Place struct {
+	ID        string  `json:"id"        store:"id,pk"`
+	UserID    string  `json:"userId"    store:"user_id,index"`
+	Name      string  `json:"name"      store:"name"`
+	Aliases   string  `json:"aliases"   store:"aliases"`    // JSON-encoded []string
+	City      string  `json:"city"      store:"city"`
+	Country   string  `json:"country"   store:"country"`
+	Latitude  float64 `json:"latitude"  store:"latitude"`
+	Longitude float64 `json:"longitude" store:"longitude"`
+	Timezone  string  `json:"timezone"  store:"timezone"`
+	Kind      string  `json:"kind"      store:"kind"`
+	CreatedAt string  `json:"createdAt" store:"created_at"`
+}
+
+// PlaceStore handles place persistence.
+type PlaceStore struct {
+	coll *store.Collection[Place]
+}
+
+// NewPlaceStore creates a store backed by the given database.
+func NewPlaceStore(d *db.DB) (*PlaceStore, error) {
+	coll, err := store.NewCollection[Place](d, "places")
+	if err != nil {
+		return nil, err
+	}
+	return &PlaceStore{coll: coll}, nil
+}
+
+// Create adds a new place.
+func (s *PlaceStore) Create(p *Place) error {
+	return s.coll.Create(p)
+}
+
+// Get retrieves a place by ID.
+func (s *PlaceStore) Get(id string) (*Place, error) {
+	return s.coll.Get(id)
+}
+
+// List returns all places for a user.
+func (s *PlaceStore) List(userID string) ([]Place, error) {
+	return s.coll.Where("user_id", "==", userID).OrderBy("name", store.Asc).All()
+}
+
+// Update saves changes to a place.
+func (s *PlaceStore) Update(p *Place) error {
+	return s.coll.Update(p.ID, p)
+}
+
+// Delete removes a place.
+func (s *PlaceStore) Delete(id string) error {
+	return s.coll.Delete(id)
+}
+
+// FindByName returns a user's place with an exact name match (case-insensitive).
+func (s *PlaceStore) FindByName(userID, name string) (*Place, error) {
+	places, err := s.coll.Where("user_id", "==", userID).All()
+	if err != nil {
+		return nil, err
+	}
+	lower := strings.ToLower(name)
+	for _, p := range places {
+		if strings.ToLower(p.Name) == lower {
+			return &p, nil
+		}
+		// Check aliases
+		for _, alias := range decodeAliases(p.Aliases) {
+			if strings.ToLower(alias) == lower {
+				return &p, nil
+			}
+		}
+	}
+	return nil, nil
+}
+
+// SearchByPrefix returns user's places where name or aliases start with the prefix.
+func (s *PlaceStore) SearchByPrefix(userID, prefix string, limit int) ([]Place, error) {
+	places, err := s.coll.Where("user_id", "==", userID).All()
+	if err != nil {
+		return nil, err
+	}
+	lower := strings.ToLower(prefix)
+	var matches []Place
+	for _, p := range places {
+		if strings.HasPrefix(strings.ToLower(p.Name), lower) {
+			matches = append(matches, p)
+			continue
+		}
+		for _, alias := range decodeAliases(p.Aliases) {
+			if strings.HasPrefix(strings.ToLower(alias), lower) {
+				matches = append(matches, p)
+				break
+			}
+		}
+	}
+	if len(matches) > limit {
+		matches = matches[:limit]
+	}
+	return matches, nil
+}
+
+func decodeAliases(s string) []string {
+	if s == "" || s == "[]" || s == "null" {
+		return nil
+	}
+	// Simple JSON array decode
+	var aliases []string
+	if err := json.Unmarshal([]byte(s), &aliases); err != nil {
+		return nil
+	}
+	return aliases
+}
+
+func encodeAliases(aliases []string) string {
+	if len(aliases) == 0 {
+		return "[]"
+	}
+	b, _ := json.Marshal(aliases)
+	return string(b)
 }
 
 // PublicProfile controls a user's public dashboard.

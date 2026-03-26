@@ -75,6 +75,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/places": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the authenticated user's places */
+        get: operations["listPlaces"];
+        put?: never;
+        /** Create a new place */
+        post: operations["createPlace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/places/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a place by ID */
+        get: operations["getPlace"];
+        /** Update a place */
+        put: operations["updatePlace"];
+        post?: never;
+        /** Delete a place */
+        delete: operations["deletePlace"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/places/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve a text string to matching places */
+        post: operations["resolvePlaces"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/public-profile": {
         parameters: {
             query?: never;
@@ -251,6 +305,12 @@ export interface components {
             notes?: string;
             /** @description Optional trip ID this activity belongs to */
             tripId?: string;
+            /** @description Optional reference to a Place entity */
+            placeId?: string;
+            /** @description Origin place for travel activities */
+            originPlaceId?: string;
+            /** @description Destination place for travel activities */
+            destinationPlaceId?: string;
             /** @enum {string} */
             source: "manual" | "google_calendar" | "system";
             /** Format: date-time */
@@ -270,6 +330,9 @@ export interface components {
             location?: string;
             notes?: string;
             tripId?: string;
+            placeId?: string;
+            originPlaceId?: string;
+            destinationPlaceId?: string;
             /** @description Optional ID from a prior parse, to link creation to parse history */
             parseHistoryId?: string;
         };
@@ -285,6 +348,9 @@ export interface components {
             location?: string;
             notes?: string;
             tripId?: string;
+            placeId?: string;
+            originPlaceId?: string;
+            destinationPlaceId?: string;
         };
         DateCheck: {
             /** Format: date */
@@ -449,6 +515,76 @@ export interface components {
             shareId: string;
             /** @description Email of the person who shared with you */
             ownerEmail: string;
+        };
+        Place: {
+            id: string;
+            /** @description User's preferred name for this place */
+            name: string;
+            /** @description Alternative names */
+            aliases?: string[];
+            /** @description Normalized city name */
+            city?: string;
+            /** @description ISO 3166-1 alpha-2 country code */
+            country?: string;
+            /** Format: double */
+            latitude?: number;
+            /** Format: double */
+            longitude?: number;
+            /** @description IANA timezone */
+            timezone?: string;
+            /** @enum {string} */
+            kind: "home" | "work" | "airport" | "city" | "venue" | "other";
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreatePlaceRequest: {
+            name: string;
+            aliases?: string[];
+            city?: string;
+            country?: string;
+            /** Format: double */
+            latitude?: number;
+            /** Format: double */
+            longitude?: number;
+            timezone?: string;
+            /** @enum {string} */
+            kind?: "home" | "work" | "airport" | "city" | "venue" | "other";
+        };
+        UpdatePlaceRequest: {
+            name?: string;
+            aliases?: string[];
+            city?: string;
+            country?: string;
+            /** Format: double */
+            latitude?: number;
+            /** Format: double */
+            longitude?: number;
+            timezone?: string;
+            /** @enum {string} */
+            kind?: "home" | "work" | "airport" | "city" | "venue" | "other";
+        };
+        PlaceResolveRequest: {
+            text: string;
+        };
+        PlaceResolveResponse: {
+            exact?: components["schemas"]["Place"];
+            suggestions: components["schemas"]["PlaceSuggestion"][];
+        };
+        PlaceSuggestion: {
+            /** @enum {string} */
+            source: "user" | "gazetteer";
+            /** @description Present when source is user */
+            place?: components["schemas"]["Place"];
+            name: string;
+            country?: string;
+            /** Format: double */
+            latitude?: number;
+            /** Format: double */
+            longitude?: number;
+            timezone?: string;
+            population?: number;
+            /** Format: double */
+            score: number;
         };
         PublicProfile: {
             /** @description URL slug for the public page (e.g. michael) */
@@ -680,6 +816,155 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DateCheck"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listPlaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of places */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Place"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createPlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePlaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Created place */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Place"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getPlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The place */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Place"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updatePlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePlaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated place */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Place"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deletePlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    resolvePlaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaceResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description Resolution results */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaceResolveResponse"];
                 };
             };
             401: components["responses"]["Unauthorized"];

@@ -217,6 +217,36 @@ export async function listSharedWithMe(): Promise<SharedWithMeEntry[]> {
   return res.json();
 }
 
+// --- Places ---
+
+export type Place = components['schemas']['Place'];
+export type PlaceResolveResponse = components['schemas']['PlaceResolveResponse'];
+export type PlaceSuggestion = components['schemas']['PlaceSuggestion'];
+export type CreatePlaceRequest = components['schemas']['CreatePlaceRequest'];
+
+export async function resolvePlaces(text: string): Promise<PlaceResolveResponse> {
+  const res = await fetch(`${API_BASE}/places/resolve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) throw new Error(`Failed to resolve: ${res.statusText}`);
+  return res.json();
+}
+
+export async function createPlace(req: CreatePlaceRequest): Promise<Place> {
+  const res = await fetch(`${API_BASE}/places`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || res.statusText);
+  }
+  return res.json();
+}
+
 // --- Public Profile ---
 
 export type PublicProfile = components['schemas']['PublicProfile'];

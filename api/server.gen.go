@@ -100,6 +100,36 @@ func (e CreateActivityRequestType) Valid() bool {
 	}
 }
 
+// Defines values for CreatePlaceRequestKind.
+const (
+	CreatePlaceRequestKindAirport CreatePlaceRequestKind = "airport"
+	CreatePlaceRequestKindCity    CreatePlaceRequestKind = "city"
+	CreatePlaceRequestKindHome    CreatePlaceRequestKind = "home"
+	CreatePlaceRequestKindOther   CreatePlaceRequestKind = "other"
+	CreatePlaceRequestKindVenue   CreatePlaceRequestKind = "venue"
+	CreatePlaceRequestKindWork    CreatePlaceRequestKind = "work"
+)
+
+// Valid indicates whether the value is a known member of the CreatePlaceRequestKind enum.
+func (e CreatePlaceRequestKind) Valid() bool {
+	switch e {
+	case CreatePlaceRequestKindAirport:
+		return true
+	case CreatePlaceRequestKindCity:
+		return true
+	case CreatePlaceRequestKindHome:
+		return true
+	case CreatePlaceRequestKindOther:
+		return true
+	case CreatePlaceRequestKindVenue:
+		return true
+	case CreatePlaceRequestKindWork:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ParseConfidenceEndDate.
 const (
 	ParseConfidenceEndDateHigh   ParseConfidenceEndDate = "high"
@@ -232,6 +262,54 @@ func (e ParsedActivityType) Valid() bool {
 	}
 }
 
+// Defines values for PlaceKind.
+const (
+	PlaceKindAirport PlaceKind = "airport"
+	PlaceKindCity    PlaceKind = "city"
+	PlaceKindHome    PlaceKind = "home"
+	PlaceKindOther   PlaceKind = "other"
+	PlaceKindVenue   PlaceKind = "venue"
+	PlaceKindWork    PlaceKind = "work"
+)
+
+// Valid indicates whether the value is a known member of the PlaceKind enum.
+func (e PlaceKind) Valid() bool {
+	switch e {
+	case PlaceKindAirport:
+		return true
+	case PlaceKindCity:
+		return true
+	case PlaceKindHome:
+		return true
+	case PlaceKindOther:
+		return true
+	case PlaceKindVenue:
+		return true
+	case PlaceKindWork:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlaceSuggestionSource.
+const (
+	Gazetteer PlaceSuggestionSource = "gazetteer"
+	User      PlaceSuggestionSource = "user"
+)
+
+// Valid indicates whether the value is a known member of the PlaceSuggestionSource enum.
+func (e PlaceSuggestionSource) Valid() bool {
+	switch e {
+	case Gazetteer:
+		return true
+	case User:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SharedActivityType.
 const (
 	SharedActivityTypeCommitment SharedActivityType = "commitment"
@@ -286,13 +364,52 @@ func (e UpdateActivityRequestType) Valid() bool {
 	}
 }
 
+// Defines values for UpdatePlaceRequestKind.
+const (
+	Airport UpdatePlaceRequestKind = "airport"
+	City    UpdatePlaceRequestKind = "city"
+	Home    UpdatePlaceRequestKind = "home"
+	Other   UpdatePlaceRequestKind = "other"
+	Venue   UpdatePlaceRequestKind = "venue"
+	Work    UpdatePlaceRequestKind = "work"
+)
+
+// Valid indicates whether the value is a known member of the UpdatePlaceRequestKind enum.
+func (e UpdatePlaceRequestKind) Valid() bool {
+	switch e {
+	case Airport:
+		return true
+	case City:
+		return true
+	case Home:
+		return true
+	case Other:
+		return true
+	case Venue:
+		return true
+	case Work:
+		return true
+	default:
+		return false
+	}
+}
+
 // Activity defines model for Activity.
 type Activity struct {
-	CreatedAt time.Time          `json:"createdAt"`
-	EndDate   openapi_types.Date `json:"endDate"`
-	Id        string             `json:"id"`
-	Location  *string            `json:"location,omitempty"`
-	Notes     *string            `json:"notes,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// DestinationPlaceId Destination place for travel activities
+	DestinationPlaceId *string            `json:"destinationPlaceId,omitempty"`
+	EndDate            openapi_types.Date `json:"endDate"`
+	Id                 string             `json:"id"`
+	Location           *string            `json:"location,omitempty"`
+	Notes              *string            `json:"notes,omitempty"`
+
+	// OriginPlaceId Origin place for travel activities
+	OriginPlaceId *string `json:"originPlaceId,omitempty"`
+
+	// PlaceId Optional reference to a Place entity
+	PlaceId   *string            `json:"placeId,omitempty"`
 	Source    ActivitySource     `json:"source"`
 	StartDate openapi_types.Date `json:"startDate"`
 	Title     string             `json:"title"`
@@ -311,13 +428,17 @@ type ActivityType string
 
 // CreateActivityRequest defines model for CreateActivityRequest.
 type CreateActivityRequest struct {
+	DestinationPlaceId *string `json:"destinationPlaceId,omitempty"`
+
 	// EndDate Defaults to startDate if omitted
-	EndDate  *openapi_types.Date `json:"endDate,omitempty"`
-	Location *string             `json:"location,omitempty"`
-	Notes    *string             `json:"notes,omitempty"`
+	EndDate       *openapi_types.Date `json:"endDate,omitempty"`
+	Location      *string             `json:"location,omitempty"`
+	Notes         *string             `json:"notes,omitempty"`
+	OriginPlaceId *string             `json:"originPlaceId,omitempty"`
 
 	// ParseHistoryId Optional ID from a prior parse, to link creation to parse history
 	ParseHistoryId *string                   `json:"parseHistoryId,omitempty"`
+	PlaceId        *string                   `json:"placeId,omitempty"`
 	StartDate      openapi_types.Date        `json:"startDate"`
 	Title          string                    `json:"title"`
 	TripId         *string                   `json:"tripId,omitempty"`
@@ -326,6 +447,21 @@ type CreateActivityRequest struct {
 
 // CreateActivityRequestType defines model for CreateActivityRequest.Type.
 type CreateActivityRequestType string
+
+// CreatePlaceRequest defines model for CreatePlaceRequest.
+type CreatePlaceRequest struct {
+	Aliases   *[]string               `json:"aliases,omitempty"`
+	City      *string                 `json:"city,omitempty"`
+	Country   *string                 `json:"country,omitempty"`
+	Kind      *CreatePlaceRequestKind `json:"kind,omitempty"`
+	Latitude  *float64                `json:"latitude,omitempty"`
+	Longitude *float64                `json:"longitude,omitempty"`
+	Name      string                  `json:"name"`
+	Timezone  *string                 `json:"timezone,omitempty"`
+}
+
+// CreatePlaceRequestKind defines model for CreatePlaceRequest.Kind.
+type CreatePlaceRequestKind string
 
 // CreateShareLinkRequest defines model for CreateShareLinkRequest.
 type CreateShareLinkRequest struct {
@@ -433,6 +569,59 @@ type ParsedActivity struct {
 
 // ParsedActivityType defines model for ParsedActivity.Type.
 type ParsedActivityType string
+
+// Place defines model for Place.
+type Place struct {
+	// Aliases Alternative names
+	Aliases *[]string `json:"aliases,omitempty"`
+
+	// City Normalized city name
+	City *string `json:"city,omitempty"`
+
+	// Country ISO 3166-1 alpha-2 country code
+	Country   *string   `json:"country,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	Id        string    `json:"id"`
+	Kind      PlaceKind `json:"kind"`
+	Latitude  *float64  `json:"latitude,omitempty"`
+	Longitude *float64  `json:"longitude,omitempty"`
+
+	// Name User's preferred name for this place
+	Name string `json:"name"`
+
+	// Timezone IANA timezone
+	Timezone *string `json:"timezone,omitempty"`
+}
+
+// PlaceKind defines model for Place.Kind.
+type PlaceKind string
+
+// PlaceResolveRequest defines model for PlaceResolveRequest.
+type PlaceResolveRequest struct {
+	Text string `json:"text"`
+}
+
+// PlaceResolveResponse defines model for PlaceResolveResponse.
+type PlaceResolveResponse struct {
+	Exact       *Place            `json:"exact,omitempty"`
+	Suggestions []PlaceSuggestion `json:"suggestions"`
+}
+
+// PlaceSuggestion defines model for PlaceSuggestion.
+type PlaceSuggestion struct {
+	Country    *string               `json:"country,omitempty"`
+	Latitude   *float64              `json:"latitude,omitempty"`
+	Longitude  *float64              `json:"longitude,omitempty"`
+	Name       string                `json:"name"`
+	Place      *Place                `json:"place,omitempty"`
+	Population *int                  `json:"population,omitempty"`
+	Score      float64               `json:"score"`
+	Source     PlaceSuggestionSource `json:"source"`
+	Timezone   *string               `json:"timezone,omitempty"`
+}
+
+// PlaceSuggestionSource defines model for PlaceSuggestion.Source.
+type PlaceSuggestionSource string
 
 // PublicProfile defines model for PublicProfile.
 type PublicProfile struct {
@@ -550,17 +739,35 @@ type TripSummary struct {
 
 // UpdateActivityRequest All fields optional — only provided fields are updated
 type UpdateActivityRequest struct {
-	EndDate   *openapi_types.Date        `json:"endDate,omitempty"`
-	Location  *string                    `json:"location,omitempty"`
-	Notes     *string                    `json:"notes,omitempty"`
-	StartDate *openapi_types.Date        `json:"startDate,omitempty"`
-	Title     *string                    `json:"title,omitempty"`
-	TripId    *string                    `json:"tripId,omitempty"`
-	Type      *UpdateActivityRequestType `json:"type,omitempty"`
+	DestinationPlaceId *string                    `json:"destinationPlaceId,omitempty"`
+	EndDate            *openapi_types.Date        `json:"endDate,omitempty"`
+	Location           *string                    `json:"location,omitempty"`
+	Notes              *string                    `json:"notes,omitempty"`
+	OriginPlaceId      *string                    `json:"originPlaceId,omitempty"`
+	PlaceId            *string                    `json:"placeId,omitempty"`
+	StartDate          *openapi_types.Date        `json:"startDate,omitempty"`
+	Title              *string                    `json:"title,omitempty"`
+	TripId             *string                    `json:"tripId,omitempty"`
+	Type               *UpdateActivityRequestType `json:"type,omitempty"`
 }
 
 // UpdateActivityRequestType defines model for UpdateActivityRequest.Type.
 type UpdateActivityRequestType string
+
+// UpdatePlaceRequest defines model for UpdatePlaceRequest.
+type UpdatePlaceRequest struct {
+	Aliases   *[]string               `json:"aliases,omitempty"`
+	City      *string                 `json:"city,omitempty"`
+	Country   *string                 `json:"country,omitempty"`
+	Kind      *UpdatePlaceRequestKind `json:"kind,omitempty"`
+	Latitude  *float64                `json:"latitude,omitempty"`
+	Longitude *float64                `json:"longitude,omitempty"`
+	Name      *string                 `json:"name,omitempty"`
+	Timezone  *string                 `json:"timezone,omitempty"`
+}
+
+// UpdatePlaceRequestKind defines model for UpdatePlaceRequest.Kind.
+type UpdatePlaceRequestKind string
 
 // UpdatePublicProfileRequest defines model for UpdatePublicProfileRequest.
 type UpdatePublicProfileRequest struct {
@@ -618,6 +825,15 @@ type ParseActivityJSONRequestBody = ParseRequest
 // UpdateActivityJSONRequestBody defines body for UpdateActivity for application/json ContentType.
 type UpdateActivityJSONRequestBody = UpdateActivityRequest
 
+// CreatePlaceJSONRequestBody defines body for CreatePlace for application/json ContentType.
+type CreatePlaceJSONRequestBody = CreatePlaceRequest
+
+// ResolvePlacesJSONRequestBody defines body for ResolvePlaces for application/json ContentType.
+type ResolvePlacesJSONRequestBody = PlaceResolveRequest
+
+// UpdatePlaceJSONRequestBody defines body for UpdatePlace for application/json ContentType.
+type UpdatePlaceJSONRequestBody = UpdatePlaceRequest
+
 // UpdatePublicProfileJSONRequestBody defines body for UpdatePublicProfile for application/json ContentType.
 type UpdatePublicProfileJSONRequestBody = UpdatePublicProfileRequest
 
@@ -656,6 +872,24 @@ type ServerInterface interface {
 	// Update an activity
 	// (PUT /api/activities/{id})
 	UpdateActivity(w http.ResponseWriter, r *http.Request, id string)
+	// List the authenticated user's places
+	// (GET /api/places)
+	ListPlaces(w http.ResponseWriter, r *http.Request)
+	// Create a new place
+	// (POST /api/places)
+	CreatePlace(w http.ResponseWriter, r *http.Request)
+	// Resolve a text string to matching places
+	// (POST /api/places/resolve)
+	ResolvePlaces(w http.ResponseWriter, r *http.Request)
+	// Delete a place
+	// (DELETE /api/places/{id})
+	DeletePlace(w http.ResponseWriter, r *http.Request, id string)
+	// Get a place by ID
+	// (GET /api/places/{id})
+	GetPlace(w http.ResponseWriter, r *http.Request, id string)
+	// Update a place
+	// (PUT /api/places/{id})
+	UpdatePlace(w http.ResponseWriter, r *http.Request, id string)
 	// Get the authenticated user's public profile settings
 	// (GET /api/public-profile)
 	GetPublicProfile(w http.ResponseWriter, r *http.Request)
@@ -743,6 +977,42 @@ func (_ Unimplemented) GetActivity(w http.ResponseWriter, r *http.Request, id st
 // Update an activity
 // (PUT /api/activities/{id})
 func (_ Unimplemented) UpdateActivity(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List the authenticated user's places
+// (GET /api/places)
+func (_ Unimplemented) ListPlaces(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a new place
+// (POST /api/places)
+func (_ Unimplemented) CreatePlace(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Resolve a text string to matching places
+// (POST /api/places/resolve)
+func (_ Unimplemented) ResolvePlaces(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete a place
+// (DELETE /api/places/{id})
+func (_ Unimplemented) DeletePlace(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get a place by ID
+// (GET /api/places/{id})
+func (_ Unimplemented) GetPlace(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Update a place
+// (PUT /api/places/{id})
+func (_ Unimplemented) UpdatePlace(w http.ResponseWriter, r *http.Request, id string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1043,6 +1313,159 @@ func (siw *ServerInterfaceWrapper) UpdateActivity(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateActivity(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPlaces operation middleware
+func (siw *ServerInterfaceWrapper) ListPlaces(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPlaces(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreatePlace operation middleware
+func (siw *ServerInterfaceWrapper) CreatePlace(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreatePlace(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResolvePlaces operation middleware
+func (siw *ServerInterfaceWrapper) ResolvePlaces(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResolvePlaces(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeletePlace operation middleware
+func (siw *ServerInterfaceWrapper) DeletePlace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeletePlace(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPlace operation middleware
+func (siw *ServerInterfaceWrapper) GetPlace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPlace(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdatePlace operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePlace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePlace(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1549,6 +1972,24 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Put(options.BaseURL+"/api/activities/{id}", wrapper.UpdateActivity)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/places", wrapper.ListPlaces)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/places", wrapper.CreatePlace)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/places/resolve", wrapper.ResolvePlaces)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/api/places/{id}", wrapper.DeletePlace)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/places/{id}", wrapper.GetPlace)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/api/places/{id}", wrapper.UpdatePlace)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/public-profile", wrapper.GetPublicProfile)
 	})
 	r.Group(func(r chi.Router) {
@@ -1597,54 +2038,64 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
+	"zf8CAAD//7x8N/WNXwAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

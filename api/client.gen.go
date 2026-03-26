@@ -117,6 +117,30 @@ type ClientInterface interface {
 
 	UpdateActivity(ctx context.Context, id string, body UpdateActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListPlaces request
+	ListPlaces(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreatePlaceWithBody request with any body
+	CreatePlaceWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreatePlace(ctx context.Context, body CreatePlaceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ResolvePlacesWithBody request with any body
+	ResolvePlacesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ResolvePlaces(ctx context.Context, body ResolvePlacesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeletePlace request
+	DeletePlace(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetPlace request
+	GetPlace(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdatePlaceWithBody request with any body
+	UpdatePlaceWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdatePlace(ctx context.Context, id string, body UpdatePlaceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetPublicProfile request
 	GetPublicProfile(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -280,6 +304,114 @@ func (c *Client) UpdateActivityWithBody(ctx context.Context, id string, contentT
 
 func (c *Client) UpdateActivity(ctx context.Context, id string, body UpdateActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateActivityRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListPlaces(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListPlacesRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreatePlaceWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreatePlaceRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreatePlace(ctx context.Context, body CreatePlaceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreatePlaceRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ResolvePlacesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewResolvePlacesRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ResolvePlaces(ctx context.Context, body ResolvePlacesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewResolvePlacesRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeletePlace(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeletePlaceRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetPlace(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetPlaceRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdatePlaceWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdatePlaceRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdatePlace(ctx context.Context, id string, body UpdatePlaceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdatePlaceRequest(c.Server, id, body)
 	if err != nil {
 		return nil, err
 	}
@@ -809,6 +941,228 @@ func NewUpdateActivityRequestWithBody(server string, id string, contentType stri
 	}
 
 	operationPath := fmt.Sprintf("/api/activities/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListPlacesRequest generates requests for ListPlaces
+func NewListPlacesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/places")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreatePlaceRequest calls the generic CreatePlace builder with application/json body
+func NewCreatePlaceRequest(server string, body CreatePlaceJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreatePlaceRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreatePlaceRequestWithBody generates requests for CreatePlace with any type of body
+func NewCreatePlaceRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/places")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewResolvePlacesRequest calls the generic ResolvePlaces builder with application/json body
+func NewResolvePlacesRequest(server string, body ResolvePlacesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewResolvePlacesRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewResolvePlacesRequestWithBody generates requests for ResolvePlaces with any type of body
+func NewResolvePlacesRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/places/resolve")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeletePlaceRequest generates requests for DeletePlace
+func NewDeletePlaceRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/places/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetPlaceRequest generates requests for GetPlace
+func NewGetPlaceRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/places/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdatePlaceRequest calls the generic UpdatePlace builder with application/json body
+func NewUpdatePlaceRequest(server string, id string, body UpdatePlaceJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdatePlaceRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewUpdatePlaceRequestWithBody generates requests for UpdatePlace with any type of body
+func NewUpdatePlaceRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/places/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1430,6 +1784,30 @@ type ClientWithResponsesInterface interface {
 
 	UpdateActivityWithResponse(ctx context.Context, id string, body UpdateActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateActivityResponse, error)
 
+	// ListPlacesWithResponse request
+	ListPlacesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListPlacesResponse, error)
+
+	// CreatePlaceWithBodyWithResponse request with any body
+	CreatePlaceWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePlaceResponse, error)
+
+	CreatePlaceWithResponse(ctx context.Context, body CreatePlaceJSONRequestBody, reqEditors ...RequestEditorFn) (*CreatePlaceResponse, error)
+
+	// ResolvePlacesWithBodyWithResponse request with any body
+	ResolvePlacesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ResolvePlacesResponse, error)
+
+	ResolvePlacesWithResponse(ctx context.Context, body ResolvePlacesJSONRequestBody, reqEditors ...RequestEditorFn) (*ResolvePlacesResponse, error)
+
+	// DeletePlaceWithResponse request
+	DeletePlaceWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeletePlaceResponse, error)
+
+	// GetPlaceWithResponse request
+	GetPlaceWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetPlaceResponse, error)
+
+	// UpdatePlaceWithBodyWithResponse request with any body
+	UpdatePlaceWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdatePlaceResponse, error)
+
+	UpdatePlaceWithResponse(ctx context.Context, id string, body UpdatePlaceJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdatePlaceResponse, error)
+
 	// GetPublicProfileWithResponse request
 	GetPublicProfileWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetPublicProfileResponse, error)
 
@@ -1644,6 +2022,149 @@ func (r UpdateActivityResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r UpdateActivityResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListPlacesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]Place
+	JSON401      *Unauthorized
+}
+
+// Status returns HTTPResponse.Status
+func (r ListPlacesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListPlacesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreatePlaceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *Place
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+}
+
+// Status returns HTTPResponse.Status
+func (r CreatePlaceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreatePlaceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ResolvePlacesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *PlaceResolveResponse
+	JSON401      *Unauthorized
+}
+
+// Status returns HTTPResponse.Status
+func (r ResolvePlacesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ResolvePlacesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeletePlaceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OkResponse
+	JSON401      *Unauthorized
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r DeletePlaceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeletePlaceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetPlaceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *Place
+	JSON401      *Unauthorized
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r GetPlaceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetPlaceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdatePlaceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *Place
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdatePlaceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdatePlaceResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -2068,6 +2589,84 @@ func (c *ClientWithResponses) UpdateActivityWithResponse(ctx context.Context, id
 	return ParseUpdateActivityResponse(rsp)
 }
 
+// ListPlacesWithResponse request returning *ListPlacesResponse
+func (c *ClientWithResponses) ListPlacesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListPlacesResponse, error) {
+	rsp, err := c.ListPlaces(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListPlacesResponse(rsp)
+}
+
+// CreatePlaceWithBodyWithResponse request with arbitrary body returning *CreatePlaceResponse
+func (c *ClientWithResponses) CreatePlaceWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePlaceResponse, error) {
+	rsp, err := c.CreatePlaceWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreatePlaceResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreatePlaceWithResponse(ctx context.Context, body CreatePlaceJSONRequestBody, reqEditors ...RequestEditorFn) (*CreatePlaceResponse, error) {
+	rsp, err := c.CreatePlace(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreatePlaceResponse(rsp)
+}
+
+// ResolvePlacesWithBodyWithResponse request with arbitrary body returning *ResolvePlacesResponse
+func (c *ClientWithResponses) ResolvePlacesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ResolvePlacesResponse, error) {
+	rsp, err := c.ResolvePlacesWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseResolvePlacesResponse(rsp)
+}
+
+func (c *ClientWithResponses) ResolvePlacesWithResponse(ctx context.Context, body ResolvePlacesJSONRequestBody, reqEditors ...RequestEditorFn) (*ResolvePlacesResponse, error) {
+	rsp, err := c.ResolvePlaces(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseResolvePlacesResponse(rsp)
+}
+
+// DeletePlaceWithResponse request returning *DeletePlaceResponse
+func (c *ClientWithResponses) DeletePlaceWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeletePlaceResponse, error) {
+	rsp, err := c.DeletePlace(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeletePlaceResponse(rsp)
+}
+
+// GetPlaceWithResponse request returning *GetPlaceResponse
+func (c *ClientWithResponses) GetPlaceWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetPlaceResponse, error) {
+	rsp, err := c.GetPlace(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetPlaceResponse(rsp)
+}
+
+// UpdatePlaceWithBodyWithResponse request with arbitrary body returning *UpdatePlaceResponse
+func (c *ClientWithResponses) UpdatePlaceWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdatePlaceResponse, error) {
+	rsp, err := c.UpdatePlaceWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdatePlaceResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdatePlaceWithResponse(ctx context.Context, id string, body UpdatePlaceJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdatePlaceResponse, error) {
+	rsp, err := c.UpdatePlace(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdatePlaceResponse(rsp)
+}
+
 // GetPublicProfileWithResponse request returning *GetPublicProfileResponse
 func (c *ClientWithResponses) GetPublicProfileWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetPublicProfileResponse, error) {
 	rsp, err := c.GetPublicProfile(ctx, reqEditors...)
@@ -2476,6 +3075,239 @@ func ParseUpdateActivityResponse(rsp *http.Response) (*UpdateActivityResponse, e
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest Activity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListPlacesResponse parses an HTTP response from a ListPlacesWithResponse call
+func ParseListPlacesResponse(rsp *http.Response) (*ListPlacesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListPlacesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []Place
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreatePlaceResponse parses an HTTP response from a CreatePlaceWithResponse call
+func ParseCreatePlaceResponse(rsp *http.Response) (*CreatePlaceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreatePlaceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Place
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseResolvePlacesResponse parses an HTTP response from a ResolvePlacesWithResponse call
+func ParseResolvePlacesResponse(rsp *http.Response) (*ResolvePlacesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ResolvePlacesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PlaceResolveResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeletePlaceResponse parses an HTTP response from a DeletePlaceWithResponse call
+func ParseDeletePlaceResponse(rsp *http.Response) (*DeletePlaceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeletePlaceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OkResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetPlaceResponse parses an HTTP response from a GetPlaceWithResponse call
+func ParseGetPlaceResponse(rsp *http.Response) (*GetPlaceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetPlaceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Place
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdatePlaceResponse parses an HTTP response from a UpdatePlaceWithResponse call
+func ParseUpdatePlaceResponse(rsp *http.Response) (*UpdatePlaceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdatePlaceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Place
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

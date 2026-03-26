@@ -383,6 +383,7 @@
     startDate: string;
     endDate: string;
     location: string;
+    placeId: string;
     notes: string;
     tripId: string;
     tripName: string;
@@ -398,6 +399,7 @@
           startDate: data.startDate,
           endDate: data.endDate !== data.startDate ? data.endDate : undefined,
           location: data.location || undefined,
+          placeId: data.placeId || undefined,
           notes: data.notes || undefined,
           tripId: tripId,
           parseHistoryId: data.parseHistoryId,
@@ -409,6 +411,7 @@
           startDate: data.startDate,
           endDate: data.endDate,
           location: data.location || undefined,
+          placeId: data.placeId || undefined,
           notes: data.notes || undefined,
           tripId: tripId ?? '',
         });
@@ -652,6 +655,7 @@
       startDate={modalMode === 'edit' ? modalActivity?.startDate : modalPrefill.startDate}
       endDate={modalMode === 'edit' ? modalActivity?.endDate : modalPrefill.endDate}
       location={modalMode === 'edit' ? (modalActivity?.location ?? '') : undefined}
+      placeId={modalMode === 'edit' ? (modalActivity?.placeId ?? '') : undefined}
       notes={modalMode === 'edit' ? (modalActivity?.notes ?? '') : undefined}
       tripId={modalMode === 'edit' ? (modalActivity?.tripId ?? '') : undefined}
       tripName={modalMode === 'edit' ? (tripsCache.find(t => t.id === modalActivity?.tripId)?.name ?? '') : undefined}

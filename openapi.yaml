@@ -191,6 +191,147 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /api/places:
+    get:
+      operationId: listPlaces
+      summary: List the authenticated user's places
+      security:
+        - session: []
+      responses:
+        '200':
+          description: List of places
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Place'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      operationId: createPlace
+      summary: Create a new place
+      security:
+        - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlaceRequest'
+      responses:
+        '201':
+          description: Created place
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Place'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/places/{id}:
+    get:
+      operationId: getPlace
+      summary: Get a place by ID
+      security:
+        - session: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The place
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Place'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      operationId: updatePlace
+      summary: Update a place
+      security:
+        - session: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePlaceRequest'
+      responses:
+        '200':
+          description: Updated place
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Place'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      operationId: deletePlace
+      summary: Delete a place
+      security:
+        - session: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/places/resolve:
+    post:
+      operationId: resolvePlaces
+      summary: Resolve a text string to matching places
+      security:
+        - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaceResolveRequest'
+      responses:
+        '200':
+          description: Resolution results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaceResolveResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /api/public-profile:
     get:
       operationId: getPublicProfile
@@ -543,6 +684,15 @@ components:
         tripId:
           type: string
           description: Optional trip ID this activity belongs to
+        placeId:
+          type: string
+          description: Optional reference to a Place entity
+        originPlaceId:
+          type: string
+          description: Origin place for travel activities
+        destinationPlaceId:
+          type: string
+          description: Destination place for travel activities
         source:
           type: string
           enum: [manual, google_calendar, system]
@@ -573,6 +723,12 @@ components:
           type: string
         tripId:
           type: string
+        placeId:
+          type: string
+        originPlaceId:
+          type: string
+        destinationPlaceId:
+          type: string
         parseHistoryId:
           type: string
           description: Optional ID from a prior parse, to link creation to parse history
@@ -598,6 +754,12 @@ components:
         notes:
           type: string
         tripId:
+          type: string
+        placeId:
+          type: string
+        originPlaceId:
+          type: string
+        destinationPlaceId:
           type: string
 
     DateCheck:
@@ -875,6 +1037,141 @@ components:
         ownerEmail:
           type: string
           description: Email of the person who shared with you
+
+    Place:
+      type: object
+      required: [id, name, kind, createdAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          description: User's preferred name for this place
+        aliases:
+          type: array
+          items:
+            type: string
+          description: Alternative names
+        city:
+          type: string
+          description: Normalized city name
+        country:
+          type: string
+          description: ISO 3166-1 alpha-2 country code
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        timezone:
+          type: string
+          description: IANA timezone
+        kind:
+          type: string
+          enum: [home, work, airport, city, venue, other]
+        createdAt:
+          type: string
+          format: date-time
+
+    CreatePlaceRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        aliases:
+          type: array
+          items:
+            type: string
+        city:
+          type: string
+        country:
+          type: string
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        timezone:
+          type: string
+        kind:
+          type: string
+          enum: [home, work, airport, city, venue, other]
+
+    UpdatePlaceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        aliases:
+          type: array
+          items:
+            type: string
+        city:
+          type: string
+        country:
+          type: string
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        timezone:
+          type: string
+        kind:
+          type: string
+          enum: [home, work, airport, city, venue, other]
+
+    PlaceResolveRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+
+    PlaceResolveResponse:
+      type: object
+      required: [suggestions]
+      properties:
+        exact:
+          $ref: '#/components/schemas/Place'
+        suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlaceSuggestion'
+
+    PlaceSuggestion:
+      type: object
+      required: [source, name, score]
+      properties:
+        source:
+          type: string
+          enum: [user, gazetteer]
+        place:
+          $ref: '#/components/schemas/Place'
+          description: Present when source is user
+        name:
+          type: string
+        country:
+          type: string
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        timezone:
+          type: string
+        population:
+          type: integer
+        score:
+          type: number
+          format: double
 
     PublicProfile:
       type: object

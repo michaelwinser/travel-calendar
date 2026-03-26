@@ -33,11 +33,12 @@ type ActivityServer struct {
 	shareLinks     *ShareLinkStore
 	shares         *ShareStore
 	publicProfiles *PublicProfileStore
+	places         *PlaceStore
 }
 
 // NewActivityServer creates a new server with all dependencies.
-func NewActivityServer(store *ActivityStore, trips *TripStore, parseHistory *ParseHistoryStore, shareLinks *ShareLinkStore, shares *ShareStore, publicProfiles *PublicProfileStore) *ActivityServer {
-	return &ActivityServer{store: store, trips: trips, parseHistory: parseHistory, shareLinks: shareLinks, shares: shares, publicProfiles: publicProfiles}
+func NewActivityServer(store *ActivityStore, trips *TripStore, parseHistory *ParseHistoryStore, shareLinks *ShareLinkStore, shares *ShareStore, publicProfiles *PublicProfileStore, places *PlaceStore) *ActivityServer {
+	return &ActivityServer{store: store, trips: trips, parseHistory: parseHistory, shareLinks: shareLinks, shares: shares, publicProfiles: publicProfiles, places: places}
 }
 
 func (s *ActivityServer) ListActivities(w http.ResponseWriter, r *http.Request, params api.ListActivitiesParams) {
@@ -110,8 +111,20 @@ func (s *ActivityServer) CreateActivity(w http.ResponseWriter, r *http.Request) 
 	if req.TripId != nil {
 		tripID = *req.TripId
 	}
+	placeID := ""
+	if req.PlaceId != nil {
+		placeID = *req.PlaceId
+	}
+	originPlaceID := ""
+	if req.OriginPlaceId != nil {
+		originPlaceID = *req.OriginPlaceId
+	}
+	destPlaceID := ""
+	if req.DestinationPlaceId != nil {
+		destPlaceID = *req.DestinationPlaceId
+	}
 
-	a, err := s.store.Create(userID, req.Title, string(req.Type), startDate, endDate, location, notes, tripID)
+	a, err := s.store.Create(userID, req.Title, string(req.Type), startDate, endDate, location, notes, tripID, placeID, originPlaceID, destPlaceID)
 	if err != nil {
 		server.RespondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -187,6 +200,15 @@ func (s *ActivityServer) UpdateActivity(w http.ResponseWriter, r *http.Request, 
 	}
 	if req.TripId != nil {
 		a.TripID = *req.TripId
+	}
+	if req.PlaceId != nil {
+		a.PlaceID = *req.PlaceId
+	}
+	if req.OriginPlaceId != nil {
+		a.OriginPlaceID = *req.OriginPlaceId
+	}
+	if req.DestinationPlaceId != nil {
+		a.DestinationPlaceID = *req.DestinationPlaceId
 	}
 
 	if err := s.store.Update(a); err != nil {
@@ -1017,6 +1039,15 @@ func entityToAPI(a Activity) api.Activity {
 	}
 	if a.TripID != "" {
 		act.TripId = &a.TripID
+	}
+	if a.PlaceID != "" {
+		act.PlaceId = &a.PlaceID
+	}
+	if a.OriginPlaceID != "" {
+		act.OriginPlaceId = &a.OriginPlaceID
+	}
+	if a.DestinationPlaceID != "" {
+		act.DestinationPlaceId = &a.DestinationPlaceID
 	}
 	return act
 }
