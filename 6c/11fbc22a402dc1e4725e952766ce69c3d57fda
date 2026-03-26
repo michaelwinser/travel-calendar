@@ -1,0 +1,48 @@
+internal/app/server.go
+  c4b81f6d41e4e10c 15,139-143,362,1014-1021,1028,1054-1069,1085-1156,1233-1325
+gazetteer/geo_test.go
+  c4b81f6d41e4e10c 1-67
+frontend/src/components/PlaceAutocomplete.svelte
+  c4b81f6d41e4e10c 2,21,23-40,51,95,195-204,282-305
+internal/app/store.go
+  c4b81f6d41e4e10c 8,347-358,400-409,451-454
+frontend/src/components/ActivityModal.svelte
+  c4b81f6d41e4e10c 5,54,146-169,284,287-289,348-353
+frontend/src/lib/date-utils.ts
+  c4b81f6d41e4e10c 189-202
+gazetteer/geo.go
+  c4b81f6d41e4e10c 1-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.19",
+  "base_commit_sha": "6c11fbc22a402dc1e4725e952766ce69c3d57fda",
+  "prompts": {
+    "c4b81f6d41e4e10c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1068418b-2d23-4075-8b99-24178f7ad113",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 431,
+      "total_deletions": 32,
+      "accepted_lines": 427,
+      "overriden_lines": 0
+    },
+    "db0ccec4fd040162": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f91b5184-5d36-475e-a387-fb6a0cd69653",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 364,
+      "overriden_lines": 0
+    }
+  }
+}
