@@ -31,7 +31,7 @@ func main() {
 	defer w.Flush()
 
 	// Header
-	w.Write([]string{"name", "ascii_name", "alt_names", "country", "lat", "lng", "population", "timezone"})
+	w.Write([]string{"name", "ascii_name", "alt_names", "country", "lat", "lng", "population", "timezone", "admin1"})
 
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
@@ -48,6 +48,7 @@ func main() {
 		lat := fields[4]
 		lng := fields[5]
 		country := fields[8]
+		admin1 := fields[10]
 		popStr := fields[14]
 		timezone := fields[17]
 
@@ -60,7 +61,7 @@ func main() {
 		// Compress alternate names: keep only ASCII-safe names, limit to 10, deduplicate
 		alts := compactAlts(name, asciiName, altNames)
 
-		w.Write([]string{name, asciiName, alts, country, lat, lng, popStr, timezone})
+		w.Write([]string{name, asciiName, alts, country, lat, lng, popStr, timezone, admin1})
 	}
 
 	if err := scanner.Err(); err != nil {

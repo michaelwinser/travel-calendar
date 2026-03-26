@@ -3,7 +3,6 @@ package app
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -208,33 +207,10 @@ func (s *ActivityServer) ResolvePlaces(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// 3. Search gazetteer
-	// Parse qualifiers: "Westport, CT" → search "Westport", filter by "CT"
-	// "3 Woodland Dr, Westport, CT 06880" → try progressively shorter parts
-	searchTerms, countryFilter := parseLocationQuery(req.Text)
-
+	// 3. Search gazetteer with right-to-left location parsing
 	gaz, err := gazetteer.Get()
 	if err == nil {
-		var results []gazetteer.Result
-		for _, term := range searchTerms {
-			results = gaz.PrefixSearch(term, 15)
-			if len(results) > 0 {
-				break
-			}
-		}
-
-		// Filter by country/state qualifier if present
-		if countryFilter != "" && len(results) > 1 {
-			filtered := filterByQualifier(results, countryFilter)
-			if len(filtered) > 0 {
-				results = filtered
-			}
-		}
-
-		// Limit to top 8
-		if len(results) > 8 {
-			results = results[:8]
-		}
+		results := gaz.ResolveLocation(req.Text, 8)
 
 		for _, gr := range results {
 			c := gr.City
@@ -307,131 +283,8 @@ func derefStr(s *string) string {
 	return *s
 }
 
-// parseLocationQuery breaks a user input like "Westport, CT 06880 USA" into
-// search terms and an optional country/state filter.
-// Returns a list of terms to try (most specific first) and a filter string.
-func parseLocationQuery(text string) (searchTerms []string, countryFilter string) {
-	text = strings.TrimSpace(text)
-	parts := strings.Split(text, ",")
-
-	// Clean each part
-	for i := range parts {
-		parts[i] = strings.TrimSpace(parts[i])
-	}
-
-	// The first comma-separated part is likely the city/place name.
-	// Remaining parts are qualifiers (state, country, zip).
-	if len(parts) >= 2 {
-		// Build the filter from everything after the first part
-		countryFilter = strings.Join(parts[1:], " ")
-		// Remove zip codes (sequences of digits)
-		countryFilter = removeZipCodes(countryFilter)
-		countryFilter = strings.TrimSpace(countryFilter)
-	}
-
-	// Try progressively shorter versions of the first part
-	// "3 Woodland Dr" won't match, but the system should try the whole input first
-	first := parts[0]
-	searchTerms = append(searchTerms, first)
-
-	// Also try the last word of the first part (often the city name after a street address)
-	words := strings.Fields(first)
-	if len(words) > 1 {
-		searchTerms = append(searchTerms, words[len(words)-1])
-	}
-
-	// If we have qualifier parts, try those as city names too
-	// "3 Woodland Dr, Westport, CT" → try "Westport"
-	for _, p := range parts[1:] {
-		p = removeZipCodes(strings.TrimSpace(p))
-		p = strings.TrimSpace(p)
-		if len(p) > 2 { // skip state/country abbreviations as search terms
-			searchTerms = append(searchTerms, p)
-		}
-	}
-
-	return searchTerms, countryFilter
-}
-
-func removeZipCodes(s string) string {
-	words := strings.Fields(s)
-	var filtered []string
-	for _, w := range words {
-		isZip := true
-		for _, r := range w {
-			if r < '0' || r > '9' {
-				isZip = false
-				break
-			}
-		}
-		if !isZip {
-			filtered = append(filtered, w)
-		}
-	}
-	return strings.Join(filtered, " ")
-}
-
-// US state abbreviations → full names for matching against gazetteer country data
-var usStates = map[string]string{
-	"al": "alabama", "ak": "alaska", "az": "arizona", "ar": "arkansas",
-	"ca": "california", "co": "colorado", "ct": "connecticut", "de": "delaware",
-	"fl": "florida", "ga": "georgia", "hi": "hawaii", "id": "idaho",
-	"il": "illinois", "in": "indiana", "ia": "iowa", "ks": "kansas",
-	"ky": "kentucky", "la": "louisiana", "me": "maine", "md": "maryland",
-	"ma": "massachusetts", "mi": "michigan", "mn": "minnesota", "ms": "mississippi",
-	"mo": "missouri", "mt": "montana", "ne": "nebraska", "nv": "nevada",
-	"nh": "new hampshire", "nj": "new jersey", "nm": "new mexico", "ny": "new york",
-	"nc": "north carolina", "nd": "north dakota", "oh": "ohio", "ok": "oklahoma",
-	"or": "oregon", "pa": "pennsylvania", "ri": "rhode island", "sc": "south carolina",
-	"sd": "south dakota", "tn": "tennessee", "tx": "texas", "ut": "utah",
-	"vt": "vermont", "va": "virginia", "wa": "washington", "wv": "west virginia",
-	"wi": "wisconsin", "wy": "wyoming",
-}
-
-// filterByQualifier filters gazetteer results by a country/state qualifier string.
-// "CT" or "Connecticut" → keep only US results in Connecticut.
-// "USA" or "US" → keep only US results.
-func filterByQualifier(results []gazetteer.Result, qualifier string) []gazetteer.Result {
-	lower := strings.ToLower(strings.TrimSpace(qualifier))
-	// Remove common country suffixes
-	lower = strings.TrimSuffix(lower, " usa")
-	lower = strings.TrimSuffix(lower, " us")
-	lower = strings.TrimSpace(lower)
-
-	var filtered []gazetteer.Result
-	for _, r := range results {
-		c := r.City
-		countryLower := strings.ToLower(c.Country)
-
-		// Check if qualifier matches country code
-		if countryLower == lower || lower == "usa" || lower == "us" {
-			if countryLower == "us" || lower == "usa" || lower == "us" {
-				filtered = append(filtered, r)
-			} else {
-				filtered = append(filtered, r)
-			}
-			continue
-		}
-
-		// Check if qualifier is a US state abbreviation or name
-		if _, isState := usStates[lower]; isState && countryLower == "us" {
-			// The gazetteer doesn't have state data, but we can match on timezone
-			// as a rough proxy, or just accept all US results when state is specified
-			filtered = append(filtered, r)
-			continue
-		}
-
-		// Check full state name
-		for abbr, fullName := range usStates {
-			if lower == fullName && countryLower == "us" {
-				_ = abbr
-				filtered = append(filtered, r)
-				break
-			}
-		}
-	}
-	return filtered
-}
+// Old parseLocationQuery, filterByQualifier, usStates removed —
+// replaced by gazetteer.ResolveLocation with right-to-left parsing.
 
 func derefFloat(f *float64) float64 {
 	if f == nil {

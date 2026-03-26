@@ -28,6 +28,7 @@ type City struct {
 	ASCIIName  string
 	AltNames   []string // pipe-separated in CSV
 	Country    string   // ISO 3166-1 alpha-2
+	Admin1     string   // State/province code (e.g. "CT" for Connecticut)
 	Latitude   float64
 	Longitude  float64
 	Population int
@@ -93,11 +94,17 @@ func load(citiesData, airportsData string) (*Gazetteer, error) {
 			altNames = strings.Split(record[2], "|")
 		}
 
+		admin1 := ""
+		if len(record) > 8 {
+			admin1 = record[8]
+		}
+
 		city := City{
 			Name:       record[0],
 			ASCIIName:  record[1],
 			AltNames:   altNames,
 			Country:    record[3],
+			Admin1:     admin1,
 			Latitude:   lat,
 			Longitude:  lng,
 			Population: pop,
