@@ -1820,8 +1820,18 @@ func namedSet(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no matches found for %q. Try a more specific location.", location)
 	}
 
-	// Check for ambiguity: if top two results are close in score and different cities
-	if len(gazetteerSugs) >= 2 && gazetteerSugs[0].Score-gazetteerSugs[1].Score < 0.15 {
+	// Check for ambiguity: if top two results are close in score, different countries,
+	// and neither is clearly dominant by population
+	isAmbiguous := false
+	if len(gazetteerSugs) >= 2 {
+		s0, s1 := gazetteerSugs[0], gazetteerSugs[1]
+		sameCountry := s0.Country != nil && s1.Country != nil && *s0.Country == *s1.Country
+		scoreDiff := s0.Score - s1.Score
+		if !sameCountry && scoreDiff < 0.3 {
+			isAmbiguous = true
+		}
+	}
+	if isAmbiguous {
 		// Ambiguous — show candidates
 		fmt.Println("Multiple matches:")
 		for i, s := range gazetteerSugs {
