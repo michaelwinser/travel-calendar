@@ -1,0 +1,42 @@
+gazetteer/gazetteer_test.go
+  c4b81f6d41e4e10c 115-116,118,121,191-239
+main.go
+  c4b81f6d41e4e10c 348-356,1486-1657
+gazetteer/gazetteer.go
+  c4b81f6d41e4e10c 22-24,176-199,229,237-239,247,249-252
+gazetteer/aliases.txt
+  c4b81f6d41e4e10c 1-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.19",
+  "base_commit_sha": "4605e1489d609724848c088c7a0a358d91dfb700",
+  "prompts": {
+    "c4b81f6d41e4e10c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1068418b-2d23-4075-8b99-24178f7ad113",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 305,
+      "total_deletions": 19,
+      "accepted_lines": 290,
+      "overriden_lines": 0
+    },
+    "db0ccec4fd040162": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f91b5184-5d36-475e-a387-fb6a0cd69653",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 364,
+      "overriden_lines": 0
+    }
+  }
+}
