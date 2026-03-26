@@ -18,3 +18,13 @@ SEA : Seattle
 PDX : Portland
 DEN : Denver
 DTW : Detroit
+LON : London, GB
+PAR : Paris, France
+AMS : Amsterdamn, Netherlands
+ZUR : Zurich, Switzerland
+MIL : Milan, IT
+MTL : Montreal, Canada
+TOR : Toronto, Canada
+VAN : Vancouver, Canada
+DC : Washington, DC, USA
+

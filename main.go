@@ -346,15 +346,48 @@ func main() {
 	}
 	placesCmd.AddCommand(placesShowCmd)
 
-	placesBackfillCmd := &cobra.Command{
-		Use:   "backfill",
-		Short: "Auto-link existing activities to Places via gazetteer",
-		RunE:  placesBackfill,
-	}
-	placesBackfillCmd.Flags().Bool("dry-run", false, "Show what would be linked without making changes")
-	placesCmd.AddCommand(placesBackfillCmd)
 
 	cli.AddCommand(placesCmd)
+
+	// --- Named locations ---
+
+	namedCmd := &cobra.Command{
+		Use:   "named",
+		Short: "Manage named locations",
+	}
+
+	namedListCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List named locations and unresolved activity locations",
+		RunE:  namedList,
+	}
+	namedCmd.AddCommand(namedListCmd)
+
+	namedSetCmd := &cobra.Command{
+		Use:   "set [name] [location]",
+		Short: "Create or update a named location",
+		Args:  cobra.ExactArgs(2),
+		RunE:  namedSet,
+	}
+	namedCmd.AddCommand(namedSetCmd)
+
+	namedClearCmd := &cobra.Command{
+		Use:   "clear [name]",
+		Short: "Remove a named location",
+		Args:  cobra.ExactArgs(1),
+		RunE:  namedClear,
+	}
+	namedCmd.AddCommand(namedClearCmd)
+
+	namedBackfillCmd := &cobra.Command{
+		Use:   "backfill",
+		Short: "Auto-name unresolved activity locations via gazetteer",
+		RunE:  placesBackfill,
+	}
+	namedBackfillCmd.Flags().Bool("dry-run", false, "Show what would be linked without making changes")
+	namedCmd.AddCommand(namedBackfillCmd)
+
+	cli.AddCommand(namedCmd)
 
 	cli.Execute()
 }
@@ -1653,5 +1686,304 @@ func placesBackfill(cmd *cobra.Command, args []string) error {
 	fmt.Printf("\nDone%s. Linked: %d, Skipped: %d, Places created: %d\n",
 		map[bool]string{true: " (dry run)", false: ""}[dryRun],
 		linked, skipped, placesCreated)
+	return nil
+}
+
+// --- Named locations CLI ---
+
+func namedList(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	// Fetch places and activities
+	placesResp, err := client.ListPlacesWithResponse(context.Background())
+	if err != nil {
+		return err
+	}
+	if placesResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", placesResp.StatusCode(), string(placesResp.Body))
+	}
+
+	actsResp, err := client.ListActivitiesWithResponse(context.Background(), &api.ListActivitiesParams{})
+	if err != nil {
+		return err
+	}
+	if actsResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", actsResp.StatusCode(), string(actsResp.Body))
+	}
+
+	places := *placesResp.JSON200
+	activities := *actsResp.JSON200
+
+	// Count activities per place
+	placeActivityCount := map[string]int{}
+	unresolvedLocs := map[string]int{} // location string → count, for activities with no placeId
+
+	for _, a := range activities {
+		if a.PlaceId != nil && *a.PlaceId != "" {
+			placeActivityCount[*a.PlaceId]++
+		} else if a.Location != nil && *a.Location != "" {
+			unresolvedLocs[*a.Location]++
+		}
+	}
+
+	if len(places) == 0 && len(unresolvedLocs) == 0 {
+		fmt.Println("No named locations. Create one with: travel named set \"Home\" \"San Francisco\"")
+		return nil
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "NAME\tRESOLVES TO\tACTIVITIES\n")
+
+	for _, p := range places {
+		resolvesTo := ""
+		parts := []string{}
+		if p.City != nil && *p.City != "" {
+			parts = append(parts, *p.City)
+		}
+		if p.Country != nil && *p.Country != "" {
+			parts = append(parts, *p.Country)
+		}
+		if p.Timezone != nil && *p.Timezone != "" {
+			parts = append(parts, *p.Timezone)
+		}
+		if len(parts) > 0 {
+			resolvesTo = strings.Join(parts, ", ")
+		} else {
+			resolvesTo = "(no geo data)"
+		}
+
+		count := placeActivityCount[p.Id]
+		fmt.Fprintf(w, "%s\t%s\t%d\n", p.Name, resolvesTo, count)
+	}
+
+	// Show unresolved locations
+	unresolvedCount := 0
+	for loc, count := range unresolvedLocs {
+		// Skip route-style locations
+		if strings.Contains(loc, "→") || strings.Contains(loc, "->") {
+			continue
+		}
+		fmt.Fprintf(w, "%s\t(unresolved)\t%d\n", loc, count)
+		unresolvedCount++
+	}
+
+	w.Flush()
+
+	if unresolvedCount > 0 {
+		fmt.Printf("\n%d unresolved locations. Set them with: travel named set \"<name>\" \"<city>\"\n", unresolvedCount)
+	}
+
+	return nil
+}
+
+func namedSet(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	name := args[0]
+	location := args[1]
+
+	// Resolve the location against the gazetteer
+	resolveResp, err := client.ResolvePlacesWithResponse(context.Background(), api.PlaceResolveRequest{Text: location})
+	if err != nil {
+		return err
+	}
+	if resolveResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", resolveResp.StatusCode(), string(resolveResp.Body))
+	}
+
+	result := resolveResp.JSON200
+
+	// Check for exact match
+	if result.Exact != nil {
+		// Update existing place's name
+		fmt.Printf("Named \"%s\" → %s (existing place)\n", name, result.Exact.Name)
+		return namedLinkActivities(client, name, result.Exact.Id)
+	}
+
+	// Filter to gazetteer suggestions only (user places would be exact matches)
+	var gazetteerSugs []api.PlaceSuggestion
+	for _, s := range result.Suggestions {
+		if s.Source == api.Gazetteer {
+			gazetteerSugs = append(gazetteerSugs, s)
+		}
+	}
+
+	if len(gazetteerSugs) == 0 {
+		return fmt.Errorf("no matches found for %q. Try a more specific location.", location)
+	}
+
+	// Check for ambiguity: if top two results are close in score and different cities
+	if len(gazetteerSugs) >= 2 && gazetteerSugs[0].Score-gazetteerSugs[1].Score < 0.15 {
+		// Ambiguous — show candidates
+		fmt.Println("Multiple matches:")
+		for i, s := range gazetteerSugs {
+			if i >= 5 {
+				break
+			}
+			extra := ""
+			if s.Country != nil {
+				extra = *s.Country
+			}
+			pop := ""
+			if s.Population != nil && *s.Population > 0 {
+				pop = fmt.Sprintf(", pop %dk", *s.Population/1000)
+			}
+			fmt.Printf("  %d. %s (%s%s)\n", i+1, s.Name, extra, pop)
+		}
+		fmt.Println("Specify a more precise location.")
+		return nil
+	}
+
+	// Unambiguous — create the place
+	best := gazetteerSugs[0]
+	req := api.CreatePlaceRequest{
+		Name: name,
+		City: &best.Name,
+	}
+	if best.Country != nil {
+		req.Country = best.Country
+	}
+	if best.Latitude != nil {
+		req.Latitude = best.Latitude
+	}
+	if best.Longitude != nil {
+		req.Longitude = best.Longitude
+	}
+	if best.Timezone != nil {
+		req.Timezone = best.Timezone
+	}
+	kind := api.CreatePlaceRequestKindCity
+	req.Kind = &kind
+
+	// Add the original name as an alias so "Home" resolves to this place
+	aliases := []string{name}
+	if strings.ToLower(name) != strings.ToLower(best.Name) {
+		aliases = append(aliases, best.Name)
+	}
+	req.Aliases = &aliases
+
+	createResp, err := client.CreatePlaceWithResponse(context.Background(), req)
+	if err != nil {
+		return err
+	}
+	if createResp.StatusCode() != http.StatusCreated {
+		return fmt.Errorf("server returned %d: %s", createResp.StatusCode(), string(createResp.Body))
+	}
+
+	p := createResp.JSON201
+	extra := ""
+	if p.Country != nil {
+		extra += ", " + *p.Country
+	}
+	if p.Timezone != nil {
+		extra += ", " + *p.Timezone
+	}
+	fmt.Printf("Named \"%s\" → %s%s\n", name, best.Name, extra)
+
+	return namedLinkActivities(client, name, p.Id)
+}
+
+// namedLinkActivities finds activities whose location matches the name and links them.
+func namedLinkActivities(client *api.ClientWithResponses, name, placeID string) error {
+	actsResp, err := client.ListActivitiesWithResponse(context.Background(), &api.ListActivitiesParams{})
+	if err != nil {
+		return nil // non-fatal
+	}
+	if actsResp.StatusCode() != http.StatusOK {
+		return nil
+	}
+
+	lowerName := strings.ToLower(name)
+	linked := 0
+	for _, a := range *actsResp.JSON200 {
+		if a.PlaceId != nil && *a.PlaceId != "" {
+			continue // already linked
+		}
+		loc := ""
+		if a.Location != nil {
+			loc = *a.Location
+		}
+		if strings.ToLower(loc) == lowerName {
+			_, err := client.UpdateActivityWithResponse(context.Background(), a.Id, api.UpdateActivityRequest{
+				PlaceId: &placeID,
+			})
+			if err == nil {
+				linked++
+			}
+		}
+	}
+
+	if linked > 0 {
+		fmt.Printf("Linked %d activities.\n", linked)
+	}
+	return nil
+}
+
+func namedClear(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	name := args[0]
+
+	// Find the place by name
+	placesResp, err := client.ListPlacesWithResponse(context.Background())
+	if err != nil {
+		return err
+	}
+	if placesResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", placesResp.StatusCode(), string(placesResp.Body))
+	}
+
+	lowerName := strings.ToLower(name)
+	var match *api.Place
+	for _, p := range *placesResp.JSON200 {
+		if strings.ToLower(p.Name) == lowerName {
+			match = &p
+			break
+		}
+	}
+	if match == nil {
+		return fmt.Errorf("no named location %q found", name)
+	}
+
+	// Unlink activities referencing this place
+	actsResp, err := client.ListActivitiesWithResponse(context.Background(), &api.ListActivitiesParams{})
+	if err == nil && actsResp.StatusCode() == http.StatusOK {
+		empty := ""
+		unlinked := 0
+		for _, a := range *actsResp.JSON200 {
+			if a.PlaceId != nil && *a.PlaceId == match.Id {
+				client.UpdateActivityWithResponse(context.Background(), a.Id, api.UpdateActivityRequest{
+					PlaceId: &empty,
+				})
+				unlinked++
+			}
+		}
+		if unlinked > 0 {
+			fmt.Printf("Unlinked %d activities.\n", unlinked)
+		}
+	}
+
+	// Delete the place
+	delResp, err := client.DeletePlaceWithResponse(context.Background(), match.Id)
+	if err != nil {
+		return err
+	}
+	if delResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", delResp.StatusCode(), string(delResp.Body))
+	}
+
+	fmt.Printf("Removed named location \"%s\".\n", name)
 	return nil
 }
