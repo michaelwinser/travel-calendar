@@ -146,6 +146,16 @@ A corresponding `appbase logout --app NAME` (or extending the existing logout) w
 
 **Filed as:** [appbase #27](https://github.com/michaelwinser/appbase/issues/27)
 
+### 9. Config merging: setting GoogleAuth breaks YAML credential loading
+
+**Context:** Setting `config.GoogleAuth` to add `ExtraScopes` for Google Calendar caused appbase to skip loading `client_id` and `client_secret` from app.yaml entirely. The nil check in app.go line 123 treats any non-nil `GoogleAuth` as fully configured.
+
+**What's needed:**
+1. `extra_scopes` field in YAML auth config
+2. Config merging: if both app code and YAML provide GoogleAuth config, merge them (app fields take precedence, empty fields fall back to YAML)
+
+**Filed as:** [appbase #29](https://github.com/michaelwinser/appbase/issues/29)
+
 ## Notes
 
 (none yet)
