@@ -2900,12 +2900,8 @@ func importCalendar(cmd *cobra.Command, args []string) error {
 	// Import events
 	created, skipped := 0, 0
 	for _, e := range events {
-		startStr := e.Start.Format("2006-01-02")
-		endStr := e.End.Format("2006-01-02")
-		// Adjust all-day DTEND (exclusive → inclusive)
-		if e.AllDay && !e.End.IsZero() && e.End.After(e.Start) {
-			endStr = e.End.AddDate(0, 0, -1).Format("2006-01-02")
-		}
+		startStr := e.StartDate()
+		endStr := e.EndDate()
 
 		key := actType + "/" + startStr + "/" + travelapp.Slug(e.Summary)
 		if existingKeys[key] {
