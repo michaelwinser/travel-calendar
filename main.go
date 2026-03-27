@@ -100,10 +100,19 @@ func setup() error {
 	if err != nil {
 		return err
 	}
+	importSources, err := travelapp.NewImportSourceStore(app.DB())
+	if err != nil {
+		return err
+	}
+	stagedEvents, err := travelapp.NewStagedEventStore(app.DB())
+	if err != nil {
+		return err
+	}
 
 	// Register API routes
 	activityServer = travelapp.NewActivityServer(activities, trips, parseHistory, shareLinks, shares, publicProfiles, places)
 	activityServer.SetSyncStores(syncTargets, syncRecords)
+	activityServer.SetSourceStores(importSources, stagedEvents)
 	api.HandlerFromMux(activityServer, app.Server().Router())
 
 	return nil
@@ -155,6 +164,7 @@ func main() {
 
 		// Register sync routes (manual, not codegen)
 		activityServer.RegisterSyncRoutes(r)
+		activityServer.RegisterSourceRoutes(r)
 
 		return app.Serve()
 	})
@@ -486,6 +496,82 @@ func main() {
 	syncCmd.AddCommand(syncDisconnectCmd)
 
 	cli.AddCommand(syncCmd)
+
+	// --- Source commands ---
+
+	sourceCmd := &cobra.Command{
+		Use:   "source",
+		Short: "Manage calendar import sources",
+	}
+
+	sourceAddCmd := &cobra.Command{
+		Use:   "add [name] [url]",
+		Short: "Add a calendar source and run initial sync",
+		Args:  cobra.ExactArgs(2),
+		RunE:  sourceAdd,
+	}
+	sourceCmd.AddCommand(sourceAddCmd)
+
+	sourceListCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List import sources",
+		RunE:  sourceList,
+	}
+	sourceCmd.AddCommand(sourceListCmd)
+
+	sourceSyncCmd := &cobra.Command{
+		Use:   "sync [name-or-id]",
+		Short: "Re-sync a source",
+		Args:  cobra.ExactArgs(1),
+		RunE:  sourceSync,
+	}
+	sourceCmd.AddCommand(sourceSyncCmd)
+
+	sourceRemoveCmd := &cobra.Command{
+		Use:   "remove [name-or-id]",
+		Short: "Remove a source and its staged events",
+		Args:  cobra.ExactArgs(1),
+		RunE:  sourceRemove,
+	}
+	sourceCmd.AddCommand(sourceRemoveCmd)
+
+	cli.AddCommand(sourceCmd)
+
+	// --- Staged event commands ---
+
+	stagedCmd := &cobra.Command{
+		Use:   "staged",
+		Short: "Review and manage staged import events",
+		RunE:  stagedList,
+	}
+	stagedCmd.Flags().String("source", "", "Filter by source name")
+	stagedCmd.Flags().String("state", "", "Filter by state (new, imported, hidden)")
+
+	stagedImportCmd := &cobra.Command{
+		Use:   "import [id-prefix...]",
+		Short: "Import staged events as activities",
+		Args:  cobra.MinimumNArgs(1),
+		RunE:  stagedImport,
+	}
+	stagedCmd.AddCommand(stagedImportCmd)
+
+	stagedHideCmd := &cobra.Command{
+		Use:   "hide [id-prefix...]",
+		Short: "Hide staged events",
+		Args:  cobra.MinimumNArgs(1),
+		RunE:  stagedHide,
+	}
+	stagedCmd.AddCommand(stagedHideCmd)
+
+	stagedUnhideCmd := &cobra.Command{
+		Use:   "unhide [id-prefix...]",
+		Short: "Unhide staged events",
+		Args:  cobra.MinimumNArgs(1),
+		RunE:  stagedUnhide,
+	}
+	stagedCmd.AddCommand(stagedUnhideCmd)
+
+	cli.AddCommand(stagedCmd)
 
 	infoCmd := &cobra.Command{
 		Use:   "info",
@@ -3090,4 +3176,330 @@ func syncDisconnect(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("%s\n", result["message"])
 	return nil
+}
+
+// --- Source CLI commands ---
+
+func sourceAdd(cmd *cobra.Command, args []string) error {
+	baseURL, httpClient, cleanup, err := rawHTTPClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	name, srcURL := args[0], args[1]
+	body := fmt.Sprintf(`{"name":%q,"url":%q}`, name, srcURL)
+
+	resp, err := httpClient.Post(baseURL+"/api/sources", "application/json", strings.NewReader(body))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if resp.StatusCode >= 400 {
+		if e, ok := result["error"]; ok {
+			return fmt.Errorf("%v", e)
+		}
+		return fmt.Errorf("server returned %d", resp.StatusCode)
+	}
+
+	if src, ok := result["source"].(map[string]interface{}); ok {
+		fmt.Printf("Added source: %s (%s)\n", src["name"], src["id"].(string)[:8])
+	}
+	if sr, ok := result["syncResult"].(map[string]interface{}); ok {
+		fmt.Printf("Initial sync: fetched %.0f, staged %.0f, filtered %.0f\n",
+			sr["fetched"], sr["staged"], sr["filtered"])
+	}
+	return nil
+}
+
+func sourceList(cmd *cobra.Command, args []string) error {
+	baseURL, httpClient, cleanup, err := rawHTTPClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := httpClient.Get(baseURL + "/api/sources")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var sources []map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&sources)
+
+	if len(sources) == 0 {
+		fmt.Println("No import sources. Add one with: travel source add \"Name\" \"https://...\"")
+		return nil
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "ID\tNAME\tSTATUS\tNEW\tIMPORTED\tHIDDEN\tLAST SYNC\n")
+	for _, s := range sources {
+		id := s["id"].(string)[:8]
+		lastSync := ""
+		if ls, ok := s["lastSyncAt"].(string); ok && ls != "" {
+			if t, err := time.Parse(time.RFC3339, ls); err == nil {
+				lastSync = t.Format("2006-01-02 15:04")
+			}
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%.0f\t%.0f\t%.0f\t%s\n",
+			id, s["name"], s["status"],
+			s["newCount"], s["importedCount"], s["hiddenCount"], lastSync)
+	}
+	w.Flush()
+	return nil
+}
+
+func sourceSync(cmd *cobra.Command, args []string) error {
+	baseURL, httpClient, cleanup, err := rawHTTPClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	sourceID, err := resolveSourceID(httpClient, baseURL, args[0])
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Syncing...")
+	resp, err := httpClient.Post(baseURL+"/api/sources/"+sourceID+"/sync", "application/json", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if resp.StatusCode >= 400 {
+		if e, ok := result["error"]; ok {
+			return fmt.Errorf("%v", e)
+		}
+		return fmt.Errorf("server returned %d", resp.StatusCode)
+	}
+
+	fmt.Printf("Fetched: %.0f, Staged: %.0f, Updated: %.0f, Filtered: %.0f\n",
+		result["fetched"], result["staged"], result["updated"], result["filtered"])
+	return nil
+}
+
+func sourceRemove(cmd *cobra.Command, args []string) error {
+	baseURL, httpClient, cleanup, err := rawHTTPClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	sourceID, err := resolveSourceID(httpClient, baseURL, args[0])
+	if err != nil {
+		return err
+	}
+
+	req, _ := http.NewRequest("DELETE", baseURL+"/api/sources/"+sourceID, nil)
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("server returned %d", resp.StatusCode)
+	}
+
+	fmt.Println("Source removed.")
+	return nil
+}
+
+func resolveSourceID(httpClient *http.Client, baseURL, query string) (string, error) {
+	resp, err := httpClient.Get(baseURL + "/api/sources")
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var sources []map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&sources)
+
+	lower := strings.ToLower(query)
+	for _, s := range sources {
+		id := s["id"].(string)
+		name := s["name"].(string)
+		if strings.HasPrefix(id, query) || strings.ToLower(name) == lower {
+			return id, nil
+		}
+	}
+	return "", fmt.Errorf("no source found matching %q", query)
+}
+
+// --- Staged event CLI commands ---
+
+func stagedList(cmd *cobra.Command, args []string) error {
+	baseURL, httpClient, cleanup, err := rawHTTPClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	state, _ := cmd.Flags().GetString("state")
+	sourceName, _ := cmd.Flags().GetString("source")
+
+	apiURL := baseURL + "/api/staged"
+	var params []string
+	if state != "" {
+		params = append(params, "state="+state)
+	}
+	if sourceName != "" {
+		sourceID, err := resolveSourceID(httpClient, baseURL, sourceName)
+		if err != nil {
+			return err
+		}
+		params = append(params, "sourceId="+sourceID)
+	}
+	if len(params) > 0 {
+		apiURL += "?" + strings.Join(params, "&")
+	}
+
+	resp, err := httpClient.Get(apiURL)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var events []map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&events)
+
+	if len(events) == 0 {
+		fmt.Println("No staged events.")
+		return nil
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "ID\tSTATE\tDATES\tTYPE\tLOCATION\tTITLE\n")
+	for _, e := range events {
+		id := e["id"].(string)[:8]
+		dates := e["startDate"].(string)
+		if end, ok := e["endDate"].(string); ok && end != "" && end != dates {
+			dates += " -> " + end
+		}
+		loc := ""
+		if l, ok := e["location"].(string); ok {
+			loc = l
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+			id, e["state"], dates, e["type"], loc, e["title"])
+	}
+	w.Flush()
+	return nil
+}
+
+func stagedImport(cmd *cobra.Command, args []string) error {
+	baseURL, httpClient, cleanup, err := rawHTTPClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	ids, err := resolveStagedIDs(httpClient, baseURL, args)
+	if err != nil {
+		return err
+	}
+
+	body, _ := json.Marshal(map[string][]string{"ids": ids})
+	resp, err := httpClient.Post(baseURL+"/api/staged/import", "application/json",
+		strings.NewReader(string(body)))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	fmt.Printf("Imported: %.0f\n", result["imported"])
+	return nil
+}
+
+func stagedHide(cmd *cobra.Command, args []string) error {
+	baseURL, httpClient, cleanup, err := rawHTTPClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	ids, err := resolveStagedIDs(httpClient, baseURL, args)
+	if err != nil {
+		return err
+	}
+
+	body, _ := json.Marshal(map[string][]string{"ids": ids})
+	resp, err := httpClient.Post(baseURL+"/api/staged/hide", "application/json",
+		strings.NewReader(string(body)))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	fmt.Printf("Hidden: %.0f\n", result["hidden"])
+	return nil
+}
+
+func stagedUnhide(cmd *cobra.Command, args []string) error {
+	baseURL, httpClient, cleanup, err := rawHTTPClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	ids, err := resolveStagedIDs(httpClient, baseURL, args)
+	if err != nil {
+		return err
+	}
+
+	body, _ := json.Marshal(map[string][]string{"ids": ids})
+	resp, err := httpClient.Post(baseURL+"/api/staged/unhide", "application/json",
+		strings.NewReader(string(body)))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	fmt.Printf("Unhidden: %.0f\n", result["unhidden"])
+	return nil
+}
+
+func resolveStagedIDs(httpClient *http.Client, baseURL string, prefixes []string) ([]string, error) {
+	resp, err := httpClient.Get(baseURL + "/api/staged")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var events []map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&events)
+
+	var ids []string
+	for _, prefix := range prefixes {
+		found := false
+		for _, e := range events {
+			id := e["id"].(string)
+			if strings.HasPrefix(id, prefix) {
+				ids = append(ids, id)
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("no staged event matching %q", prefix)
+		}
+	}
+	return ids, nil
 }

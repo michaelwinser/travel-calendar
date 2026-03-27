@@ -37,6 +37,8 @@ type ActivityServer struct {
 	places         *PlaceStore
 	syncTargets    *SyncTargetStore
 	syncRecords    *SyncRecordStore
+	importSources  *ImportSourceStore
+	stagedEvents   *StagedEventStore
 }
 
 // NewActivityServer creates a new server with all dependencies.
