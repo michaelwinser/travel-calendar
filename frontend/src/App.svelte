@@ -27,6 +27,7 @@
   import SharePanel from './components/SharePanel.svelte';
   import SharedCalendarView from './components/SharedCalendarView.svelte';
   import OverlaySidebar from './components/OverlaySidebar.svelte';
+  import SourcesPanel from './components/SourcesPanel.svelte';
   import {
     listSharedWithMe,
     fetchSharedWithMeActivities,
@@ -65,6 +66,9 @@
 
   // Share panel state
   let showSharePanel = $state(false);
+
+  // Sources panel state
+  let showSourcesPanel = $state(false);
 
   // Overlay state
   const OVERLAY_COLORS = ['#e07b53', '#5cbcb6', '#c75ca2', '#d4a843', '#8b6cc1', '#c95454', '#5a8f5a'];
@@ -536,6 +540,7 @@
         >{v.label}</button>
       {/each}
       <div class="tab-spacer"></div>
+      <button class="share-btn" onclick={() => showSourcesPanel = true} title="Calendar sources">Import</button>
       <button class="share-btn" onclick={() => showSharePanel = true} title="Sharing settings">Share</button>
       <button class="add-btn" onclick={openQuickAdd} title="New activity (n)">+ Add</button>
       {#if currentView === 'month' || currentView === 'day' || currentView === 'year'}
@@ -665,6 +670,13 @@
       oncancel={closeModal}
       ondelete={modalMode === 'edit' ? handleDelete : undefined}
       onchange={handleModalChange}
+    />
+  {/if}
+
+  {#if showSourcesPanel}
+    <SourcesPanel
+      onclose={() => showSourcesPanel = false}
+      onimported={refreshActivities}
     />
   {/if}
 

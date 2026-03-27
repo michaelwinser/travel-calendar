@@ -296,6 +296,112 @@ export interface OverlayCalendar {
   activities: Activity[];
 }
 
+// --- Import Sources ---
+
+export interface ImportSource {
+  id: string;
+  name: string;
+  url: string;
+  sourceType: string;
+  filterConfig: string;
+  lastSyncAt: string;
+  status: string;
+  newCount: number;
+  importedCount: number;
+  hiddenCount: number;
+}
+
+export interface StagedEvent {
+  id: string;
+  sourceId: string;
+  sourceEventId: string;
+  title: string;
+  type: string;
+  startDate: string;
+  endDate: string;
+  location: string;
+  notes: string;
+  state: 'new' | 'imported' | 'hidden';
+  activityId: string;
+}
+
+export interface SyncResult {
+  fetched: number;
+  staged: number;
+  updated: number;
+  filtered: number;
+}
+
+export async function listSources(): Promise<ImportSource[]> {
+  const res = await fetch(`${API_BASE}/sources`);
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json();
+}
+
+export async function createSource(name: string, url: string): Promise<{ source: ImportSource; syncResult: SyncResult }> {
+  const res = await fetch(`${API_BASE}/sources`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, url }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || res.statusText);
+  }
+  return res.json();
+}
+
+export async function syncSource(id: string): Promise<SyncResult> {
+  const res = await fetch(`${API_BASE}/sources/${id}/sync`, { method: 'POST' });
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json();
+}
+
+export async function deleteSource(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/sources/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(res.statusText);
+}
+
+export async function listStagedEvents(params?: { sourceId?: string; state?: string }): Promise<StagedEvent[]> {
+  const search = new URLSearchParams();
+  if (params?.sourceId) search.set('sourceId', params.sourceId);
+  if (params?.state) search.set('state', params.state);
+  const qs = search.toString();
+  const res = await fetch(`${API_BASE}/staged${qs ? '?' + qs : ''}`);
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json();
+}
+
+export async function importStagedEvents(ids: string[]): Promise<{ imported: number }> {
+  const res = await fetch(`${API_BASE}/staged/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json();
+}
+
+export async function hideStagedEvents(ids: string[]): Promise<{ hidden: number }> {
+  const res = await fetch(`${API_BASE}/staged/hide`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json();
+}
+
+export async function unhideStagedEvents(ids: string[]): Promise<{ unhidden: number }> {
+  const res = await fetch(`${API_BASE}/staged/unhide`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json();
+}
+
 // --- Public Dashboard ---
 
 export async function fetchPublicDashboard(handle: string): Promise<SharedCalendarResponse> {
