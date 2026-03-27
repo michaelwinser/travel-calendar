@@ -2851,12 +2851,8 @@ func importCalendar(cmd *cobra.Command, args []string) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(w, "DATES\tTITLE\tLOCATION\n")
 	for _, e := range events {
-		startStr := e.Start.Format("2006-01-02")
-		endStr := e.End.Format("2006-01-02")
-		// For all-day events, DTEND is exclusive — subtract a day for display
-		if e.AllDay && !e.End.IsZero() && e.End.After(e.Start) {
-			endStr = e.End.AddDate(0, 0, -1).Format("2006-01-02")
-		}
+		startStr := e.StartDate()
+		endStr := e.EndDate()
 		dates := startStr
 		if endStr != startStr {
 			dates = startStr + " -> " + endStr
@@ -2917,10 +2913,11 @@ func importCalendar(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
+		startTime, _ := time.Parse("2006-01-02", startStr)
 		req := api.CreateActivityRequest{
 			Title:     e.Summary,
 			Type:      api.CreateActivityRequestType(actType),
-			StartDate: openapi_types.Date{Time: e.Start},
+			StartDate: openapi_types.Date{Time: startTime},
 		}
 		if endStr != startStr {
 			endTime, _ := time.Parse("2006-01-02", endStr)

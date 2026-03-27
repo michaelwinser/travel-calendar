@@ -17,6 +17,37 @@ type Event struct {
 	Start       time.Time
 	End         time.Time
 	AllDay      bool
+	Timezone    string // IANA timezone from DTSTART, if specified
+}
+
+// StartDate returns the start date as YYYY-MM-DD in the event's local timezone.
+func (e Event) StartDate() string {
+	return e.localDate(e.Start)
+}
+
+// EndDate returns the end date as YYYY-MM-DD in the event's local timezone.
+// For all-day events, adjusts for the exclusive DTEND convention.
+func (e Event) EndDate() string {
+	end := e.End
+	if end.IsZero() {
+		end = e.Start
+	}
+	if e.AllDay && end.After(e.Start) {
+		// All-day DTEND is exclusive — subtract a day for inclusive display
+		end = end.AddDate(0, 0, -1)
+	}
+	return e.localDate(end)
+}
+
+func (e Event) localDate(t time.Time) string {
+	if e.Timezone != "" {
+		if loc, err := time.LoadLocation(e.Timezone); err == nil {
+			return t.In(loc).Format("2006-01-02")
+		}
+	}
+	// Fallback: if no timezone, use the raw time's date
+	// (which may be UTC — better than crossing midnight)
+	return t.Format("2006-01-02")
 }
 
 // Parse reads iCalendar data and extracts all VEVENTs.
@@ -93,6 +124,10 @@ func applyProperty(e *Event, name, value string) {
 		t, allDay := parseIcalTime(value, params)
 		e.Start = t
 		e.AllDay = allDay
+		// Extract timezone from params: TZID=America/New_York
+		if tz := extractTZID(params); tz != "" {
+			e.Timezone = tz
+		}
 	case "DTEND":
 		t, _ := parseIcalTime(value, params)
 		e.End = t
@@ -128,6 +163,15 @@ func parseIcalTime(value, params string) (time.Time, bool) {
 	}
 
 	return time.Time{}, isDate
+}
+
+func extractTZID(params string) string {
+	for _, part := range strings.Split(params, ";") {
+		if strings.HasPrefix(strings.ToUpper(part), "TZID=") {
+			return part[5:]
+		}
+	}
+	return ""
 }
 
 func unescapeIcal(s string) string {

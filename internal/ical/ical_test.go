@@ -47,11 +47,12 @@ func TestParse(t *testing.T) {
 	if !e.AllDay {
 		t.Error("FOSDEM should be all-day")
 	}
-	if e.Start.Format("2006-01-02") != "2026-01-31" {
-		t.Errorf("start = %s, want 2026-01-31", e.Start.Format("2006-01-02"))
+	if e.StartDate() != "2026-01-31" {
+		t.Errorf("start = %s, want 2026-01-31", e.StartDate())
 	}
-	if e.End.Format("2006-01-02") != "2026-02-02" {
-		t.Errorf("end = %s, want 2026-02-02", e.End.Format("2006-01-02"))
+	// EndDate adjusts for exclusive DTEND: 2026-02-02 → 2026-02-01
+	if e.EndDate() != "2026-02-01" {
+		t.Errorf("end = %s, want 2026-02-01", e.EndDate())
 	}
 	if e.Location != "Brussels, Belgium" {
 		t.Errorf("location = %q, want 'Brussels, Belgium'", e.Location)
@@ -71,11 +72,51 @@ func TestParse(t *testing.T) {
 
 	// Event 3: single day, no DTEND
 	e3 := events[2]
-	if e3.Start.Format("2006-01-02") != "2026-03-20" {
-		t.Errorf("start = %s", e3.Start.Format("2006-01-02"))
+	if e3.StartDate() != "2026-03-20" {
+		t.Errorf("start = %s", e3.StartDate())
 	}
-	if e3.End.Format("2006-01-02") != "2026-03-20" {
-		t.Errorf("end should default to start, got %s", e3.End.Format("2006-01-02"))
+	if e3.EndDate() != "2026-03-20" {
+		t.Errorf("end should default to start, got %s", e3.EndDate())
+	}
+}
+
+func TestTimedEventWithTimezone(t *testing.T) {
+	// An evening event in America/New_York — should not cross midnight
+	cal := "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nSUMMARY:Hockey Game\r\nDTSTART;TZID=America/New_York:20260310T190000\r\nDTEND;TZID=America/New_York:20260310T220000\r\nLOCATION:Centre Bell\r\nEND:VEVENT\r\nEND:VCALENDAR"
+	events, err := Parse(strings.NewReader(cal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("got %d events", len(events))
+	}
+	e := events[0]
+	if e.StartDate() != "2026-03-10" {
+		t.Errorf("start = %s, want 2026-03-10", e.StartDate())
+	}
+	if e.EndDate() != "2026-03-10" {
+		t.Errorf("end = %s, want 2026-03-10 (same day)", e.EndDate())
+	}
+	if e.Timezone != "America/New_York" {
+		t.Errorf("timezone = %q, want America/New_York", e.Timezone)
+	}
+}
+
+func TestTimedEventUTC(t *testing.T) {
+	// An event stored in UTC that's 7pm-10pm in NYC (00:00-03:00 UTC next day)
+	// Should still resolve to the correct local date
+	cal := "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nSUMMARY:Late Event\r\nDTSTART:20260311T000000Z\r\nDTEND:20260311T030000Z\r\nEND:VEVENT\r\nEND:VCALENDAR"
+	events, err := Parse(strings.NewReader(cal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := events[0]
+	// Without timezone info, both dates should be March 11 (UTC)
+	if e.StartDate() != "2026-03-11" {
+		t.Errorf("start = %s, want 2026-03-11", e.StartDate())
+	}
+	if e.EndDate() != "2026-03-11" {
+		t.Errorf("end = %s, want 2026-03-11", e.EndDate())
 	}
 }
 
