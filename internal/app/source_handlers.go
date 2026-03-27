@@ -114,7 +114,7 @@ func (s *ActivityServer) CreateSource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Trigger initial sync
-	result, syncErr := SyncSource(src, s.stagedEvents)
+	result, syncErr := SyncSource(src, s.stagedEvents, s.store)
 	s.importSources.Update(src) // save lastSyncAt
 
 	resp := map[string]interface{}{
@@ -199,11 +199,30 @@ func (s *ActivityServer) DeleteSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete staged events for this source
+	// Check query param for whether to delete imported activities
+	deleteActivities := r.URL.Query().Get("deleteActivities") == "true"
+
+	// Delete imported activities if requested
+	activitiesDeleted := 0
+	staged, _ := s.stagedEvents.ListBySource(id)
+	if deleteActivities {
+		for _, e := range staged {
+			if e.State == "imported" && e.ActivityID != "" {
+				if err := s.store.Delete(e.ActivityID); err == nil {
+					activitiesDeleted++
+				}
+			}
+		}
+	}
+
+	// Delete staged events and source
 	s.stagedEvents.DeleteBySource(id)
 	s.importSources.Delete(id)
 
-	server.RespondJSON(w, http.StatusOK, map[string]string{"ok": "true"})
+	server.RespondJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":                "true",
+		"activitiesDeleted": activitiesDeleted,
+	})
 }
 
 func (s *ActivityServer) SyncSourceHandler(w http.ResponseWriter, r *http.Request) {
@@ -219,7 +238,7 @@ func (s *ActivityServer) SyncSourceHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	result, syncErr := SyncSource(src, s.stagedEvents)
+	result, syncErr := SyncSource(src, s.stagedEvents, s.store)
 	s.importSources.Update(src)
 
 	if syncErr != nil {

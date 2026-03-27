@@ -27,7 +27,8 @@ type SyncResult struct {
 }
 
 // SyncSource fetches events from a source, applies filters, and creates/updates staged events.
-func SyncSource(source *ImportSource, stagedStore *StagedEventStore) (*SyncResult, error) {
+// If activityStore is non-nil, changes to imported events are propagated to their linked activities.
+func SyncSource(source *ImportSource, stagedStore *StagedEventStore, activityStore *ActivityStore) (*SyncResult, error) {
 	result := &SyncResult{}
 
 	// Parse filter config
@@ -51,16 +52,28 @@ func SyncSource(source *ImportSource, stagedStore *StagedEventStore) (*SyncResul
 
 	result.Fetched = len(events)
 
+	// Time window: only stage events within -30 to +360 days
+	now := time.Now()
+	windowStart := now.AddDate(0, 0, -30).Format("2006-01-02")
+	windowEnd := now.AddDate(0, 0, 360).Format("2006-01-02")
+
 	// Process each event
 	for _, event := range events {
-		// Apply filters
+		startDate := event.StartDate()
+		endDate := event.EndDate()
+
+		// Filter by time window
+		if endDate < windowStart || startDate > windowEnd {
+			result.Filtered++
+			continue
+		}
+
+		// Apply content filters
 		if !shouldStage(event, &fc) {
 			result.Filtered++
 			continue
 		}
 
-		startDate := event.StartDate()
-		endDate := event.EndDate()
 		actType := inferActivityType(event)
 
 		// Check if this event already exists in staging
@@ -88,6 +101,17 @@ func SyncSource(source *ImportSource, stagedStore *StagedEventStore) (*SyncResul
 			if changed {
 				stagedStore.Update(existing)
 				result.Updated++
+
+				// Propagate changes to linked activity if imported
+				if existing.State == "imported" && existing.ActivityID != "" && activityStore != nil {
+					if act, err := activityStore.Get(existing.ActivityID); err == nil && act != nil {
+						act.Title = existing.Title
+						act.StartDate = existing.StartDate
+						act.EndDate = existing.EndDate
+						act.Location = existing.Location
+						activityStore.Update(act)
+					}
+				}
 			}
 		} else {
 			// Create new staged event

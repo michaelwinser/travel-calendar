@@ -127,7 +127,7 @@ func (s *StagedEventStore) Get(id string) (*StagedEvent, error) {
 }
 
 func (s *StagedEventStore) ListBySource(sourceID string) ([]StagedEvent, error) {
-	return s.coll.Where("source_id", "==", sourceID).OrderBy("start_date", store.Asc).All()
+	return s.coll.Where("source_id", "==", sourceID).OrderBy("start_date", store.Desc).All()
 }
 
 func (s *StagedEventStore) ListByUser(userID, stateFilter string) ([]StagedEvent, error) {
@@ -135,7 +135,7 @@ func (s *StagedEventStore) ListByUser(userID, stateFilter string) ([]StagedEvent
 	if stateFilter != "" {
 		q = q.Where("state", "==", stateFilter)
 	}
-	return q.OrderBy("start_date", store.Asc).All()
+	return q.OrderBy("start_date", store.Desc).All()
 }
 
 func (s *StagedEventStore) FindBySourceEventID(sourceID, sourceEventID string) (*StagedEvent, error) {

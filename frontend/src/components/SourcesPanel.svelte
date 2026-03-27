@@ -75,9 +75,22 @@
   }
 
   async function handleDeleteSource(id: string) {
+    const src = sources.find(s => s.id === id);
+    const hasImported = src && src.importedCount > 0;
+    let deleteActivities = false;
+
+    if (hasImported) {
+      deleteActivities = confirm(
+        `This source has ${src!.importedCount} imported activities.\n\nAlso delete those activities?`
+      );
+    }
+
     try {
-      await deleteSource(id);
+      const url = `/api/sources/${id}${deleteActivities ? '?deleteActivities=true' : ''}`;
+      const res = await fetch(url, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete source');
       await refresh();
+      if (deleteActivities) onimported(); // refresh main view
     } catch (e: any) {
       error = e.message;
     }
@@ -129,10 +142,6 @@
     selectedIds = new Set();
   }
 
-  $effect(() => {
-    // Re-fetch staged events when filters change
-    refreshStaged();
-  });
 
   function formatDate(start: string, end: string): string {
     if (!end || end === start) return start;
@@ -266,6 +275,11 @@
               <span class="event-title">{event.title}</span>
               {#if event.location}
                 <span class="event-location">{event.location}</span>
+              {/if}
+              {#if event.state === 'imported'}
+                <span class="state-badge imported-badge">imported</span>
+              {:else if event.state === 'hidden'}
+                <span class="state-badge hidden-badge">hidden</span>
               {/if}
             </label>
           {/each}
@@ -423,6 +437,13 @@
     font-size: 0.7rem; color: #888; white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis; max-width: 120px;
   }
+
+  .state-badge {
+    font-size: 0.6rem; padding: 0.1rem 0.3rem; border-radius: 3px;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .imported-badge { background: #dcfce7; color: #166534; }
+  .hidden-badge { background: #f3f4f6; color: #9ca3af; }
 
   .error {
     color: #dc2626; font-size: 0.8rem; margin: 0 0 0.75rem;
