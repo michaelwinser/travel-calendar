@@ -25,8 +25,19 @@
   let selectedIds = $state<Set<string>>(new Set());
   let stateFilter = $state<'' | 'new' | 'imported' | 'hidden'>('new');
   let sourceFilter = $state('');
+  let searchQuery = $state('');
   let loading = $state(true);
   let error = $state('');
+
+  let filteredEvents = $derived.by(() => {
+    if (!searchQuery.trim()) return stagedEvents;
+    const q = searchQuery.toLowerCase();
+    return stagedEvents.filter(e =>
+      e.title.toLowerCase().includes(q) ||
+      (e.location && e.location.toLowerCase().includes(q)) ||
+      (e.notes && e.notes.toLowerCase().includes(q))
+    );
+  });
 
   onMount(async () => {
     await refresh();
@@ -135,7 +146,7 @@
   }
 
   function selectAll() {
-    selectedIds = new Set(stagedEvents.map(e => e.id));
+    selectedIds = new Set(filteredEvents.map(e => e.id));
   }
 
   function selectNone() {
@@ -235,18 +246,27 @@
         </div>
       </div>
 
+      <input
+        type="text"
+        class="search-input"
+        placeholder="Search events..."
+        bind:value={searchQuery}
+      />
+
       {#if loading}
         <p class="muted">Loading...</p>
       {:else if stagedEvents.length === 0}
         <p class="muted">No staged events{stateFilter ? ` (${stateFilter})` : ''}.</p>
+      {:else if filteredEvents.length === 0}
+        <p class="muted">No events matching "{searchQuery}".</p>
       {:else}
         <!-- Bulk actions -->
         <div class="bulk-bar">
           <label class="select-all">
             <input type="checkbox"
-              checked={selectedIds.size === stagedEvents.length && stagedEvents.length > 0}
-              onchange={() => selectedIds.size === stagedEvents.length ? selectNone() : selectAll()} />
-            {selectedIds.size}/{stagedEvents.length} selected
+              checked={selectedIds.size === filteredEvents.length && filteredEvents.length > 0}
+              onchange={() => selectedIds.size === filteredEvents.length ? selectNone() : selectAll()} />
+            {selectedIds.size}/{filteredEvents.length} selected
           </label>
           <div class="bulk-actions">
             {#if stateFilter === 'new' || stateFilter === ''}
@@ -264,7 +284,7 @@
 
         <!-- Event list -->
         <div class="event-list">
-          {#each stagedEvents as event (event.id)}
+          {#each filteredEvents as event (event.id)}
             <label class="event-row" class:imported={event.state === 'imported'} class:hidden-event={event.state === 'hidden'}>
               <input type="checkbox"
                 checked={selectedIds.has(event.id)}
@@ -375,6 +395,13 @@
   }
   .btn-primary-small:hover { background: #555; border-color: #555; }
   .btn-primary-small:disabled { opacity: 0.4; }
+
+  .search-input {
+    width: 100%; padding: 0.35rem 0.6rem; border: 1px solid #ddd;
+    border-radius: 6px; font-size: 0.8rem; font-family: inherit;
+    margin-bottom: 0.5rem;
+  }
+  .search-input:focus { outline: none; border-color: #333; }
 
   .staged-header {
     display: flex; align-items: center; justify-content: space-between;
