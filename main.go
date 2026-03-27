@@ -35,6 +35,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/michaelwinser/appbase"
+	appbaseauth "github.com/michaelwinser/appbase/auth"
 	appcli "github.com/michaelwinser/appbase/cli"
 	travelapp "github.com/michaelwinser/travel-calendar/internal/app"
 	"github.com/michaelwinser/travel-calendar/api"
@@ -56,6 +57,11 @@ func setup() error {
 		Name:      appName,
 		Quiet:     !appcli.IsServeCommand,
 		LocalMode: appcli.IsLocalMode,
+		GoogleAuth: &appbaseauth.GoogleAuthConfig{
+			ExtraScopes: []string{
+				"https://www.googleapis.com/auth/calendar",
+			},
+		},
 	}
 	if appcli.LocalDataPath != "" {
 		cfg.DB.SQLitePath = appcli.LocalDataPath + "/app.db"
@@ -92,9 +98,18 @@ func setup() error {
 	if err != nil {
 		return err
 	}
+	syncTargets, err := travelapp.NewSyncTargetStore(app.DB())
+	if err != nil {
+		return err
+	}
+	syncRecords, err := travelapp.NewSyncRecordStore(app.DB())
+	if err != nil {
+		return err
+	}
 
 	// Register API routes
 	activityServer = travelapp.NewActivityServer(activities, trips, parseHistory, shareLinks, shares, publicProfiles, places)
+	activityServer.SetSyncStores(syncTargets, syncRecords)
 	api.HandlerFromMux(activityServer, app.Server().Router())
 
 	return nil
@@ -143,6 +158,9 @@ func main() {
 			r.URL.Path = "/"
 			fileServer.ServeHTTP(w, r)
 		}))
+
+		// Register sync routes (manual, not codegen)
+		activityServer.RegisterSyncRoutes(r)
 
 		return app.Serve()
 	})
@@ -430,6 +448,51 @@ func main() {
 	importCalCmd.Flags().String("trip", "", "Assign imported activities to this trip")
 	cli.AddCommand(importCalCmd)
 
+	// --- Sync commands ---
+
+	syncCmd := &cobra.Command{
+		Use:   "sync",
+		Short: "Google Calendar sync",
+	}
+
+	syncConnectCmd := &cobra.Command{
+		Use:   "connect",
+		Short: "Connect to Google Calendar (creates a dedicated Travel Calendar)",
+		RunE:  syncConnect,
+	}
+	syncCmd.AddCommand(syncConnectCmd)
+
+	syncPushCmd := &cobra.Command{
+		Use:   "push",
+		Short: "Push trips and activities to Google Calendar",
+		RunE:  syncPush,
+	}
+	syncCmd.AddCommand(syncPushCmd)
+
+	syncStatusCmd := &cobra.Command{
+		Use:   "status",
+		Short: "Show sync status",
+		RunE:  syncStatus,
+	}
+	syncCmd.AddCommand(syncStatusCmd)
+
+	syncCleanupCmd := &cobra.Command{
+		Use:   "cleanup",
+		Short: "Delete all app-created events from Google Calendar",
+		RunE:  syncCleanup,
+	}
+	syncCmd.AddCommand(syncCleanupCmd)
+
+	syncDisconnectCmd := &cobra.Command{
+		Use:   "disconnect",
+		Short: "Disconnect Google Calendar sync",
+		RunE:  syncDisconnect,
+	}
+	syncDisconnectCmd.Flags().Bool("cleanup", false, "Also delete the Travel Calendar from Google Calendar")
+	syncCmd.AddCommand(syncDisconnectCmd)
+
+	cli.AddCommand(syncCmd)
+
 	infoCmd := &cobra.Command{
 		Use:   "info",
 		Short: "Show current configuration and connection info",
@@ -458,6 +521,18 @@ func apiClient(cmd *cobra.Command) (client *api.ClientWithResponses, cleanup fun
 		return nil, nil, err
 	}
 	return c, stop, nil
+}
+
+// rawHTTPClient returns the base URL and authenticated HTTP client for direct API calls.
+func rawHTTPClient(cmd *cobra.Command) (baseURL string, httpClient *http.Client, cleanup func(), err error) {
+	if err := setup(); err != nil {
+		return "", nil, nil, err
+	}
+	hc, base, stop, err := appcli.ClientForCommand(cmd, cliName, app.Handler())
+	if err != nil {
+		return "", nil, nil, err
+	}
+	return base, hc, stop, nil
 }
 
 func addActivity(cmd *cobra.Command, args []string) error {
@@ -2879,5 +2954,153 @@ func importCalendar(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Imported %d events, skipped %d (already exist).\n", created, skipped)
+	return nil
+}
+
+// --- Sync CLI commands ---
+// These call the sync API endpoints directly via HTTP since they're not in codegen.
+
+func syncConnect(cmd *cobra.Command, args []string) error {
+	baseURL, httpClient, cleanup, err := rawHTTPClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := httpClient.Post(baseURL+"/api/sync/connect", "application/json", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]string
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("%s", result["error"])
+	}
+
+	fmt.Printf("Status: %s\n", result["status"])
+	fmt.Printf("Message: %s\n", result["message"])
+	if id, ok := result["calendarId"]; ok {
+		fmt.Printf("Calendar ID: %s\n", id)
+	}
+	return nil
+}
+
+func syncPush(cmd *cobra.Command, args []string) error {
+	baseURL, httpClient, cleanup, err := rawHTTPClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	fmt.Println("Pushing to Google Calendar...")
+	resp, err := httpClient.Post(baseURL+"/api/sync/push", "application/json", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if resp.StatusCode >= 400 {
+		if e, ok := result["error"]; ok {
+			return fmt.Errorf("%v", e)
+		}
+		return fmt.Errorf("server returned %d", resp.StatusCode)
+	}
+
+	fmt.Printf("Created: %.0f, Updated: %.0f, Skipped: %.0f\n",
+		result["created"], result["updated"], result["skipped"])
+	return nil
+}
+
+func syncStatus(cmd *cobra.Command, args []string) error {
+	baseURL, httpClient, cleanup, err := rawHTTPClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	resp, err := httpClient.Get(baseURL + "/api/sync/status")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var targets []map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&targets)
+
+	if len(targets) == 0 {
+		fmt.Println("No sync targets configured. Connect with: travel sync connect")
+		return nil
+	}
+
+	for _, t := range targets {
+		fmt.Printf("Target:     %s\n", t["calendarName"])
+		fmt.Printf("Type:       %s\n", t["type"])
+		fmt.Printf("Status:     %s\n", t["status"])
+		fmt.Printf("Calendar:   %s\n", t["calendarId"])
+		fmt.Printf("Last sync:  %s\n", t["lastSyncAt"])
+		fmt.Printf("Events:     %.0f synced\n", t["syncedCount"])
+	}
+	return nil
+}
+
+func syncCleanup(cmd *cobra.Command, args []string) error {
+	baseURL, httpClient, cleanup, err := rawHTTPClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	fmt.Println("Cleaning up Google Calendar events...")
+	resp, err := httpClient.Post(baseURL+"/api/sync/cleanup", "application/json", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if resp.StatusCode >= 400 {
+		if e, ok := result["error"]; ok {
+			return fmt.Errorf("%v", e)
+		}
+		return fmt.Errorf("server returned %d", resp.StatusCode)
+	}
+
+	fmt.Printf("%s\n", result["message"])
+	return nil
+}
+
+func syncDisconnect(cmd *cobra.Command, args []string) error {
+	baseURL, httpClient, cleanup, err := rawHTTPClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	doCleanup, _ := cmd.Flags().GetBool("cleanup")
+
+	body := fmt.Sprintf(`{"cleanup":%t}`, doCleanup)
+	resp, err := httpClient.Post(baseURL+"/api/sync/disconnect", "application/json",
+		strings.NewReader(body))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]string
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("%s", result["error"])
+	}
+
+	fmt.Printf("%s\n", result["message"])
 	return nil
 }

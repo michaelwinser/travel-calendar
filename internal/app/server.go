@@ -35,11 +35,19 @@ type ActivityServer struct {
 	shares         *ShareStore
 	publicProfiles *PublicProfileStore
 	places         *PlaceStore
+	syncTargets    *SyncTargetStore
+	syncRecords    *SyncRecordStore
 }
 
 // NewActivityServer creates a new server with all dependencies.
 func NewActivityServer(store *ActivityStore, trips *TripStore, parseHistory *ParseHistoryStore, shareLinks *ShareLinkStore, shares *ShareStore, publicProfiles *PublicProfileStore, places *PlaceStore) *ActivityServer {
 	return &ActivityServer{store: store, trips: trips, parseHistory: parseHistory, shareLinks: shareLinks, shares: shares, publicProfiles: publicProfiles, places: places}
+}
+
+// SetSyncStores adds sync target and record stores (optional, for Calendar sync).
+func (s *ActivityServer) SetSyncStores(targets *SyncTargetStore, records *SyncRecordStore) {
+	s.syncTargets = targets
+	s.syncRecords = records
 }
 
 func (s *ActivityServer) ListActivities(w http.ResponseWriter, r *http.Request, params api.ListActivitiesParams) {
