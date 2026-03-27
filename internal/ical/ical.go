@@ -27,6 +27,8 @@ func (e Event) StartDate() string {
 
 // EndDate returns the end date as YYYY-MM-DD in the event's local timezone.
 // For all-day events, adjusts for the exclusive DTEND convention.
+// For short timed events (< 12 hours), uses the start date to avoid
+// midnight-crossing artifacts from UTC conversion.
 func (e Event) EndDate() string {
 	end := e.End
 	if end.IsZero() {
@@ -35,6 +37,12 @@ func (e Event) EndDate() string {
 	if e.AllDay && end.After(e.Start) {
 		// All-day DTEND is exclusive — subtract a day for inclusive display
 		end = end.AddDate(0, 0, -1)
+		return e.localDate(end)
+	}
+	// For short timed events, the end date should match the start date.
+	// A 7pm-10pm event stored as 23:00Z-01:00Z+1 shouldn't span two days.
+	if !e.AllDay && end.Sub(e.Start) < 12*time.Hour {
+		return e.StartDate()
 	}
 	return e.localDate(end)
 }
