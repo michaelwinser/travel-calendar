@@ -35,7 +35,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/michaelwinser/appbase"
-	appbaseauth "github.com/michaelwinser/appbase/auth"
 	appcli "github.com/michaelwinser/appbase/cli"
 	travelapp "github.com/michaelwinser/travel-calendar/internal/app"
 	"github.com/michaelwinser/travel-calendar/api"
@@ -57,11 +56,6 @@ func setup() error {
 		Name:      appName,
 		Quiet:     !appcli.IsServeCommand,
 		LocalMode: appcli.IsLocalMode,
-		GoogleAuth: &appbaseauth.GoogleAuthConfig{
-			ExtraScopes: []string{
-				"https://www.googleapis.com/auth/calendar",
-			},
-		},
 	}
 	if appcli.LocalDataPath != "" {
 		cfg.DB.SQLitePath = appcli.LocalDataPath + "/app.db"
