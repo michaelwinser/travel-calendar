@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import {
     getSourceFilters, updateSourceFilters,
-    listStagedEvents, importStagedEvents, hideStagedEvents,
+    listStagedEvents, importStagedEvents, hideStagedEvents, unhideStagedEvents,
     syncSource,
     ACTIVITY_COLORS,
     type SourceFilter, type StagedEvent, type ImportSource, type ActivityType,
@@ -25,6 +25,7 @@
   let saving = $state(false);
   let error = $state('');
   let searchQuery = $state('');
+  let stateFilter = $state<'' | 'new' | 'imported' | 'hidden'>('new');
 
   onMount(async () => {
     await refresh();
@@ -95,9 +96,12 @@
     return new Set(events.filter(e => matchesPattern(e, hoveredFilter!)).map(e => e.id));
   });
 
-  // Search-filtered events
+  // Filtered events (state + search)
   let filteredEvents = $derived.by(() => {
     let result = events;
+    if (stateFilter) {
+      result = result.filter(e => e.state === stateFilter);
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(e =>
@@ -130,14 +134,26 @@
     } catch (e: any) { error = e.message; }
   }
 
+  async function handleUnhide() {
+    if (selectedIds.size === 0) return;
+    try {
+      await unhideStagedEvents([...selectedIds]);
+      await refresh();
+    } catch (e: any) { error = e.message; }
+  }
+
   function toggleSelect(id: string) {
     const next = new Set(selectedIds);
     if (next.has(id)) next.delete(id); else next.add(id);
     selectedIds = next;
   }
 
-  function selectAllFiltered() {
-    selectedIds = new Set(filteredEvents.filter(e => e.state === 'new').map(e => e.id));
+  function selectAll() {
+    selectedIds = new Set(filteredEvents.filter(e => e.state !== 'imported').map(e => e.id));
+  }
+
+  function selectNone() {
+    selectedIds = new Set();
   }
 
   function formatDate(start: string, end: string): string {
@@ -164,14 +180,28 @@
     <div class="events-pane">
       <div class="events-toolbar">
         <input type="text" class="search" placeholder="Search events..." bind:value={searchQuery} />
-        <div class="bulk">
-          <button class="btn-sm" onclick={selectAllFiltered} disabled={filteredEvents.length === 0}>
-            Select new ({filteredEvents.filter(e => e.state === 'new').length})
-          </button>
-          <button class="btn-sm btn-primary-sm" onclick={handleImport} disabled={selectedIds.size === 0}>
-            Import ({selectedIds.size})
-          </button>
-          <button class="btn-sm" onclick={handleHide} disabled={selectedIds.size === 0}>Hide</button>
+        <select class="state-select" bind:value={stateFilter}>
+          <option value="new">New</option>
+          <option value="">All</option>
+          <option value="imported">Imported</option>
+          <option value="hidden">Hidden</option>
+        </select>
+      </div>
+      <div class="bulk-bar">
+        <label class="select-all">
+          <input type="checkbox"
+            checked={selectedIds.size === filteredEvents.length && filteredEvents.length > 0}
+            onchange={() => selectedIds.size === filteredEvents.length ? selectNone() : selectAll()} />
+          {selectedIds.size}/{filteredEvents.length}
+        </label>
+        <div class="bulk-actions">
+          {#if stateFilter === 'new' || stateFilter === ''}
+            <button class="btn-sm btn-primary-sm" onclick={handleImport} disabled={selectedIds.size === 0}>Import</button>
+            <button class="btn-sm" onclick={handleHide} disabled={selectedIds.size === 0}>Hide</button>
+          {/if}
+          {#if stateFilter === 'hidden'}
+            <button class="btn-sm" onclick={handleUnhide} disabled={selectedIds.size === 0}>Unhide</button>
+          {/if}
         </div>
       </div>
 
@@ -316,7 +346,24 @@
   }
   .search:focus { outline: none; border-color: #333; }
 
-  .bulk { display: flex; gap: 0.3rem; }
+  .state-select {
+    padding: 0.3rem 0.4rem; border: 1px solid #ddd; border-radius: 6px;
+    font-size: 0.8rem; background: white;
+  }
+
+  .bulk-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.35rem 0.75rem; background: #f8f9fa;
+    border-bottom: 1px solid #eee;
+  }
+
+  .select-all {
+    display: flex; align-items: center; gap: 0.3rem;
+    font-size: 0.75rem; color: #666; cursor: pointer;
+  }
+  .select-all input { margin: 0; }
+
+  .bulk-actions { display: flex; gap: 0.3rem; }
 
   .btn-sm {
     padding: 0.2rem 0.5rem; border: 1px solid #ddd; border-radius: 4px;
