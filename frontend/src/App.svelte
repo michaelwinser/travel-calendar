@@ -70,6 +70,39 @@
   // Sources panel state
   let showSourcesPanel = $state(false);
 
+  // Search state
+  let searchOpen = $state(false);
+  let searchQuery = $state('');
+  let viewBeforeSearch = $state<View>('month');
+  let searchInput: HTMLInputElement;
+
+  let searchResults = $derived.by(() => {
+    if (!searchQuery.trim()) return activities;
+    const q = searchQuery.toLowerCase();
+    return activities.filter(a =>
+      a.title.toLowerCase().includes(q) ||
+      (a.location && a.location.toLowerCase().includes(q)) ||
+      (a.notes && a.notes.toLowerCase().includes(q)) ||
+      a.type.toLowerCase().includes(q)
+    );
+  });
+
+  function openSearch() {
+    if (!searchOpen) {
+      viewBeforeSearch = currentView;
+    }
+    searchOpen = true;
+    currentView = 'agenda';
+    // Focus after DOM update
+    setTimeout(() => searchInput?.focus(), 0);
+  }
+
+  function closeSearch() {
+    searchOpen = false;
+    searchQuery = '';
+    currentView = viewBeforeSearch;
+  }
+
   // Overlay state
   const OVERLAY_COLORS = ['#e07b53', '#5cbcb6', '#c75ca2', '#d4a843', '#8b6cc1', '#c95454', '#5a8f5a'];
   let overlayCalendars = $state<OverlayCalendar[]>([]);
@@ -169,6 +202,7 @@
   function handleGlobalKeydown(e: KeyboardEvent) {
     // ESC closes popovers
     if (e.key === 'Escape') {
+      if (searchOpen) { closeSearch(); return; }
       if (showGoToDate) { showGoToDate = false; return; }
       if (showShortcutHelp) { showShortcutHelp = false; return; }
     }
@@ -222,6 +256,10 @@
       case 'K':
         e.preventDefault();
         scrollCurrentView('prevActivity');
+        break;
+      case '/':
+        e.preventDefault();
+        openSearch();
         break;
       case '?':
         e.preventDefault();
@@ -540,6 +578,26 @@
         >{v.label}</button>
       {/each}
       <div class="tab-spacer"></div>
+      {#if searchOpen}
+        <div class="search-bar">
+          <input
+            type="text"
+            class="search-input"
+            placeholder="Search activities..."
+            bind:value={searchQuery}
+            bind:this={searchInput}
+            onkeydown={(e) => e.key === 'Escape' && closeSearch()}
+          />
+          <button class="search-clear" onclick={closeSearch}>&times;</button>
+        </div>
+      {:else}
+        <button class="search-btn" onclick={openSearch} title="Search (/)">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="6.5" cy="6.5" r="5"/>
+            <line x1="10.5" y1="10.5" x2="15" y2="15"/>
+          </svg>
+        </button>
+      {/if}
       <button class="share-btn" onclick={() => showSourcesPanel = true} title="Calendar sources">Import</button>
       <button class="share-btn" onclick={() => showSharePanel = true} title="Sharing settings">Share</button>
       <button class="add-btn" onclick={openQuickAdd} title="New activity (n)">+ Add</button>
@@ -585,6 +643,7 @@
             <kbd>a</kbd><span>Agenda view</span>
             <kbd>t</kbd><span>Go to today</span>
             <kbd>g</kbd><span>Go to date</span>
+            <kbd>/</kbd><span>Search</span>
             <kbd>n</kbd><span>New activity</span>
             <kbd>j</kbd><span>Page down</span>
             <kbd>k</kbd><span>Page up</span>
@@ -647,7 +706,7 @@
         onfocusdate={handleFocusDate}
       />
     {:else if currentView === 'agenda'}
-      <AgendaView {activities} trips={tripsCache} overlayActivities={visibleOverlayActivities} {overlayCalendars} onedit={handleEdit} onedittrip={handleEditTrip} />
+      <AgendaView activities={searchOpen ? searchResults : activities} trips={tripsCache} overlayActivities={searchOpen ? [] : visibleOverlayActivities} overlayCalendars={searchOpen ? [] : overlayCalendars} onedit={handleEdit} onedittrip={handleEditTrip} />
     {/if}
   {/if}
 
@@ -787,6 +846,51 @@
   }
 
   .tab-spacer { flex: 1; }
+
+  .search-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #888;
+    padding: 0.3rem;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+  }
+
+  .search-btn:hover { color: #333; }
+
+  .search-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-bottom: 2px;
+  }
+
+  .search-input {
+    padding: 0.3rem 0.6rem;
+    border: 1px solid #333;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-family: inherit;
+    width: 200px;
+  }
+
+  .search-input:focus {
+    outline: none;
+  }
+
+  .search-clear {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #888;
+    font-size: 1.1rem;
+    padding: 0;
+    line-height: 1;
+  }
+
+  .search-clear:hover { color: #333; }
 
   .share-btn {
     padding: 0.3rem 0.75rem;
