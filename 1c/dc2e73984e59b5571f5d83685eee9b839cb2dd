@@ -1,0 +1,50 @@
+main.go
+  c4b81f6d41e4e10c 111-114,119
+internal/app/user_config_store.go
+  c4b81f6d41e4e10c 1-52
+internal/app/source_handlers.go
+  c4b81f6d41e4e10c 13,16,32-34,121,245,404-405,411,415-416,429-437,441-443
+internal/app/server.go
+  c4b81f6d41e4e10c 42
+frontend/src/components/FilterEditor.svelte
+  c4b81f6d41e4e10c 4,7,15,35,98-100,196
+frontend/src/components/SourcesPanel.svelte
+  c4b81f6d41e4e10c 22,192-197,320,322,362-371
+frontend/src/lib/api.ts
+  c4b81f6d41e4e10c 414-415,420-421,430-431
+internal/app/sync_engine.go
+  c4b81f6d41e4e10c 34-35,128-130,147-148,151,175,205-206,209-211,213-214,219,223-233
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.20",
+  "base_commit_sha": "1cdc2e73984e59b5571f5d83685eee9b839cb2dd",
+  "prompts": {
+    "c4b81f6d41e4e10c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1068418b-2d23-4075-8b99-24178f7ad113",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 149,
+      "total_deletions": 121,
+      "accepted_lines": 148,
+      "overriden_lines": 0
+    },
+    "db0ccec4fd040162": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f91b5184-5d36-475e-a387-fb6a0cd69653",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 364,
+      "overriden_lines": 0
+    }
+  }
+}
