@@ -158,9 +158,10 @@
   }
 
   function formatSuggestion(sug: PlaceSuggestion): string {
-    let label = sug.name;
-    if (sug.country) label += `, ${sug.country}`;
-    return label;
+    const parts = [sug.name];
+    if (sug.admin1) parts.push(sug.admin1);
+    if (sug.country) parts.push(sug.country);
+    return parts.join(', ');
   }
 
   function formatMeta(sug: PlaceSuggestion): string {
