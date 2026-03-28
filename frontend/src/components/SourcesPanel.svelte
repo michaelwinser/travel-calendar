@@ -6,6 +6,7 @@
     ACTIVITY_COLORS,
     type ImportSource, type StagedEvent, type ActivityType,
   } from '../lib/api';
+  import FilterEditor from './FilterEditor.svelte';
 
   interface Props {
     onclose: () => void;
@@ -18,6 +19,7 @@
   let sources = $state<ImportSource[]>([]);
   let newSourceName = $state('');
   let newSourceURL = $state('');
+  let editingSource = $state<ImportSource | null>(null);
   let addingSource = $state(false);
 
   // Staged events
@@ -215,6 +217,7 @@
                 </span>
               </div>
               <div class="source-actions">
+                <button class="btn-small" onclick={() => editingSource = src}>Filters</button>
                 <button class="btn-small" onclick={() => handleSync(src.id)}>Sync</button>
                 <button class="btn-small btn-danger" onclick={() => handleDeleteSource(src.id)}>Remove</button>
               </div>
@@ -308,6 +311,14 @@
     </section>
   </div>
 </div>
+
+{#if editingSource}
+  <FilterEditor
+    source={editingSource}
+    onclose={() => { editingSource = null; refresh(); }}
+    onimported={() => { onimported(); }}
+  />
+{/if}
 
 <style>
   .overlay {

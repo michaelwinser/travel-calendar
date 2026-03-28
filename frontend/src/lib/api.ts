@@ -402,6 +402,31 @@ export async function unhideStagedEvents(ids: string[]): Promise<{ unhidden: num
   return res.json();
 }
 
+// --- Source Filters ---
+
+export interface SourceFilter {
+  pattern: string;
+  type: 'include' | 'exclude';
+  enabled: boolean;
+  builtin: boolean;
+}
+
+export async function getSourceFilters(sourceId: string): Promise<SourceFilter[]> {
+  const res = await fetch(`${API_BASE}/sources/${sourceId}/filters`);
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json();
+}
+
+export async function updateSourceFilters(sourceId: string, filters: SourceFilter[]): Promise<SourceFilter[]> {
+  const res = await fetch(`${API_BASE}/sources/${sourceId}/filters`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(filters),
+  });
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json();
+}
+
 // --- Public Dashboard ---
 
 export async function fetchPublicDashboard(handle: string): Promise<SharedCalendarResponse> {

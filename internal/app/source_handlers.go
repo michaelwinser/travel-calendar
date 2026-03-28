@@ -28,6 +28,8 @@ func (s *ActivityServer) RegisterSourceRoutes(mux interface {
 	mux.Put("/api/sources/{id}", s.UpdateSource)
 	mux.Delete("/api/sources/{id}", s.DeleteSource)
 	mux.Post("/api/sources/{id}/sync", s.SyncSourceHandler)
+	mux.Get("/api/sources/{id}/filters", s.GetSourceFilters)
+	mux.Put("/api/sources/{id}/filters", s.UpdateSourceFilters)
 
 	mux.Get("/api/staged", s.ListStagedEvents)
 	mux.Post("/api/staged/import", s.ImportStagedEvents)
@@ -395,6 +397,78 @@ func (s *ActivityServer) UnhideStagedEvents(w http.ResponseWriter, r *http.Reque
 	}
 
 	server.RespondJSON(w, http.StatusOK, map[string]int{"unhidden": unhidden})
+}
+
+// GetSourceFilters returns the combined built-in + user filters for a source.
+func (s *ActivityServer) GetSourceFilters(w http.ResponseWriter, r *http.Request) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	id := r.PathValue("id")
+	src, err := s.importSources.Get(id)
+	if err != nil || src == nil || src.UserID != userID {
+		server.RespondError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	// Start with built-in filters
+	filters := LoadDefaultFilters()
+
+	// Merge user filters from source config
+	if src.FilterConfig != "" {
+		var userFilters []Filter
+		if err := json.Unmarshal([]byte(src.FilterConfig), &userFilters); err == nil {
+			// Override built-in enabled state if user has toggled them
+			builtinByPattern := map[string]int{}
+			for i, f := range filters {
+				builtinByPattern[f.Pattern] = i
+			}
+			for _, uf := range userFilters {
+				if uf.Builtin {
+					// User toggled a built-in filter
+					if idx, ok := builtinByPattern[uf.Pattern]; ok {
+						filters[idx].Enabled = uf.Enabled
+					}
+				} else {
+					filters = append(filters, uf)
+				}
+			}
+		}
+	}
+
+	server.RespondJSON(w, http.StatusOK, filters)
+}
+
+// UpdateSourceFilters saves the filter configuration for a source.
+func (s *ActivityServer) UpdateSourceFilters(w http.ResponseWriter, r *http.Request) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	id := r.PathValue("id")
+	src, err := s.importSources.Get(id)
+	if err != nil || src == nil || src.UserID != userID {
+		server.RespondError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	var filters []Filter
+	if err := json.NewDecoder(r.Body).Decode(&filters); err != nil {
+		server.RespondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	data, _ := json.Marshal(filters)
+	src.FilterConfig = string(data)
+	if err := s.importSources.Update(src); err != nil {
+		server.RespondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	server.RespondJSON(w, http.StatusOK, filters)
 }
 
 // ensure appbase import is used

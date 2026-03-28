@@ -1,0 +1,21 @@
+# Built-in include patterns.
+# Events matching these are always staged (override excludes).
+# One pattern per line. Case-insensitive substring match.
+
+# Travel
+flight
+airport
+
+# Accommodation
+hotel
+airbnb
+vrbo
+
+# Events
+conference
+summit
+offsite
+
+# Appointments
+dentist
+doctor

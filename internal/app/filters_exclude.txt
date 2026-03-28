@@ -1,0 +1,19 @@
+# Built-in exclude patterns.
+# Events matching these in title, location, or description are filtered out.
+# One pattern per line. Case-insensitive substring match.
+
+# Video conferencing
+zoom.us
+zoom-
+meet.google.com
+teams.microsoft.com
+webex.com
+whereby.com
+gotomeeting.com
+
+# Meeting rooms
+meeting room
+conf room
+conference room
+phone booth
+huddle room
