@@ -1,0 +1,38 @@
+frontend/src/lib/api.ts
+  c4b81f6d41e4e10c 247-252
+frontend/src/components/PlaceAutocomplete.svelte
+  c4b81f6d41e4e10c 3,22,26-33,61,113,128,186-190,243-249
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.20",
+  "base_commit_sha": "e8758cfb75d017868651f7173ae674bf4081332c",
+  "prompts": {
+    "c4b81f6d41e4e10c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1068418b-2d23-4075-8b99-24178f7ad113",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 31,
+      "total_deletions": 2,
+      "accepted_lines": 31,
+      "overriden_lines": 0
+    },
+    "db0ccec4fd040162": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f91b5184-5d36-475e-a387-fb6a0cd69653",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 364,
+      "overriden_lines": 0
+    }
+  }
+}
