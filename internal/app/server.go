@@ -341,6 +341,32 @@ func (s *ActivityServer) DeleteActivity(w http.ResponseWriter, r *http.Request, 
 	server.RespondJSON(w, http.StatusOK, api.OkResponse{Ok: ptr("true")})
 }
 
+func (s *ActivityServer) BulkDeleteActivities(w http.ResponseWriter, r *http.Request) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	var req api.BulkDeleteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		server.RespondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	deleted := 0
+	for _, id := range req.Ids {
+		a, err := s.store.Get(id)
+		if err != nil || a == nil || a.UserID != userID {
+			continue
+		}
+		if err := s.store.Delete(id); err == nil {
+			deleted++
+		}
+	}
+
+	server.RespondJSON(w, http.StatusOK, api.BulkDeleteResponse{Deleted: deleted})
+}
+
 func (s *ActivityServer) CheckDate(w http.ResponseWriter, r *http.Request, date openapi_types.Date) {
 	userID := requireUser(w, r)
 	if userID == "" {

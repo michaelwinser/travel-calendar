@@ -98,6 +98,11 @@ type ClientInterface interface {
 
 	CreateActivity(ctx context.Context, body CreateActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// BulkDeleteActivitiesWithBody request with any body
+	BulkDeleteActivitiesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	BulkDeleteActivities(ctx context.Context, body BulkDeleteActivitiesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// CheckDate request
 	CheckDate(ctx context.Context, date openapi_types.Date, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -220,6 +225,30 @@ func (c *Client) CreateActivityWithBody(ctx context.Context, contentType string,
 
 func (c *Client) CreateActivity(ctx context.Context, body CreateActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateActivityRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) BulkDeleteActivitiesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBulkDeleteActivitiesRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) BulkDeleteActivities(ctx context.Context, body BulkDeleteActivitiesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBulkDeleteActivitiesRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -752,6 +781,46 @@ func NewCreateActivityRequestWithBody(server string, contentType string, body io
 	}
 
 	operationPath := fmt.Sprintf("/api/activities")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewBulkDeleteActivitiesRequest calls the generic BulkDeleteActivities builder with application/json body
+func NewBulkDeleteActivitiesRequest(server string, body BulkDeleteActivitiesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewBulkDeleteActivitiesRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewBulkDeleteActivitiesRequestWithBody generates requests for BulkDeleteActivities with any type of body
+func NewBulkDeleteActivitiesRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/activities/bulk-delete")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1765,6 +1834,11 @@ type ClientWithResponsesInterface interface {
 
 	CreateActivityWithResponse(ctx context.Context, body CreateActivityJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateActivityResponse, error)
 
+	// BulkDeleteActivitiesWithBodyWithResponse request with any body
+	BulkDeleteActivitiesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkDeleteActivitiesResponse, error)
+
+	BulkDeleteActivitiesWithResponse(ctx context.Context, body BulkDeleteActivitiesJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkDeleteActivitiesResponse, error)
+
 	// CheckDateWithResponse request
 	CheckDateWithResponse(ctx context.Context, date openapi_types.Date, reqEditors ...RequestEditorFn) (*CheckDateResponse, error)
 
@@ -1902,6 +1976,29 @@ func (r CreateActivityResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r CreateActivityResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type BulkDeleteActivitiesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *BulkDeleteResponse
+	JSON401      *Unauthorized
+}
+
+// Status returns HTTPResponse.Status
+func (r BulkDeleteActivitiesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r BulkDeleteActivitiesResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -2528,6 +2625,23 @@ func (c *ClientWithResponses) CreateActivityWithResponse(ctx context.Context, bo
 	return ParseCreateActivityResponse(rsp)
 }
 
+// BulkDeleteActivitiesWithBodyWithResponse request with arbitrary body returning *BulkDeleteActivitiesResponse
+func (c *ClientWithResponses) BulkDeleteActivitiesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BulkDeleteActivitiesResponse, error) {
+	rsp, err := c.BulkDeleteActivitiesWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBulkDeleteActivitiesResponse(rsp)
+}
+
+func (c *ClientWithResponses) BulkDeleteActivitiesWithResponse(ctx context.Context, body BulkDeleteActivitiesJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkDeleteActivitiesResponse, error) {
+	rsp, err := c.BulkDeleteActivities(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBulkDeleteActivitiesResponse(rsp)
+}
+
 // CheckDateWithResponse request returning *CheckDateResponse
 func (c *ClientWithResponses) CheckDateWithResponse(ctx context.Context, date openapi_types.Date, reqEditors ...RequestEditorFn) (*CheckDateResponse, error) {
 	rsp, err := c.CheckDate(ctx, date, reqEditors...)
@@ -2893,6 +3007,39 @@ func ParseCreateActivityResponse(rsp *http.Response) (*CreateActivityResponse, e
 			return nil, err
 		}
 		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseBulkDeleteActivitiesResponse parses an HTTP response from a BulkDeleteActivitiesWithResponse call
+func ParseBulkDeleteActivitiesResponse(rsp *http.Response) (*BulkDeleteActivitiesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &BulkDeleteActivitiesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BulkDeleteResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest Unauthorized

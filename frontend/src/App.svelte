@@ -9,6 +9,7 @@
     createActivity,
     updateActivity,
     deleteActivity,
+    bulkDeleteActivities,
     listTrips,
     createTrip,
     updateTrip,
@@ -478,6 +479,16 @@
     }
   }
 
+  async function handleBulkDelete(ids: string[]) {
+    try {
+      await bulkDeleteActivities(ids);
+      await refreshActivities();
+      error = '';
+    } catch (e: any) {
+      error = e.message || 'Failed to delete activities';
+    }
+  }
+
   async function handleResize(activityId: string, startDate: string, endDate: string) {
     try {
       await updateActivity(activityId, { startDate, endDate });
@@ -706,7 +717,7 @@
         onfocusdate={handleFocusDate}
       />
     {:else if currentView === 'agenda'}
-      <AgendaView activities={searchOpen ? searchResults : activities} trips={tripsCache} overlayActivities={searchOpen ? [] : visibleOverlayActivities} overlayCalendars={searchOpen ? [] : overlayCalendars} onedit={handleEdit} onedittrip={handleEditTrip} />
+      <AgendaView activities={searchOpen ? searchResults : activities} trips={tripsCache} overlayActivities={searchOpen ? [] : visibleOverlayActivities} overlayCalendars={searchOpen ? [] : overlayCalendars} onedit={handleEdit} onedittrip={handleEditTrip} onbulkdelete={handleBulkDelete} />
     {/if}
   {/if}
 

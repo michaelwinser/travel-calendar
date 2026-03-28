@@ -93,6 +93,16 @@ export async function deleteActivity(id: string): Promise<void> {
   if (!res.ok) throw new Error(`Failed to delete activity: ${res.statusText}`);
 }
 
+export async function bulkDeleteActivities(ids: string[]): Promise<{ deleted: number }> {
+  const res = await fetch(`${API_BASE}/activities/bulk-delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  if (!res.ok) throw new Error(`Failed to delete activities: ${res.statusText}`);
+  return res.json();
+}
+
 // --- Parse ---
 
 export async function parseActivity(text: string): Promise<ParseResult> {

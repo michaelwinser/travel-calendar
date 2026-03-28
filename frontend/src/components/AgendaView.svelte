@@ -8,9 +8,39 @@
     overlayCalendars?: OverlayCalendar[];
     onedit: (activity: Activity) => void;
     onedittrip?: (tripId: string) => void;
+    onbulkdelete?: (ids: string[]) => void;
   }
 
-  let { activities, trips, overlayActivities, overlayCalendars, onedit, onedittrip }: Props = $props();
+  let { activities, trips, overlayActivities, overlayCalendars, onedit, onedittrip, onbulkdelete }: Props = $props();
+
+  let selectMode = $state(false);
+  let selectedIds = $state<Set<string>>(new Set());
+
+  function toggleSelect(id: string) {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    selectedIds = next;
+  }
+
+  function selectAll() {
+    selectedIds = new Set(activities.map(a => a.id));
+  }
+
+  function selectNone() {
+    selectedIds = new Set();
+  }
+
+  function exitSelectMode() {
+    selectMode = false;
+    selectedIds = new Set();
+  }
+
+  function handleBulkDelete() {
+    if (selectedIds.size === 0 || !onbulkdelete) return;
+    if (!confirm(`Delete ${selectedIds.size} activities? This cannot be undone.`)) return;
+    onbulkdelete([...selectedIds]);
+    exitSelectMode();
+  }
 
   // Group overlay activities by owner email
   let overlayGroups = $derived.by(() => {
@@ -95,6 +125,27 @@
   }
 </script>
 
+{#if activities.length > 0 && onbulkdelete}
+  <div class="agenda-toolbar">
+    {#if selectMode}
+      <label class="select-all">
+        <input type="checkbox"
+          checked={selectedIds.size === activities.length}
+          onchange={() => selectedIds.size === activities.length ? selectNone() : selectAll()} />
+        {selectedIds.size}/{activities.length}
+      </label>
+      <div class="toolbar-spacer"></div>
+      <button class="toolbar-btn danger" onclick={handleBulkDelete} disabled={selectedIds.size === 0}>
+        Delete ({selectedIds.size})
+      </button>
+      <button class="toolbar-btn" onclick={exitSelectMode}>Cancel</button>
+    {:else}
+      <div class="toolbar-spacer"></div>
+      <button class="toolbar-btn" onclick={() => selectMode = true}>Select</button>
+    {/if}
+  </div>
+{/if}
+
 {#if activities.length === 0}
   <p class="empty">No activities yet. Press <kbd>n</kbd> to create one.</p>
 {:else}
@@ -115,7 +166,10 @@
           {/if}
         </div>
         {#each group.activities as activity (activity.id)}
-          <button class="activity-row indented" onclick={() => onedit(activity)}>
+          <button class="activity-row indented" onclick={() => selectMode ? toggleSelect(activity.id) : onedit(activity)}>
+            {#if selectMode}
+              <input type="checkbox" checked={selectedIds.has(activity.id)} onclick={(e) => e.stopPropagation()} onchange={() => toggleSelect(activity.id)} />
+            {/if}
             <span class="type-dot" style="background: {ACTIVITY_COLORS[activity.type]}"></span>
             <span class="dates">{formatDates(activity)}</span>
             <span class="title">{activity.title}</span>
@@ -128,7 +182,10 @@
       {:else}
         <!-- Standalone activity -->
         {#each group.activities as activity (activity.id)}
-          <button class="activity-row" onclick={() => onedit(activity)}>
+          <button class="activity-row" onclick={() => selectMode ? toggleSelect(activity.id) : onedit(activity)}>
+            {#if selectMode}
+              <input type="checkbox" checked={selectedIds.has(activity.id)} onclick={(e) => e.stopPropagation()} onchange={() => toggleSelect(activity.id)} />
+            {/if}
             <span class="type-dot" style="background: {ACTIVITY_COLORS[activity.type]}"></span>
             <span class="dates">{formatDates(activity)}</span>
             <span class="title">{activity.title}</span>
@@ -164,6 +221,46 @@
 {/if}
 
 <style>
+  .agenda-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .toolbar-spacer { flex: 1; }
+
+  .toolbar-btn {
+    padding: 0.25rem 0.6rem;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: white;
+    font-size: 0.8rem;
+    cursor: pointer;
+    color: #555;
+    font-family: inherit;
+  }
+  .toolbar-btn:hover { background: #f5f5f5; color: #333; }
+  .toolbar-btn:disabled { opacity: 0.4; cursor: default; }
+  .toolbar-btn.danger { color: #dc2626; border-color: #fecaca; }
+  .toolbar-btn.danger:hover { background: #fef2f2; }
+
+  .select-all {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.8rem;
+    color: #666;
+    cursor: pointer;
+  }
+  .select-all input { margin: 0; }
+
+  .activity-row input[type="checkbox"] {
+    margin: 0;
+    flex-shrink: 0;
+  }
+
   .empty {
     color: #999;
     text-align: center;

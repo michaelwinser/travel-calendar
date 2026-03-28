@@ -143,6 +143,28 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /api/activities/bulk-delete:
+    post:
+      operationId: bulkDeleteActivities
+      summary: Delete multiple activities by ID
+      security:
+        - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkDeleteRequest'
+      responses:
+        '200':
+          description: Deletion result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkDeleteResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /api/activities/parse:
     post:
       operationId: parseActivity
@@ -1196,6 +1218,22 @@ components:
           description: URL slug (lowercase alphanumeric + hyphens, 3-30 chars)
         enabled:
           type: boolean
+
+    BulkDeleteRequest:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+
+    BulkDeleteResponse:
+      type: object
+      required: [deleted]
+      properties:
+        deleted:
+          type: integer
 
     OkResponse:
       type: object

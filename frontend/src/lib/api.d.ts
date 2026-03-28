@@ -41,6 +41,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/activities/bulk-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete multiple activities by ID */
+        post: operations["bulkDeleteActivities"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/activities/parse": {
         parameters: {
             query?: never;
@@ -599,6 +616,12 @@ export interface components {
             handle: string;
             enabled: boolean;
         };
+        BulkDeleteRequest: {
+            ids: string[];
+        };
+        BulkDeleteResponse: {
+            deleted: number;
+        };
         OkResponse: {
             ok?: string;
         };
@@ -771,6 +794,31 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    bulkDeleteActivities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Deletion result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkDeleteResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
     };
     parseActivity: {

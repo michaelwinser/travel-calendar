@@ -233,10 +233,10 @@ func main() {
 	cli.AddCommand(quickCmd)
 
 	delCmd := &cobra.Command{
-		Use:   "delete [id-prefix]",
-		Short: "Delete an activity by ID prefix (via API)",
-		Args:  cobra.ExactArgs(1),
-		RunE:  deleteActivity,
+		Use:   "delete [id-prefix...]",
+		Short: "Delete one or more activities by ID prefix (via API)",
+		Args:  cobra.MinimumNArgs(1),
+		RunE:  deleteActivitiesCmd,
 	}
 	cli.AddCommand(delCmd)
 
@@ -1184,27 +1184,50 @@ func updateActivity(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func deleteActivity(cmd *cobra.Command, args []string) error {
+func deleteActivitiesCmd(cmd *cobra.Command, args []string) error {
 	client, cleanup, err := apiClient(cmd)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	a, err := resolveByPrefix(client, args[0])
-	if err != nil {
-		return err
+	// Resolve all prefixes to activities
+	var toDelete []api.Activity
+	for _, prefix := range args {
+		a, err := resolveByPrefix(client, prefix)
+		if err != nil {
+			return err
+		}
+		toDelete = append(toDelete, *a)
 	}
 
-	delResp, err := client.DeleteActivityWithResponse(context.Background(), a.Id)
-	if err != nil {
-		return err
-	}
-	if delResp.StatusCode() != http.StatusOK {
-		return fmt.Errorf("server returned %d: %s", delResp.StatusCode(), string(delResp.Body))
+	if len(toDelete) == 1 {
+		// Single delete — use the existing endpoint
+		a := toDelete[0]
+		delResp, err := client.DeleteActivityWithResponse(context.Background(), a.Id)
+		if err != nil {
+			return err
+		}
+		if delResp.StatusCode() != http.StatusOK {
+			return fmt.Errorf("server returned %d: %s", delResp.StatusCode(), string(delResp.Body))
+		}
+		fmt.Printf("Deleted: %s (%s to %s) [%s]\n", a.Title, a.StartDate.Format("2006-01-02"), a.EndDate.Format("2006-01-02"), a.Type)
+	} else {
+		// Bulk delete
+		ids := make([]string, len(toDelete))
+		for i, a := range toDelete {
+			ids[i] = a.Id
+		}
+		resp, err := client.BulkDeleteActivitiesWithResponse(context.Background(), api.BulkDeleteRequest{Ids: ids})
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode() != http.StatusOK {
+			return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+		}
+		fmt.Printf("Deleted %d activities.\n", resp.JSON200.Deleted)
 	}
 
-	fmt.Printf("Deleted: %s (%s to %s) [%s]\n", a.Title, a.StartDate.Format("2006-01-02"), a.EndDate.Format("2006-01-02"), a.Type)
 	return nil
 }
 
