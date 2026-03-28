@@ -3,8 +3,9 @@
   import {
     listSources, createSource, syncSource, deleteSource,
     listStagedEvents, importStagedEvents, hideStagedEvents, unhideStagedEvents,
+    getGlobalFilters,
     ACTIVITY_COLORS,
-    type ImportSource, type StagedEvent, type ActivityType,
+    type ImportSource, type StagedEvent, type ActivityType, type SourceFilter,
   } from '../lib/api';
   import FilterEditor from './FilterEditor.svelte';
 
@@ -25,6 +26,7 @@
   // Staged events
   let stagedEvents = $state<StagedEvent[]>([]);
   let selectedIds = $state<Set<string>>(new Set());
+  let globalFilters = $state<SourceFilter[]>([]);
   let stateFilter = $state<'' | 'new' | 'imported' | 'hidden'>('new');
   let sourceFilter = $state('');
   let searchQuery = $state('');
@@ -49,6 +51,7 @@
   async function refresh() {
     try {
       sources = await listSources();
+      globalFilters = await getGlobalFilters();
       await refreshStaged();
       error = '';
     } catch (e: any) {
@@ -61,7 +64,26 @@
     if (stateFilter) params.state = stateFilter;
     if (sourceFilter) params.sourceId = sourceFilter;
     stagedEvents = await listStagedEvents(params) ?? [];
-    selectedIds = new Set();
+    autoSelect();
+  }
+
+  function autoSelect() {
+    const selectPatterns = globalFilters
+      .filter(f => (f.type === 'select' || f.type === 'include') && f.enabled)
+      .map(f => f.pattern.toLowerCase());
+    if (selectPatterns.length === 0) { selectedIds = new Set(); return; }
+
+    const ids = new Set<string>();
+    for (const e of stagedEvents) {
+      if (e.state !== 'new') continue;
+      for (const p of selectPatterns) {
+        if (e.title?.toLowerCase().includes(p) || e.location?.toLowerCase().includes(p)) {
+          ids.add(e.id);
+          break;
+        }
+      }
+    }
+    selectedIds = ids;
   }
 
   async function handleAddSource() {
@@ -183,8 +205,9 @@
     <div class="panel-header">
       <h2>Calendar Sources</h2>
       <div class="header-actions">
-        <button class="filters-btn" onclick={() => showFilterEditor = true}>
-          Filters &#x25B6;
+        <button class="expand-btn" onclick={() => showFilterEditor = !showFilterEditor}
+          title={showFilterEditor ? 'Collapse filters' : 'Expand filters'}>
+          {showFilterEditor ? '«' : '»'}
         </button>
         <button class="close-btn" onclick={onclose}>&times;</button>
       </div>
@@ -310,8 +333,8 @@
 
 {#if showFilterEditor}
   <FilterEditor
-    onclose={() => { onclose(); }}
-    onimported={() => { onimported(); }}
+    onclose={() => { showFilterEditor = false; refresh(); }}
+    onimported={() => { onimported(); refresh(); }}
   />
 {/if}
 
@@ -348,12 +371,12 @@
     display: flex; align-items: center; gap: 0.5rem;
   }
 
-  .filters-btn {
-    padding: 0.25rem 0.6rem; border: 1px solid #ddd; border-radius: 6px;
-    background: white; font-size: 0.8rem; cursor: pointer; color: #555;
-    font-family: inherit;
+  .expand-btn {
+    background: none; border: 1px solid #ddd; border-radius: 6px;
+    font-size: 1.2rem; cursor: pointer; color: #888;
+    padding: 0.1rem 0.5rem; line-height: 1;
   }
-  .filters-btn:hover { background: #f5f5f5; color: #333; }
+  .expand-btn:hover { color: #333; background: #f5f5f5; }
 
   .close-btn {
     background: none; border: none; font-size: 1.5rem;

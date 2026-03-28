@@ -202,7 +202,7 @@
       {counts.newCount} new · {counts.hiddenCount} hidden · {counts.importedCount} imported · {counts.total} total
     </span>
     <div class="toolbar-spacer"></div>
-    <button class="close-btn" onclick={onclose}>&times;</button>
+    <button class="collapse-btn" onclick={onclose} title="Collapse filters">&laquo;</button>
   </div>
 
   {#if error}
@@ -341,11 +341,12 @@
   .counts { font-size: 0.75rem; color: #888; }
   .toolbar-spacer { flex: 1; }
 
-  .close-btn {
-    background: none; border: none; font-size: 1.5rem;
-    cursor: pointer; color: #888; padding: 0 0.25rem; line-height: 1;
+  .collapse-btn {
+    background: none; border: 1px solid #ddd; border-radius: 6px;
+    font-size: 1.2rem; cursor: pointer; color: #888;
+    padding: 0.1rem 0.5rem; line-height: 1;
   }
-  .close-btn:hover { color: #333; }
+  .collapse-btn:hover { color: #333; background: #f5f5f5; }
 
   .error {
     color: #dc2626; font-size: 0.8rem; margin: 0;
