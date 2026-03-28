@@ -157,117 +157,102 @@ func fetchIcalEvents(url string) ([]icalparser.Event, error) {
 
 // --- Filter logic ---
 
-// Built-in exclude patterns
-var videoConferencePatterns = []string{
-	"zoom.us", "meet.google.com", "teams.microsoft.com", "webex.com",
-	"whereby.com", "gotomeeting.com",
-}
-
-var meetingRoomPatterns = []string{
-	"meeting room", "conf room", "conference room", "phone booth",
-	"huddle room",
-}
-
-// Built-in include keywords for filtering (separate from parser keywords)
+// Built-in include keywords for type inference (separate from filter patterns)
 var filterStayKeywords = []string{"hotel", "airbnb", "vrbo", "stay", "accommodation", "check-in", "checkout"}
-var filterIncludeKeywords = []string{
-	"flight", "fly", "plane", "airport",
-	"hotel", "airbnb", "vrbo", "stay", "accommodation",
-	"conference", "summit", "expo", "convention", "offsite",
-	"dentist", "doctor", "appointment", "haircut", "vet",
-}
 
 func shouldStage(event icalparser.Event, fc *FilterConfig) bool {
 	title := strings.ToLower(event.Summary)
 	location := strings.ToLower(event.Location)
 
-	// Step 1: Built-in excludes
-	excluded := false
-	if !fc.DisableBuiltinExcludes {
-		// Video conference URLs in location
-		for _, pattern := range videoConferencePatterns {
-			if strings.Contains(location, pattern) {
-				excluded = true
-				break
+	// Load filter patterns (built-in + user-defined from FilterConfig)
+	filters := LoadDefaultFilters()
+	if fc.DisableBuiltinExcludes {
+		var kept []Filter
+		for _, f := range filters {
+			if !(f.Builtin && f.Type == "exclude") {
+				kept = append(kept, f)
 			}
 		}
-		// Meeting room names
-		if !excluded {
-			for _, pattern := range meetingRoomPatterns {
-				if strings.Contains(location, pattern) {
-					excluded = true
-					break
-				}
+		filters = kept
+	}
+	if fc.DisableBuiltinIncludes {
+		var kept []Filter
+		for _, f := range filters {
+			if !(f.Builtin && f.Type == "include") {
+				kept = append(kept, f)
 			}
 		}
-		// Room + digit pattern
-		if !excluded && strings.Contains(location, "room") {
-			for _, r := range location {
-				if r >= '0' && r <= '9' {
-					excluded = true
-					break
-				}
-			}
-		}
+		filters = kept
+	}
+	// Add user keywords as filters
+	for _, kw := range fc.ExcludeKeywords {
+		filters = append(filters, Filter{Pattern: kw, Type: "exclude", Enabled: true})
+	}
+	for _, kw := range fc.IncludeKeywords {
+		filters = append(filters, Filter{Pattern: kw, Type: "include", Enabled: true})
 	}
 
-	// Step 2: User exclude keywords
-	for _, kw := range fc.ExcludeKeywords {
-		lower := strings.ToLower(kw)
-		if strings.Contains(title, lower) || strings.Contains(location, lower) {
+	// Step 1: Check exclude filters — match against LOCATION and TITLE only (not description)
+	excluded := false
+	for _, f := range filters {
+		if f.Type != "exclude" || !f.Enabled {
+			continue
+		}
+		lower := strings.ToLower(f.Pattern)
+		if strings.Contains(location, lower) || strings.Contains(title, lower) {
 			excluded = true
 			break
 		}
 	}
 
-	// Step 3: Built-in includes (override excludes)
-	included := false
-	if !fc.DisableBuiltinIncludes {
-		// All-day events always pass
-		if event.AllDay {
-			included = true
-		}
-		// Multi-day events always pass
-		startDate := event.StartDate()
-		endDate := event.EndDate()
-		if endDate > startDate {
-			included = true
-		}
-		// Events with physical locations (non-video, non-room)
-		if location != "" && !excluded {
-			included = true
-		}
+	// Step 1b: URL-only location — if location is just a URL with no other text, exclude
+	if !excluded && location != "" && isURLOnly(location) {
+		excluded = true
 	}
 
-	// Step 4: User include keywords (override excludes)
-	for _, kw := range fc.IncludeKeywords {
-		lower := strings.ToLower(kw)
+	// Step 2: Check include filters — match against TITLE and LOCATION (not description)
+	// Include overrides exclude
+	included := false
+	for _, f := range filters {
+		if f.Type != "include" || !f.Enabled {
+			continue
+		}
+		lower := strings.ToLower(f.Pattern)
 		if strings.Contains(title, lower) || strings.Contains(location, lower) {
 			included = true
 			break
 		}
 	}
 
-	// Also check built-in travel/commitment keywords
-	for _, kw := range filterIncludeKeywords {
-		if strings.Contains(title, kw) {
-			included = true
-			break
-		}
+	// Step 3: Structural includes (always apply)
+	// All-day events and multi-day events are almost always travel-relevant
+	if event.AllDay {
+		included = true
+	}
+	if event.StartDate() != event.EndDate() {
+		included = true
 	}
 
-	// Step 5: Default rule
+	// Step 4: Physical location — if location has non-URL text, likely a real place
+	if location != "" && !excluded && !isURLOnly(location) {
+		included = true
+	}
+
+	// Step 5: Decision
 	if included {
 		return true
 	}
 	if excluded {
 		return false
 	}
-	// If has a location that's not a video URL, include
-	if location != "" {
-		return true
-	}
+	// No location, no keyword match — skip
 	return false
+}
+
+// isURLOnly returns true if the string is just a URL with no meaningful text.
+func isURLOnly(s string) bool {
+	s = strings.TrimSpace(s)
+	return strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://")
 }
 
 func inferActivityType(event icalparser.Event) string {

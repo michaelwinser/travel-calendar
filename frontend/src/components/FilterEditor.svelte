@@ -86,8 +86,7 @@
   function matchesPattern(event: StagedEvent, pattern: string): boolean {
     const lower = pattern.toLowerCase();
     return (event.title?.toLowerCase().includes(lower)) ||
-      (event.location?.toLowerCase().includes(lower)) ||
-      (event.notes?.toLowerCase().includes(lower));
+      (event.location?.toLowerCase().includes(lower));
   }
 
   // Events matching the hovered filter

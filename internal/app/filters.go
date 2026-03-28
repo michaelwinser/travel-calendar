@@ -52,10 +52,11 @@ func LoadDefaultFilters() []Filter {
 	return filters
 }
 
-// MatchesFilter checks if an event's title, location, or notes contain the pattern.
-func MatchesFilter(pattern, title, location, notes string) bool {
+// MatchesFilter checks if an event's title or location contain the pattern.
+// Description/notes are intentionally excluded to avoid false positives
+// from video conference links embedded in event descriptions.
+func MatchesFilter(pattern, title, location string) bool {
 	lower := strings.ToLower(pattern)
 	return strings.Contains(strings.ToLower(title), lower) ||
-		strings.Contains(strings.ToLower(location), lower) ||
-		strings.Contains(strings.ToLower(notes), lower)
+		strings.Contains(strings.ToLower(location), lower)
 }
