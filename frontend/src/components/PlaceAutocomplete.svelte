@@ -184,12 +184,8 @@
     {placeholder}
     autocomplete="off"
   />
-  {#if placeId && resolvedPlace}
-    <span class="resolved-info">
-      {#if resolvedPlace.city}{resolvedPlace.city}{/if}{#if resolvedPlace.country}, {resolvedPlace.country}{/if}{#if resolvedPlace.timezone} · {resolvedPlace.timezone}{/if}
-    </span>
-  {:else if placeId}
-    <span class="linked-badge" title="Linked to a place">●</span>
+  {#if placeId && resolvedPlace && resolvedPlace.timezone}
+    <span class="resolved-info">{resolvedPlace.timezone}</span>
   {/if}
 
   {#if showDropdown && suggestions.length > 0}
