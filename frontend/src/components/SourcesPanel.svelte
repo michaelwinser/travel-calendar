@@ -334,6 +334,7 @@
 {#if showFilterEditor}
   <FilterEditor
     onclose={() => { showFilterEditor = false; refresh(); }}
+    oncloseall={onclose}
     onimported={() => { onimported(); refresh(); }}
   />
 {/if}

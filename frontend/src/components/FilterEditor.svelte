@@ -9,10 +9,11 @@
 
   interface Props {
     onclose: () => void;
+    oncloseall: () => void;
     onimported: () => void;
   }
 
-  let { onclose, onimported }: Props = $props();
+  let { onclose, oncloseall, onimported }: Props = $props();
 
   let filters = $state<SourceFilter[]>([]);
   let events = $state<StagedEvent[]>([]);
@@ -203,6 +204,7 @@
     </span>
     <div class="toolbar-spacer"></div>
     <button class="collapse-btn" onclick={onclose} title="Collapse filters">&laquo;</button>
+    <button class="close-btn" onclick={oncloseall}>&times;</button>
   </div>
 
   {#if error}
@@ -347,6 +349,12 @@
     padding: 0.1rem 0.5rem; line-height: 1;
   }
   .collapse-btn:hover { color: #333; background: #f5f5f5; }
+
+  .close-btn {
+    background: none; border: none; font-size: 1.5rem;
+    cursor: pointer; color: #888; padding: 0 0.25rem; line-height: 1;
+  }
+  .close-btn:hover { color: #333; }
 
   .error {
     color: #dc2626; font-size: 0.8rem; margin: 0;
