@@ -18,9 +18,10 @@
   let events = $state<StagedEvent[]>([]);
   let selectedIds = $state<Set<string>>(new Set());
   let hoveredFilter = $state<string | null>(null);
-  let newFilterPattern = $state('');
-  let newFilterType = $state<'hide' | 'select'>('hide');
+  let newHidePattern = $state('');
+  let newSelectPattern = $state('');
   let saving = $state(false);
+  let dirty = $state(false);
   let error = $state('');
   let searchQuery = $state('');
   let showHidden = $state(false);
@@ -70,35 +71,38 @@
     }
   }
 
-  async function toggleFilter(idx: number) {
+  function toggleFilter(idx: number) {
     filters[idx].enabled = !filters[idx].enabled;
-    await saveAndApply();
+    dirty = true;
   }
 
-  async function addFilter() {
-    if (!newFilterPattern.trim()) return;
-    filters = [...filters, {
-      pattern: newFilterPattern.trim(),
-      type: newFilterType,
-      enabled: true,
-      builtin: false,
-    }];
-    newFilterPattern = '';
-    await saveAndApply();
+  function addHideFilter() {
+    if (!newHidePattern.trim()) return;
+    filters = [...filters, { pattern: newHidePattern.trim(), type: 'hide', enabled: true, builtin: false }];
+    newHidePattern = '';
+    dirty = true;
   }
 
-  async function removeFilter(idx: number) {
+  function addSelectFilter() {
+    if (!newSelectPattern.trim()) return;
+    filters = [...filters, { pattern: newSelectPattern.trim(), type: 'select', enabled: true, builtin: false }];
+    newSelectPattern = '';
+    dirty = true;
+  }
+
+  function removeFilter(idx: number) {
     filters = filters.filter((_, i) => i !== idx);
-    await saveAndApply();
+    dirty = true;
   }
 
-  async function saveAndApply() {
+  async function applyFilters() {
     saving = true;
     try {
       filters = await updateGlobalFilters(filters);
       await applyGlobalFilters();
       events = await listStagedEvents({}) ?? [];
       autoSelect();
+      dirty = false;
     } catch (e: any) {
       error = e.message;
     }
@@ -224,8 +228,6 @@
         </label>
         <div class="bulk-actions">
           <button class="btn-sm btn-primary-sm" onclick={handleImport} disabled={selectedIds.size === 0}>Import</button>
-          <button class="btn-sm" onclick={handleHide} disabled={selectedIds.size === 0}>Hide</button>
-          <button class="btn-sm" onclick={handleUnhide} disabled={selectedIds.size === 0}>Unhide</button>
         </div>
       </div>
 
@@ -263,7 +265,7 @@
 
       <div class="filter-section">
         <h4>Hide patterns</h4>
-        <p class="filter-hint">Matching events are hidden from view (recoverable).</p>
+        <p class="filter-hint">Matching events are hidden from view.</p>
         {#each hideFilters as filter}
           {@const idx = filters.indexOf(filter)}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -280,6 +282,11 @@
             {/if}
           </div>
         {/each}
+        <div class="add-inline">
+          <input type="text" placeholder="Add hide pattern..." bind:value={newHidePattern}
+            onkeydown={(e) => e.key === 'Enter' && addHideFilter()} />
+          <button class="btn-sm" onclick={addHideFilter} disabled={!newHidePattern.trim()}>+</button>
+        </div>
       </div>
 
       <div class="filter-section">
@@ -301,20 +308,19 @@
             {/if}
           </div>
         {/each}
+        <div class="add-inline">
+          <input type="text" placeholder="Add select pattern..." bind:value={newSelectPattern}
+            onkeydown={(e) => e.key === 'Enter' && addSelectFilter()} />
+          <button class="btn-sm" onclick={addSelectFilter} disabled={!newSelectPattern.trim()}>+</button>
+        </div>
       </div>
 
-      <div class="add-filter">
-        <input type="text" placeholder="New pattern..." bind:value={newFilterPattern}
-          onkeydown={(e) => e.key === 'Enter' && addFilter()} />
-        <select bind:value={newFilterType}>
-          <option value="hide">Hide</option>
-          <option value="select">Select</option>
-        </select>
-        <button class="btn-sm" onclick={addFilter} disabled={!newFilterPattern.trim()}>Add</button>
-      </div>
+      <button class="apply-btn" onclick={applyFilters} disabled={!dirty || saving}>
+        {saving ? 'Applying...' : 'Apply Filters'}
+      </button>
 
       <p class="hint">
-        Hover a filter to highlight matching events. Changes apply immediately.
+        Hover a filter to highlight matching events. Click Apply to update event states.
       </p>
     </div>
   </div>
@@ -452,16 +458,21 @@
   }
   .remove-btn:hover { color: #dc2626; }
 
-  .add-filter { display: flex; gap: 0.3rem; margin-top: 0.5rem; }
-  .add-filter input {
+  .add-inline { display: flex; gap: 0.3rem; margin-top: 0.35rem; }
+  .add-inline input {
     flex: 1; padding: 0.25rem 0.4rem; border: 1px solid #ddd;
     border-radius: 4px; font-size: 0.8rem; font-family: inherit;
   }
-  .add-filter input:focus { outline: none; border-color: #333; }
-  .add-filter select {
-    padding: 0.25rem 0.3rem; border: 1px solid #ddd;
-    border-radius: 4px; font-size: 0.75rem;
+  .add-inline input:focus { outline: none; border-color: #333; }
+
+  .apply-btn {
+    width: 100%; padding: 0.5rem; margin-top: 0.75rem;
+    border: none; border-radius: 6px;
+    background: #333; color: white; font-size: 0.85rem;
+    font-family: inherit; cursor: pointer; font-weight: 500;
   }
+  .apply-btn:hover { background: #555; }
+  .apply-btn:disabled { opacity: 0.4; cursor: default; }
 
   .hint { font-size: 0.7rem; color: #aaa; margin-top: 0.75rem; }
 </style>
