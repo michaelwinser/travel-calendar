@@ -182,18 +182,17 @@
   <div class="panel" onclick={(e) => e.stopPropagation()}>
     <div class="panel-header">
       <h2>Calendar Sources</h2>
-      <button class="close-btn" onclick={onclose}>&times;</button>
+      <div class="header-actions">
+        <button class="filters-btn" onclick={() => showFilterEditor = true}>
+          Filters &#x25B6;
+        </button>
+        <button class="close-btn" onclick={onclose}>&times;</button>
+      </div>
     </div>
 
     {#if error}
       <p class="error">{error}</p>
     {/if}
-
-    <!-- Global Filters -->
-    <button class="filters-toggle" onclick={() => showFilterEditor = true}>
-      <span class="chevron">&#x25B6;</span>
-      Filters
-    </button>
 
     <!-- Add Source -->
     <section>
@@ -277,16 +276,8 @@
             {selectedIds.size}/{filteredEvents.length} selected
           </label>
           <div class="bulk-actions">
-            {#if stateFilter === 'new' || stateFilter === ''}
-              <button class="btn-small btn-primary-small" onclick={handleImportSelected}
-                disabled={selectedIds.size === 0}>Import</button>
-              <button class="btn-small" onclick={handleHideSelected}
-                disabled={selectedIds.size === 0}>Hide</button>
-            {/if}
-            {#if stateFilter === 'hidden'}
-              <button class="btn-small" onclick={handleUnhideSelected}
-                disabled={selectedIds.size === 0}>Unhide</button>
-            {/if}
+            <button class="btn-small btn-primary-small" onclick={handleImportSelected}
+              disabled={selectedIds.size === 0}>Import</button>
           </div>
         </div>
 
@@ -319,7 +310,7 @@
 
 {#if showFilterEditor}
   <FilterEditor
-    onclose={() => { showFilterEditor = false; refresh(); }}
+    onclose={() => { onclose(); }}
     onimported={() => { onimported(); }}
   />
 {/if}
@@ -353,21 +344,22 @@
 
   .panel-header h2 { margin: 0; font-size: 1.2rem; }
 
+  .header-actions {
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+
+  .filters-btn {
+    padding: 0.25rem 0.6rem; border: 1px solid #ddd; border-radius: 6px;
+    background: white; font-size: 0.8rem; cursor: pointer; color: #555;
+    font-family: inherit;
+  }
+  .filters-btn:hover { background: #f5f5f5; color: #333; }
+
   .close-btn {
     background: none; border: none; font-size: 1.5rem;
     cursor: pointer; color: #888; padding: 0 0.25rem; line-height: 1;
   }
   .close-btn:hover { color: #333; }
-
-  .filters-toggle {
-    display: flex; align-items: center; gap: 0.5rem;
-    width: 100%; padding: 0.5rem 0.65rem; margin-bottom: 0.75rem;
-    border: 1px solid #eee; border-radius: 6px; background: #f8f9fa;
-    font-size: 0.85rem; font-weight: 500; color: #555;
-    cursor: pointer; text-align: left; font-family: inherit;
-  }
-  .filters-toggle:hover { background: #f0f0f0; color: #333; }
-  .chevron { font-size: 0.7rem; color: #999; }
 
   section { margin-bottom: 1.25rem; }
   h3 { font-size: 0.9rem; margin: 0 0 0.5rem; color: #333; }

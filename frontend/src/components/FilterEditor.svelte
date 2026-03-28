@@ -202,7 +202,7 @@
       {counts.newCount} new · {counts.hiddenCount} hidden · {counts.importedCount} imported · {counts.total} total
     </span>
     <div class="toolbar-spacer"></div>
-    <button class="btn btn-close" onclick={onclose}>Close</button>
+    <button class="close-btn" onclick={onclose}>&times;</button>
   </div>
 
   {#if error}
@@ -341,12 +341,11 @@
   .counts { font-size: 0.75rem; color: #888; }
   .toolbar-spacer { flex: 1; }
 
-  .btn {
-    padding: 0.3rem 0.75rem; border: 1px solid #ddd; border-radius: 6px;
-    background: white; font-size: 0.8rem; cursor: pointer; color: #555;
+  .close-btn {
+    background: none; border: none; font-size: 1.5rem;
+    cursor: pointer; color: #888; padding: 0 0.25rem; line-height: 1;
   }
-  .btn:hover { background: #f5f5f5; color: #333; }
-  .btn-close { font-weight: 600; }
+  .close-btn:hover { color: #333; }
 
   .error {
     color: #dc2626; font-size: 0.8rem; margin: 0;
