@@ -250,9 +250,21 @@ func shouldStage(event icalparser.Event, fc *FilterConfig) bool {
 }
 
 // isURLOnly returns true if the string is just a URL with no meaningful text.
+// Map URLs are excluded — they indicate a real physical location.
 func isURLOnly(s string) bool {
 	s = strings.TrimSpace(s)
-	return strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://")
+	if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
+		return false
+	}
+	// Map URLs are physical locations, not virtual meetings
+	lower := strings.ToLower(s)
+	if strings.Contains(lower, "google.com/maps") ||
+		strings.Contains(lower, "maps.app.goo.gl") ||
+		strings.Contains(lower, "maps.apple.com") ||
+		strings.Contains(lower, "maps.bing.com") {
+		return false
+	}
+	return true
 }
 
 func inferActivityType(event icalparser.Event) string {
