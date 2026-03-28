@@ -1,20 +1,18 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    getSourceFilters, updateSourceFilters, applySourceFilters,
+    getGlobalFilters, updateGlobalFilters, applyGlobalFilters,
     listStagedEvents, importStagedEvents, hideStagedEvents, unhideStagedEvents,
-    syncSource,
     ACTIVITY_COLORS,
-    type SourceFilter, type StagedEvent, type ImportSource, type ActivityType,
+    type SourceFilter, type StagedEvent, type ActivityType,
   } from '../lib/api';
 
   interface Props {
-    source: ImportSource;
     onclose: () => void;
     onimported: () => void;
   }
 
-  let { source, onclose, onimported }: Props = $props();
+  let { onclose, onimported }: Props = $props();
 
   let filters = $state<SourceFilter[]>([]);
   let events = $state<StagedEvent[]>([]);
@@ -34,8 +32,8 @@
   async function refresh() {
     try {
       [filters, events] = await Promise.all([
-        getSourceFilters(source.id),
-        listStagedEvents({ sourceId: source.id }),
+        getGlobalFilters(),
+        listStagedEvents({}),
       ]);
       // Pre-select events matching "select" filters
       autoSelect();
@@ -97,10 +95,9 @@
   async function saveAndApply() {
     saving = true;
     try {
-      filters = await updateSourceFilters(source.id, filters);
-      await applySourceFilters(source.id);
-      // Re-fetch events to see state changes
-      events = await listStagedEvents({ sourceId: source.id }) ?? [];
+      filters = await updateGlobalFilters(filters);
+      await applyGlobalFilters();
+      events = await listStagedEvents({}) ?? [];
       autoSelect();
     } catch (e: any) {
       error = e.message;
@@ -196,12 +193,11 @@
 
 <div class="fullscreen">
   <div class="toolbar">
-    <h2>{source.name}</h2>
+    <h2>Import Filters</h2>
     <span class="counts">
       {counts.newCount} new · {counts.hiddenCount} hidden · {counts.importedCount} imported · {counts.total} total
     </span>
     <div class="toolbar-spacer"></div>
-    <button class="btn" onclick={handleSync}>Sync</button>
     <button class="btn btn-close" onclick={onclose}>Close</button>
   </div>
 

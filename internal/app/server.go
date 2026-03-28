@@ -39,6 +39,7 @@ type ActivityServer struct {
 	syncRecords    *SyncRecordStore
 	importSources  *ImportSourceStore
 	stagedEvents   *StagedEventStore
+	userConfigs    *UserConfigStore
 }
 
 // NewActivityServer creates a new server with all dependencies.

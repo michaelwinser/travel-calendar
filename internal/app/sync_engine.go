@@ -31,8 +31,8 @@ type SyncResult struct {
 }
 
 // SyncSource fetches events from a source, stages ALL of them, then applies
-// filters to set initial state (hidden vs new) and selection.
-func SyncSource(source *ImportSource, stagedStore *StagedEventStore, activityStore *ActivityStore) (*SyncResult, error) {
+// global filters to set initial state (hidden vs new) and selection.
+func SyncSource(source *ImportSource, stagedStore *StagedEventStore, activityStore *ActivityStore, configs *UserConfigStore) (*SyncResult, error) {
 	result := &SyncResult{}
 
 	// Fetch events
@@ -125,8 +125,9 @@ func SyncSource(source *ImportSource, stagedStore *StagedEventStore, activitySto
 		}
 	}
 
-	// Apply filters to set initial state on new events
-	filterResult := ApplyFilters(source, stagedStore)
+	// Apply global filters to set initial state on new events
+	filters := resolveGlobalFilters(configs, source.UserID)
+	filterResult := applyFiltersToUser(source.UserID, filters, stagedStore)
 	result.Hidden = filterResult.Hidden
 	result.Selected = filterResult.Selected
 
@@ -143,23 +144,15 @@ type ApplyFiltersResult struct {
 	Selected int `json:"selected"`
 }
 
-// ApplyFilters evaluates all staged events for a source against its filters.
-// - Hide filters: matching "new" events → "hidden"
-// - Disabled hide filters: matching "hidden" events → "new" (unhide)
-// - Select filters: returns IDs of matching "new" events (for pre-selection)
-func ApplyFilters(source *ImportSource, stagedStore *StagedEventStore) *ApplyFiltersResult {
+// applyFiltersToUser evaluates all staged events for a user against the given filters.
+func applyFiltersToUser(userID string, filters []Filter, stagedStore *StagedEventStore) *ApplyFiltersResult {
 	result := &ApplyFiltersResult{}
 
-	// Load filters (built-in + user)
-	filters := resolveFilters(source)
-
-	// Get all staged events for this source
-	events, err := stagedStore.ListBySource(source.ID)
+	events, err := stagedStore.ListByUser(userID, "")
 	if err != nil {
 		return result
 	}
 
-	// Build active pattern sets
 	activeHidePatterns := []string{}
 	disabledHidePatterns := []string{}
 	activeSelectPatterns := []string{}
@@ -179,7 +172,7 @@ func ApplyFilters(source *ImportSource, stagedStore *StagedEventStore) *ApplyFil
 
 	for _, e := range events {
 		if e.State == "imported" {
-			continue // never touch imported events
+			continue
 		}
 
 		title := strings.ToLower(e.Title)
@@ -187,7 +180,6 @@ func ApplyFilters(source *ImportSource, stagedStore *StagedEventStore) *ApplyFil
 		matchesHide := matchesAny(title, location, activeHidePatterns)
 		matchesDisabledHide := matchesAny(title, location, disabledHidePatterns)
 
-		// Also auto-hide URL-only locations
 		if e.Location != "" && isURLOnly(strings.ToLower(e.Location)) {
 			matchesHide = true
 		}
@@ -197,13 +189,11 @@ func ApplyFilters(source *ImportSource, stagedStore *StagedEventStore) *ApplyFil
 			stagedStore.Update(&e)
 			result.Hidden++
 		} else if e.State == "hidden" && matchesDisabledHide && !matchesHide {
-			// A previously hidden event whose hide filter was disabled → unhide
 			e.State = "new"
 			stagedStore.Update(&e)
 			result.Unhidden++
 		}
 
-		// Count select matches (for UI pre-selection)
 		if e.State == "new" && matchesAny(title, location, activeSelectPatterns) {
 			result.Selected++
 		}
@@ -212,41 +202,35 @@ func ApplyFilters(source *ImportSource, stagedStore *StagedEventStore) *ApplyFil
 	return result
 }
 
-// resolveFilters returns the combined filter list for a source.
-func resolveFilters(source *ImportSource) []Filter {
+// resolveGlobalFilters returns the user's global filters (built-in + user-defined).
+func resolveGlobalFilters(configs *UserConfigStore, userID string) []Filter {
 	filters := LoadDefaultFilters()
 
-	if source.FilterConfig == "" {
+	if configs == nil {
 		return filters
 	}
 
-	// Try parsing as new format (array of Filter)
+	configJSON := configs.Get(userID, "import_filters")
+	if configJSON == "" {
+		return filters
+	}
+
 	var userFilters []Filter
-	if err := json.Unmarshal([]byte(source.FilterConfig), &userFilters); err == nil && len(userFilters) > 0 {
-		builtinByPattern := map[string]int{}
-		for i, f := range filters {
-			builtinByPattern[f.Pattern] = i
-		}
-		for _, uf := range userFilters {
-			if uf.Builtin {
-				if idx, ok := builtinByPattern[uf.Pattern]; ok {
-					filters[idx].Enabled = uf.Enabled
-				}
-			} else {
-				filters = append(filters, uf)
-			}
-		}
+	if err := json.Unmarshal([]byte(configJSON), &userFilters); err != nil {
 		return filters
 	}
 
-	// Try parsing as legacy FilterConfig
-	var fc FilterConfig
-	if err := json.Unmarshal([]byte(source.FilterConfig), &fc); err == nil {
-		for _, kw := range fc.ExcludeKeywords {
-			filters = append(filters, Filter{Pattern: kw, Type: "hide", Enabled: true})
-		}
-		for _, kw := range fc.IncludeKeywords {
-			filters = append(filters, Filter{Pattern: kw, Type: "select", Enabled: true})
+	builtinByPattern := map[string]int{}
+	for i, f := range filters {
+		builtinByPattern[f.Pattern] = i
+	}
+	for _, uf := range userFilters {
+		if uf.Builtin {
+			if idx, ok := builtinByPattern[uf.Pattern]; ok {
+				filters[idx].Enabled = uf.Enabled
+			}
+		} else {
+			filters = append(filters, uf)
 		}
 	}
 

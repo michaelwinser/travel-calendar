@@ -108,11 +108,15 @@ func setup() error {
 	if err != nil {
 		return err
 	}
+	userConfigs, err := travelapp.NewUserConfigStore(app.DB())
+	if err != nil {
+		return err
+	}
 
 	// Register API routes
 	activityServer = travelapp.NewActivityServer(activities, trips, parseHistory, shareLinks, shares, publicProfiles, places)
 	activityServer.SetSyncStores(syncTargets, syncRecords)
-	activityServer.SetSourceStores(importSources, stagedEvents)
+	activityServer.SetSourceStores(importSources, stagedEvents, userConfigs)
 	api.HandlerFromMux(activityServer, app.Server().Router())
 
 	return nil

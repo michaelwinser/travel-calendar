@@ -411,24 +411,24 @@ export interface SourceFilter {
   builtin: boolean;
 }
 
-export async function applySourceFilters(sourceId: string): Promise<{ hidden: number; unhidden: number; selected: number }> {
-  const res = await fetch(`${API_BASE}/sources/${sourceId}/apply-filters`, { method: 'POST' });
+export async function getGlobalFilters(): Promise<SourceFilter[]> {
+  const res = await fetch(`${API_BASE}/filters`);
   if (!res.ok) throw new Error(res.statusText);
   return res.json();
 }
 
-export async function getSourceFilters(sourceId: string): Promise<SourceFilter[]> {
-  const res = await fetch(`${API_BASE}/sources/${sourceId}/filters`);
-  if (!res.ok) throw new Error(res.statusText);
-  return res.json();
-}
-
-export async function updateSourceFilters(sourceId: string, filters: SourceFilter[]): Promise<SourceFilter[]> {
-  const res = await fetch(`${API_BASE}/sources/${sourceId}/filters`, {
+export async function updateGlobalFilters(filters: SourceFilter[]): Promise<SourceFilter[]> {
+  const res = await fetch(`${API_BASE}/filters`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(filters),
   });
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json();
+}
+
+export async function applyGlobalFilters(): Promise<{ hidden: number; unhidden: number; selected: number }> {
+  const res = await fetch(`${API_BASE}/filters/apply`, { method: 'POST' });
   if (!res.ok) throw new Error(res.statusText);
   return res.json();
 }

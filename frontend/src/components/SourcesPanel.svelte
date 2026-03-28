@@ -19,7 +19,7 @@
   let sources = $state<ImportSource[]>([]);
   let newSourceName = $state('');
   let newSourceURL = $state('');
-  let editingSource = $state<ImportSource | null>(null);
+  let showFilterEditor = $state(false);
   let addingSource = $state(false);
 
   // Staged events
@@ -189,6 +189,12 @@
       <p class="error">{error}</p>
     {/if}
 
+    <!-- Global Filters -->
+    <button class="filters-toggle" onclick={() => showFilterEditor = true}>
+      <span class="chevron">&#x25B6;</span>
+      Filters
+    </button>
+
     <!-- Add Source -->
     <section>
       <h3>Add Source</h3>
@@ -217,7 +223,6 @@
                 </span>
               </div>
               <div class="source-actions">
-                <button class="btn-small" onclick={() => editingSource = src}>Filters</button>
                 <button class="btn-small" onclick={() => handleSync(src.id)}>Sync</button>
                 <button class="btn-small btn-danger" onclick={() => handleDeleteSource(src.id)}>Remove</button>
               </div>
@@ -312,10 +317,9 @@
   </div>
 </div>
 
-{#if editingSource}
+{#if showFilterEditor}
   <FilterEditor
-    source={editingSource}
-    onclose={() => { editingSource = null; refresh(); }}
+    onclose={() => { showFilterEditor = false; refresh(); }}
     onimported={() => { onimported(); }}
   />
 {/if}
@@ -354,6 +358,16 @@
     cursor: pointer; color: #888; padding: 0 0.25rem; line-height: 1;
   }
   .close-btn:hover { color: #333; }
+
+  .filters-toggle {
+    display: flex; align-items: center; gap: 0.5rem;
+    width: 100%; padding: 0.5rem 0.65rem; margin-bottom: 0.75rem;
+    border: 1px solid #eee; border-radius: 6px; background: #f8f9fa;
+    font-size: 0.85rem; font-weight: 500; color: #555;
+    cursor: pointer; text-align: left; font-family: inherit;
+  }
+  .filters-toggle:hover { background: #f0f0f0; color: #333; }
+  .chevron { font-size: 0.7rem; color: #999; }
 
   section { margin-bottom: 1.25rem; }
   h3 { font-size: 0.9rem; margin: 0 0 0.5rem; color: #333; }

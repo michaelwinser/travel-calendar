@@ -10,9 +10,10 @@ import (
 )
 
 // SetSourceStores adds source and staged event stores.
-func (s *ActivityServer) SetSourceStores(sources *ImportSourceStore, staged *StagedEventStore) {
+func (s *ActivityServer) SetSourceStores(sources *ImportSourceStore, staged *StagedEventStore, configs *UserConfigStore) {
 	s.importSources = sources
 	s.stagedEvents = staged
+	s.userConfigs = configs
 }
 
 // RegisterSourceRoutes adds source and staging endpoints.
@@ -28,9 +29,9 @@ func (s *ActivityServer) RegisterSourceRoutes(mux interface {
 	mux.Put("/api/sources/{id}", s.UpdateSource)
 	mux.Delete("/api/sources/{id}", s.DeleteSource)
 	mux.Post("/api/sources/{id}/sync", s.SyncSourceHandler)
-	mux.Get("/api/sources/{id}/filters", s.GetSourceFilters)
-	mux.Put("/api/sources/{id}/filters", s.UpdateSourceFilters)
-	mux.Post("/api/sources/{id}/apply-filters", s.ApplySourceFilters)
+	mux.Get("/api/filters", s.GetGlobalFilters)
+	mux.Put("/api/filters", s.UpdateGlobalFilters)
+	mux.Post("/api/filters/apply", s.ApplyGlobalFilters)
 
 	mux.Get("/api/staged", s.ListStagedEvents)
 	mux.Post("/api/staged/import", s.ImportStagedEvents)
@@ -117,7 +118,7 @@ func (s *ActivityServer) CreateSource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Trigger initial sync
-	result, syncErr := SyncSource(src, s.stagedEvents, s.store)
+	result, syncErr := SyncSource(src, s.stagedEvents, s.store, s.userConfigs)
 	s.importSources.Update(src) // save lastSyncAt
 
 	resp := map[string]interface{}{
@@ -241,7 +242,7 @@ func (s *ActivityServer) SyncSourceHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	result, syncErr := SyncSource(src, s.stagedEvents, s.store)
+	result, syncErr := SyncSource(src, s.stagedEvents, s.store, s.userConfigs)
 	s.importSources.Update(src)
 
 	if syncErr != nil {
@@ -400,53 +401,21 @@ func (s *ActivityServer) UnhideStagedEvents(w http.ResponseWriter, r *http.Reque
 	server.RespondJSON(w, http.StatusOK, map[string]int{"unhidden": unhidden})
 }
 
-// ApplySourceFilters re-evaluates all staged events against current filters.
-func (s *ActivityServer) ApplySourceFilters(w http.ResponseWriter, r *http.Request) {
+// GetGlobalFilters returns the user's global import filters (built-in + user-defined).
+func (s *ActivityServer) GetGlobalFilters(w http.ResponseWriter, r *http.Request) {
 	userID := requireUser(w, r)
 	if userID == "" {
 		return
 	}
 
-	id := r.PathValue("id")
-	src, err := s.importSources.Get(id)
-	if err != nil || src == nil || src.UserID != userID {
-		server.RespondError(w, http.StatusNotFound, "not found")
-		return
-	}
-
-	result := ApplyFilters(src, s.stagedEvents)
-	server.RespondJSON(w, http.StatusOK, result)
-}
-
-// GetSourceFilters returns the combined built-in + user filters for a source.
-func (s *ActivityServer) GetSourceFilters(w http.ResponseWriter, r *http.Request) {
-	userID := requireUser(w, r)
-	if userID == "" {
-		return
-	}
-
-	id := r.PathValue("id")
-	src, err := s.importSources.Get(id)
-	if err != nil || src == nil || src.UserID != userID {
-		server.RespondError(w, http.StatusNotFound, "not found")
-		return
-	}
-
-	filters := resolveFilters(src)
+	filters := resolveGlobalFilters(s.userConfigs, userID)
 	server.RespondJSON(w, http.StatusOK, filters)
 }
 
-// UpdateSourceFilters saves the filter configuration for a source.
-func (s *ActivityServer) UpdateSourceFilters(w http.ResponseWriter, r *http.Request) {
+// UpdateGlobalFilters saves the user's global filter configuration.
+func (s *ActivityServer) UpdateGlobalFilters(w http.ResponseWriter, r *http.Request) {
 	userID := requireUser(w, r)
 	if userID == "" {
-		return
-	}
-
-	id := r.PathValue("id")
-	src, err := s.importSources.Get(id)
-	if err != nil || src == nil || src.UserID != userID {
-		server.RespondError(w, http.StatusNotFound, "not found")
 		return
 	}
 
@@ -457,13 +426,21 @@ func (s *ActivityServer) UpdateSourceFilters(w http.ResponseWriter, r *http.Requ
 	}
 
 	data, _ := json.Marshal(filters)
-	src.FilterConfig = string(data)
-	if err := s.importSources.Update(src); err != nil {
-		server.RespondError(w, http.StatusInternalServerError, err.Error())
+	s.userConfigs.Set(userID, "import_filters", string(data))
+
+	server.RespondJSON(w, http.StatusOK, filters)
+}
+
+// ApplyGlobalFilters applies the user's filters to ALL their staged events across all sources.
+func (s *ActivityServer) ApplyGlobalFilters(w http.ResponseWriter, r *http.Request) {
+	userID := requireUser(w, r)
+	if userID == "" {
 		return
 	}
 
-	server.RespondJSON(w, http.StatusOK, filters)
+	filters := resolveGlobalFilters(s.userConfigs, userID)
+	result := applyFiltersToUser(userID, filters, s.stagedEvents)
+	server.RespondJSON(w, http.StatusOK, result)
 }
 
 // ensure appbase import is used
