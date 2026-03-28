@@ -143,6 +143,7 @@ func main() {
 		// Public dashboard (unauthenticated — outside /api/ prefix)
 		r.Get("/public/{handle}.json", activityServer.HandlePublicDashboard)
 		r.Get("/public/{handle}/feed.ics", activityServer.HandlePublicFeed)
+		r.Get("/public/{handle}/display", activityServer.HandleDisplay)
 
 		// Public dashboard frontend (separate entry point, no login required)
 		r.Get("/public/*", func(w http.ResponseWriter, r *http.Request) {
