@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { resolvePlaces, createPlace, type PlaceSuggestion, type PlaceResolveResponse } from '../lib/api';
+  import { resolvePlaces, createPlace, getPlace, type PlaceSuggestion, type PlaceResolveResponse, type Place } from '../lib/api';
 
   interface Props {
     value: string;
@@ -19,9 +19,18 @@
   let inputEl: HTMLInputElement;
   let lastPropValue = value;
   let chipSuggestions = $state<PlaceSuggestion[]>([]);
+  let resolvedPlace = $state<Place | null>(null);
 
   // Load suggestion chips on mount if there's text but no placeId
   onMount(async () => {
+    // Fetch linked place details for display
+    if (placeId) {
+      try {
+        resolvedPlace = await getPlace(placeId);
+      } catch { /* ignore */ }
+    }
+
+    // Load suggestion chips for unresolved locations
     if (value && !placeId) {
       try {
         const result = await resolvePlaces(value);
@@ -49,6 +58,7 @@
 
   function handleInput() {
     chipSuggestions = []; // Clear chips when user edits
+    resolvedPlace = null; // Clear resolved display
     // Always propagate text changes to parent; clear place link when editing
     onchange(inputValue, placeId && inputValue !== value ? '' : placeId);
 
@@ -100,6 +110,7 @@
     if (sug.source === 'user' && sug.place) {
       // Existing user place — link directly
       inputValue = sug.place.name;
+      resolvedPlace = sug.place;
       onchange(inputValue, sug.place.id);
     } else {
       // Gazetteer suggestion — create a new place with the canonical name
@@ -114,6 +125,7 @@
           timezone: sug.timezone ?? undefined,
           kind: 'city',
         });
+        resolvedPlace = newPlace;
         onchange(displayName, newPlace.id);
       } catch {
         onchange(displayName, '');
@@ -171,7 +183,11 @@
     {placeholder}
     autocomplete="off"
   />
-  {#if placeId}
+  {#if placeId && resolvedPlace}
+    <span class="resolved-info">
+      {#if resolvedPlace.city}{resolvedPlace.city}{/if}{#if resolvedPlace.country}, {resolvedPlace.country}{/if}{#if resolvedPlace.timezone} · {resolvedPlace.timezone}{/if}
+    </span>
+  {:else if placeId}
     <span class="linked-badge" title="Linked to a place">●</span>
   {/if}
 
@@ -222,6 +238,13 @@
   input:focus {
     outline: none;
     border-color: #333;
+  }
+
+  .resolved-info {
+    font-size: 0.7rem;
+    color: #22c55e;
+    margin-top: 0.15rem;
+    display: block;
   }
 
   .linked-badge {

@@ -244,6 +244,12 @@ export async function resolvePlaces(text: string): Promise<PlaceResolveResponse>
   return res.json();
 }
 
+export async function getPlace(id: string): Promise<Place> {
+  const res = await fetch(`${API_BASE}/places/${id}`);
+  if (!res.ok) throw new Error(`Failed to get place: ${res.statusText}`);
+  return res.json();
+}
+
 export async function createPlace(req: CreatePlaceRequest): Promise<Place> {
   const res = await fetch(`${API_BASE}/places`, {
     method: 'POST',
