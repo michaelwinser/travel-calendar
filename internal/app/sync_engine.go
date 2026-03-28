@@ -184,16 +184,18 @@ func applyFiltersToUser(userID string, filters []Filter, stagedStore *StagedEven
 			matchesHide = true
 		}
 
+		// Hide wins over select — if an event matches both, it stays hidden
 		if e.State == "new" && matchesHide {
 			e.State = "hidden"
 			stagedStore.Update(&e)
 			result.Hidden++
-		} else if e.State == "hidden" && matchesDisabledHide && !matchesHide {
+		} else if e.State == "hidden" && !matchesHide && matchesDisabledHide {
 			e.State = "new"
 			stagedStore.Update(&e)
 			result.Unhidden++
 		}
 
+		// Only count select matches for events that are visible (not hidden)
 		if e.State == "new" && matchesAny(title, location, activeSelectPatterns) {
 			result.Selected++
 		}
