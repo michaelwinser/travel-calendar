@@ -30,6 +30,7 @@ func (s *ActivityServer) RegisterSourceRoutes(mux interface {
 	mux.Post("/api/sources/{id}/sync", s.SyncSourceHandler)
 	mux.Get("/api/sources/{id}/filters", s.GetSourceFilters)
 	mux.Put("/api/sources/{id}/filters", s.UpdateSourceFilters)
+	mux.Post("/api/sources/{id}/apply-filters", s.ApplySourceFilters)
 
 	mux.Get("/api/staged", s.ListStagedEvents)
 	mux.Post("/api/staged/import", s.ImportStagedEvents)
@@ -399,6 +400,24 @@ func (s *ActivityServer) UnhideStagedEvents(w http.ResponseWriter, r *http.Reque
 	server.RespondJSON(w, http.StatusOK, map[string]int{"unhidden": unhidden})
 }
 
+// ApplySourceFilters re-evaluates all staged events against current filters.
+func (s *ActivityServer) ApplySourceFilters(w http.ResponseWriter, r *http.Request) {
+	userID := requireUser(w, r)
+	if userID == "" {
+		return
+	}
+
+	id := r.PathValue("id")
+	src, err := s.importSources.Get(id)
+	if err != nil || src == nil || src.UserID != userID {
+		server.RespondError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	result := ApplyFilters(src, s.stagedEvents)
+	server.RespondJSON(w, http.StatusOK, result)
+}
+
 // GetSourceFilters returns the combined built-in + user filters for a source.
 func (s *ActivityServer) GetSourceFilters(w http.ResponseWriter, r *http.Request) {
 	userID := requireUser(w, r)
@@ -413,31 +432,7 @@ func (s *ActivityServer) GetSourceFilters(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Start with built-in filters
-	filters := LoadDefaultFilters()
-
-	// Merge user filters from source config
-	if src.FilterConfig != "" {
-		var userFilters []Filter
-		if err := json.Unmarshal([]byte(src.FilterConfig), &userFilters); err == nil {
-			// Override built-in enabled state if user has toggled them
-			builtinByPattern := map[string]int{}
-			for i, f := range filters {
-				builtinByPattern[f.Pattern] = i
-			}
-			for _, uf := range userFilters {
-				if uf.Builtin {
-					// User toggled a built-in filter
-					if idx, ok := builtinByPattern[uf.Pattern]; ok {
-						filters[idx].Enabled = uf.Enabled
-					}
-				} else {
-					filters = append(filters, uf)
-				}
-			}
-		}
-	}
-
+	filters := resolveFilters(src)
 	server.RespondJSON(w, http.StatusOK, filters)
 }
 

@@ -406,9 +406,15 @@ export async function unhideStagedEvents(ids: string[]): Promise<{ unhidden: num
 
 export interface SourceFilter {
   pattern: string;
-  type: 'include' | 'exclude';
+  type: 'hide' | 'select' | 'include' | 'exclude'; // hide/select preferred, include/exclude legacy
   enabled: boolean;
   builtin: boolean;
+}
+
+export async function applySourceFilters(sourceId: string): Promise<{ hidden: number; unhidden: number; selected: number }> {
+  const res = await fetch(`${API_BASE}/sources/${sourceId}/apply-filters`, { method: 'POST' });
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json();
 }
 
 export async function getSourceFilters(sourceId: string): Promise<SourceFilter[]> {

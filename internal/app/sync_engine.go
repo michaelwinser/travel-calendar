@@ -9,8 +9,11 @@ import (
 	icalparser "github.com/michaelwinser/travel-calendar/internal/ical"
 )
 
-// FilterConfig controls which events pass from source to staging.
+// FilterConfig controls how staged events are categorized.
 type FilterConfig struct {
+	HidePatterns    []string `json:"hidePatterns,omitempty"`
+	SelectPatterns  []string `json:"selectPatterns,omitempty"`
+	// Legacy fields for backward compat
 	ExcludeKeywords        []string `json:"excludeKeywords,omitempty"`
 	IncludeKeywords        []string `json:"includeKeywords,omitempty"`
 	DisableBuiltinExcludes bool     `json:"disableBuiltinExcludes,omitempty"`
@@ -22,22 +25,17 @@ type SyncResult struct {
 	Fetched  int `json:"fetched"`
 	Staged   int `json:"staged"`
 	Updated  int `json:"updated"`
-	Filtered int `json:"filtered"`
+	Hidden   int `json:"hidden"`
+	Selected int `json:"selected"`
 	Errors   int `json:"errors"`
 }
 
-// SyncSource fetches events from a source, applies filters, and creates/updates staged events.
-// If activityStore is non-nil, changes to imported events are propagated to their linked activities.
+// SyncSource fetches events from a source, stages ALL of them, then applies
+// filters to set initial state (hidden vs new) and selection.
 func SyncSource(source *ImportSource, stagedStore *StagedEventStore, activityStore *ActivityStore) (*SyncResult, error) {
 	result := &SyncResult{}
 
-	// Parse filter config
-	var fc FilterConfig
-	if source.FilterConfig != "" {
-		json.Unmarshal([]byte(source.FilterConfig), &fc)
-	}
-
-	// Fetch events based on source type
+	// Fetch events
 	var events []icalparser.Event
 	switch source.SourceType {
 	case "ical", "":
@@ -52,31 +50,23 @@ func SyncSource(source *ImportSource, stagedStore *StagedEventStore, activitySto
 
 	result.Fetched = len(events)
 
-	// Time window: only stage events within -30 to +360 days
+	// Time window: -30 to +360 days
 	now := time.Now()
 	windowStart := now.AddDate(0, 0, -30).Format("2006-01-02")
 	windowEnd := now.AddDate(0, 0, 360).Format("2006-01-02")
 
-	// Process each event
+	// Stage ALL events (no content filtering — filters set state, not entry)
 	for _, event := range events {
 		startDate := event.StartDate()
 		endDate := event.EndDate()
 
-		// Filter by time window
+		// Time window is the only gate
 		if endDate < windowStart || startDate > windowEnd {
-			result.Filtered++
-			continue
-		}
-
-		// Apply content filters
-		if !shouldStage(event, &fc) {
-			result.Filtered++
 			continue
 		}
 
 		actType := inferActivityType(event)
 
-		// Check if this event already exists in staging
 		existing, _ := stagedStore.FindBySourceEventID(source.ID, event.UID)
 
 		if existing != nil {
@@ -102,7 +92,7 @@ func SyncSource(source *ImportSource, stagedStore *StagedEventStore, activitySto
 				stagedStore.Update(existing)
 				result.Updated++
 
-				// Propagate changes to linked activity if imported
+				// Propagate to linked activity if imported
 				if existing.State == "imported" && existing.ActivityID != "" && activityStore != nil {
 					if act, err := activityStore.Get(existing.ActivityID); err == nil && act != nil {
 						act.Title = existing.Title
@@ -114,7 +104,7 @@ func SyncSource(source *ImportSource, stagedStore *StagedEventStore, activitySto
 				}
 			}
 		} else {
-			// Create new staged event
+			// Create new staged event (state will be set by ApplyFilters)
 			staged := &StagedEvent{
 				UserID:        source.UserID,
 				SourceID:      source.ID,
@@ -135,10 +125,141 @@ func SyncSource(source *ImportSource, stagedStore *StagedEventStore, activitySto
 		}
 	}
 
+	// Apply filters to set initial state on new events
+	filterResult := ApplyFilters(source, stagedStore)
+	result.Hidden = filterResult.Hidden
+	result.Selected = filterResult.Selected
+
 	// Update source last sync time
 	source.LastSyncAt = time.Now().Format(time.RFC3339)
 
 	return result, nil
+}
+
+// ApplyFiltersResult summarizes what changed when filters were applied.
+type ApplyFiltersResult struct {
+	Hidden   int `json:"hidden"`
+	Unhidden int `json:"unhidden"`
+	Selected int `json:"selected"`
+}
+
+// ApplyFilters evaluates all staged events for a source against its filters.
+// - Hide filters: matching "new" events → "hidden"
+// - Disabled hide filters: matching "hidden" events → "new" (unhide)
+// - Select filters: returns IDs of matching "new" events (for pre-selection)
+func ApplyFilters(source *ImportSource, stagedStore *StagedEventStore) *ApplyFiltersResult {
+	result := &ApplyFiltersResult{}
+
+	// Load filters (built-in + user)
+	filters := resolveFilters(source)
+
+	// Get all staged events for this source
+	events, err := stagedStore.ListBySource(source.ID)
+	if err != nil {
+		return result
+	}
+
+	// Build active pattern sets
+	activeHidePatterns := []string{}
+	disabledHidePatterns := []string{}
+	activeSelectPatterns := []string{}
+
+	for _, f := range filters {
+		if f.Type == "hide" || f.Type == "exclude" {
+			if f.Enabled {
+				activeHidePatterns = append(activeHidePatterns, strings.ToLower(f.Pattern))
+			} else {
+				disabledHidePatterns = append(disabledHidePatterns, strings.ToLower(f.Pattern))
+			}
+		}
+		if (f.Type == "select" || f.Type == "include") && f.Enabled {
+			activeSelectPatterns = append(activeSelectPatterns, strings.ToLower(f.Pattern))
+		}
+	}
+
+	for _, e := range events {
+		if e.State == "imported" {
+			continue // never touch imported events
+		}
+
+		title := strings.ToLower(e.Title)
+		location := strings.ToLower(e.Location)
+		matchesHide := matchesAny(title, location, activeHidePatterns)
+		matchesDisabledHide := matchesAny(title, location, disabledHidePatterns)
+
+		// Also auto-hide URL-only locations
+		if e.Location != "" && isURLOnly(strings.ToLower(e.Location)) {
+			matchesHide = true
+		}
+
+		if e.State == "new" && matchesHide {
+			e.State = "hidden"
+			stagedStore.Update(&e)
+			result.Hidden++
+		} else if e.State == "hidden" && matchesDisabledHide && !matchesHide {
+			// A previously hidden event whose hide filter was disabled → unhide
+			e.State = "new"
+			stagedStore.Update(&e)
+			result.Unhidden++
+		}
+
+		// Count select matches (for UI pre-selection)
+		if e.State == "new" && matchesAny(title, location, activeSelectPatterns) {
+			result.Selected++
+		}
+	}
+
+	return result
+}
+
+// resolveFilters returns the combined filter list for a source.
+func resolveFilters(source *ImportSource) []Filter {
+	filters := LoadDefaultFilters()
+
+	if source.FilterConfig == "" {
+		return filters
+	}
+
+	// Try parsing as new format (array of Filter)
+	var userFilters []Filter
+	if err := json.Unmarshal([]byte(source.FilterConfig), &userFilters); err == nil && len(userFilters) > 0 {
+		builtinByPattern := map[string]int{}
+		for i, f := range filters {
+			builtinByPattern[f.Pattern] = i
+		}
+		for _, uf := range userFilters {
+			if uf.Builtin {
+				if idx, ok := builtinByPattern[uf.Pattern]; ok {
+					filters[idx].Enabled = uf.Enabled
+				}
+			} else {
+				filters = append(filters, uf)
+			}
+		}
+		return filters
+	}
+
+	// Try parsing as legacy FilterConfig
+	var fc FilterConfig
+	if err := json.Unmarshal([]byte(source.FilterConfig), &fc); err == nil {
+		for _, kw := range fc.ExcludeKeywords {
+			filters = append(filters, Filter{Pattern: kw, Type: "hide", Enabled: true})
+		}
+		for _, kw := range fc.IncludeKeywords {
+			filters = append(filters, Filter{Pattern: kw, Type: "select", Enabled: true})
+		}
+	}
+
+	return filters
+}
+
+func matchesAny(title, location string, patterns []string) bool {
+	for _, p := range patterns {
+		if strings.Contains(title, p) || strings.Contains(location, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func fetchIcalEvents(url string) ([]icalparser.Event, error) {
@@ -155,100 +276,6 @@ func fetchIcalEvents(url string) ([]icalparser.Event, error) {
 	return icalparser.Parse(resp.Body)
 }
 
-// --- Filter logic ---
-
-// Built-in include keywords for type inference (separate from filter patterns)
-var filterStayKeywords = []string{"hotel", "airbnb", "vrbo", "stay", "accommodation", "check-in", "checkout"}
-
-func shouldStage(event icalparser.Event, fc *FilterConfig) bool {
-	title := strings.ToLower(event.Summary)
-	location := strings.ToLower(event.Location)
-
-	// Load filter patterns (built-in + user-defined from FilterConfig)
-	filters := LoadDefaultFilters()
-	if fc.DisableBuiltinExcludes {
-		var kept []Filter
-		for _, f := range filters {
-			if !(f.Builtin && f.Type == "exclude") {
-				kept = append(kept, f)
-			}
-		}
-		filters = kept
-	}
-	if fc.DisableBuiltinIncludes {
-		var kept []Filter
-		for _, f := range filters {
-			if !(f.Builtin && f.Type == "include") {
-				kept = append(kept, f)
-			}
-		}
-		filters = kept
-	}
-	// Add user keywords as filters
-	for _, kw := range fc.ExcludeKeywords {
-		filters = append(filters, Filter{Pattern: kw, Type: "exclude", Enabled: true})
-	}
-	for _, kw := range fc.IncludeKeywords {
-		filters = append(filters, Filter{Pattern: kw, Type: "include", Enabled: true})
-	}
-
-	// Step 1: Check exclude filters — match against LOCATION and TITLE only (not description)
-	excluded := false
-	for _, f := range filters {
-		if f.Type != "exclude" || !f.Enabled {
-			continue
-		}
-		lower := strings.ToLower(f.Pattern)
-		if strings.Contains(location, lower) || strings.Contains(title, lower) {
-			excluded = true
-			break
-		}
-	}
-
-	// Step 1b: URL-only location — if location is just a URL with no other text, exclude
-	if !excluded && location != "" && isURLOnly(location) {
-		excluded = true
-	}
-
-	// Step 2: Check include filters — match against TITLE and LOCATION (not description)
-	// Include overrides exclude
-	included := false
-	for _, f := range filters {
-		if f.Type != "include" || !f.Enabled {
-			continue
-		}
-		lower := strings.ToLower(f.Pattern)
-		if strings.Contains(title, lower) || strings.Contains(location, lower) {
-			included = true
-			break
-		}
-	}
-
-	// Step 3: Structural includes (always apply)
-	// All-day events and multi-day events are almost always travel-relevant
-	if event.AllDay {
-		included = true
-	}
-	if event.StartDate() != event.EndDate() {
-		included = true
-	}
-
-	// Step 4: Physical location — if location has non-URL text, likely a real place
-	if location != "" && !excluded && !isURLOnly(location) {
-		included = true
-	}
-
-	// Step 5: Decision
-	if included {
-		return true
-	}
-	if excluded {
-		return false
-	}
-	// No location, no keyword match — skip
-	return false
-}
-
 // isURLOnly returns true if the string is just a URL with no meaningful text.
 // Map URLs are excluded — they indicate a real physical location.
 func isURLOnly(s string) bool {
@@ -256,7 +283,6 @@ func isURLOnly(s string) bool {
 	if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
 		return false
 	}
-	// Map URLs are physical locations, not virtual meetings
 	lower := strings.ToLower(s)
 	if strings.Contains(lower, "google.com/maps") ||
 		strings.Contains(lower, "maps.app.goo.gl") ||
@@ -267,6 +293,7 @@ func isURLOnly(s string) bool {
 	return true
 }
 
+// inferActivityType guesses the activity type from event content.
 func inferActivityType(event icalparser.Event) string {
 	title := strings.ToLower(event.Summary)
 	words := strings.Fields(title)
@@ -282,21 +309,17 @@ func inferActivityType(event icalparser.Event) string {
 			return TypeCommitment
 		}
 	}
-	for _, kw := range filterStayKeywords {
+	for _, kw := range []string{"hotel", "airbnb", "vrbo", "stay", "accommodation"} {
 		if strings.Contains(title, kw) {
 			return TypeStay
 		}
 	}
 
-	// Multi-day with location → vacation
 	if event.StartDate() != event.EndDate() && event.Location != "" {
 		return TypeVacation
 	}
-
-	// Single day with location → commitment
 	if event.Location != "" {
 		return TypeCommitment
 	}
-
 	return TypeStay
 }

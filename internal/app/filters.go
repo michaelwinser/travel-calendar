@@ -14,7 +14,7 @@ var defaultIncludeFilters string
 // Filter represents a single filter rule.
 type Filter struct {
 	Pattern string `json:"pattern"`
-	Type    string `json:"type"`    // "exclude" or "include"
+	Type    string `json:"type"`    // "hide" or "select" (legacy: "exclude", "include")
 	Enabled bool   `json:"enabled"`
 	Builtin bool   `json:"builtin"`
 }
@@ -30,7 +30,7 @@ func LoadDefaultFilters() []Filter {
 		}
 		filters = append(filters, Filter{
 			Pattern: line,
-			Type:    "exclude",
+			Type:    "hide",
 			Enabled: true,
 			Builtin: true,
 		})
@@ -43,7 +43,7 @@ func LoadDefaultFilters() []Filter {
 		}
 		filters = append(filters, Filter{
 			Pattern: line,
-			Type:    "include",
+			Type:    "select",
 			Enabled: true,
 			Builtin: true,
 		})

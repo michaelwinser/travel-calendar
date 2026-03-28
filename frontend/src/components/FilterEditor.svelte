@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    getSourceFilters, updateSourceFilters,
+    getSourceFilters, updateSourceFilters, applySourceFilters,
     listStagedEvents, importStagedEvents, hideStagedEvents, unhideStagedEvents,
     syncSource,
     ACTIVITY_COLORS,
@@ -21,11 +21,11 @@
   let selectedIds = $state<Set<string>>(new Set());
   let hoveredFilter = $state<string | null>(null);
   let newFilterPattern = $state('');
-  let newFilterType = $state<'exclude' | 'include'>('exclude');
+  let newFilterType = $state<'hide' | 'select'>('hide');
   let saving = $state(false);
   let error = $state('');
   let searchQuery = $state('');
-  let stateFilter = $state<'' | 'new' | 'imported' | 'hidden'>('new');
+  let showHidden = $state(false);
 
   onMount(async () => {
     await refresh();
@@ -37,10 +37,30 @@
         getSourceFilters(source.id),
         listStagedEvents({ sourceId: source.id }),
       ]);
+      // Pre-select events matching "select" filters
+      autoSelect();
       error = '';
     } catch (e: any) {
       error = e.message;
     }
+  }
+
+  function autoSelect() {
+    const selectPatterns = filters
+      .filter(f => (f.type === 'select' || f.type === 'include') && f.enabled)
+      .map(f => f.pattern.toLowerCase());
+
+    const ids = new Set<string>();
+    for (const e of events) {
+      if (e.state !== 'new') continue;
+      for (const p of selectPatterns) {
+        if (e.title?.toLowerCase().includes(p) || e.location?.toLowerCase().includes(p)) {
+          ids.add(e.id);
+          break;
+        }
+      }
+    }
+    selectedIds = ids;
   }
 
   async function handleSync() {
@@ -54,7 +74,7 @@
 
   async function toggleFilter(idx: number) {
     filters[idx].enabled = !filters[idx].enabled;
-    await saveFilters();
+    await saveAndApply();
   }
 
   async function addFilter() {
@@ -66,18 +86,22 @@
       builtin: false,
     }];
     newFilterPattern = '';
-    await saveFilters();
+    await saveAndApply();
   }
 
   async function removeFilter(idx: number) {
     filters = filters.filter((_, i) => i !== idx);
-    await saveFilters();
+    await saveAndApply();
   }
 
-  async function saveFilters() {
+  async function saveAndApply() {
     saving = true;
     try {
       filters = await updateSourceFilters(source.id, filters);
+      await applySourceFilters(source.id);
+      // Re-fetch events to see state changes
+      events = await listStagedEvents({ sourceId: source.id }) ?? [];
+      autoSelect();
     } catch (e: any) {
       error = e.message;
     }
@@ -90,17 +114,16 @@
       (event.location?.toLowerCase().includes(lower));
   }
 
-  // Events matching the hovered filter
   let highlightedIds = $derived.by(() => {
     if (!hoveredFilter) return new Set<string>();
     return new Set(events.filter(e => matchesPattern(e, hoveredFilter!)).map(e => e.id));
   });
 
-  // Filtered events (state + search)
   let filteredEvents = $derived.by(() => {
     let result = events;
-    if (stateFilter) {
-      result = result.filter(e => e.state === stateFilter);
+    // Hide "hidden" events unless showHidden is on
+    if (!showHidden) {
+      result = result.filter(e => e.state !== 'hidden');
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -113,9 +136,18 @@
     return result;
   });
 
-  // Counts
-  let excludeCount = $derived(filters.filter(f => f.type === 'exclude' && f.enabled).length);
-  let includeCount = $derived(filters.filter(f => f.type === 'include' && f.enabled).length);
+  let counts = $derived.by(() => {
+    let newCount = 0, hiddenCount = 0, importedCount = 0;
+    for (const e of events) {
+      if (e.state === 'new') newCount++;
+      else if (e.state === 'hidden') hiddenCount++;
+      else if (e.state === 'imported') importedCount++;
+    }
+    return { newCount, hiddenCount, importedCount, total: events.length };
+  });
+
+  let hideFilters = $derived(filters.filter(f => f.type === 'hide' || f.type === 'exclude'));
+  let selectFilters = $derived(filters.filter(f => f.type === 'select' || f.type === 'include'));
 
   async function handleImport() {
     if (selectedIds.size === 0) return;
@@ -165,7 +197,9 @@
 <div class="fullscreen">
   <div class="toolbar">
     <h2>{source.name}</h2>
-    <span class="event-count">{events.length} events ({filteredEvents.length} shown)</span>
+    <span class="counts">
+      {counts.newCount} new · {counts.hiddenCount} hidden · {counts.importedCount} imported · {counts.total} total
+    </span>
     <div class="toolbar-spacer"></div>
     <button class="btn" onclick={handleSync}>Sync</button>
     <button class="btn btn-close" onclick={onclose}>Close</button>
@@ -180,12 +214,10 @@
     <div class="events-pane">
       <div class="events-toolbar">
         <input type="text" class="search" placeholder="Search events..." bind:value={searchQuery} />
-        <select class="state-select" bind:value={stateFilter}>
-          <option value="new">New</option>
-          <option value="">All</option>
-          <option value="imported">Imported</option>
-          <option value="hidden">Hidden</option>
-        </select>
+        <label class="show-hidden-toggle">
+          <input type="checkbox" bind:checked={showHidden} />
+          Show hidden
+        </label>
       </div>
       <div class="bulk-bar">
         <label class="select-all">
@@ -195,13 +227,9 @@
           {selectedIds.size}/{filteredEvents.length}
         </label>
         <div class="bulk-actions">
-          {#if stateFilter === 'new' || stateFilter === ''}
-            <button class="btn-sm btn-primary-sm" onclick={handleImport} disabled={selectedIds.size === 0}>Import</button>
-            <button class="btn-sm" onclick={handleHide} disabled={selectedIds.size === 0}>Hide</button>
-          {/if}
-          {#if stateFilter === 'hidden'}
-            <button class="btn-sm" onclick={handleUnhide} disabled={selectedIds.size === 0}>Unhide</button>
-          {/if}
+          <button class="btn-sm btn-primary-sm" onclick={handleImport} disabled={selectedIds.size === 0}>Import</button>
+          <button class="btn-sm" onclick={handleHide} disabled={selectedIds.size === 0}>Hide</button>
+          <button class="btn-sm" onclick={handleUnhide} disabled={selectedIds.size === 0}>Unhide</button>
         </div>
       </div>
 
@@ -235,47 +263,47 @@
 
     <!-- Right: Filters -->
     <div class="filters-pane">
-      <h3>Filters <span class="filter-summary">{excludeCount} exclude, {includeCount} include</span></h3>
+      <h3>Filters</h3>
 
       <div class="filter-section">
-        <h4>Exclude patterns</h4>
-        {#each filters as filter, idx}
-          {#if filter.type === 'exclude'}
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div class="filter-row"
-              onmouseenter={() => hoveredFilter = filter.pattern}
-              onmouseleave={() => hoveredFilter = null}
-            >
-              <input type="checkbox" checked={filter.enabled} onchange={() => toggleFilter(idx)} />
-              <span class="filter-pattern" class:disabled={!filter.enabled}>{filter.pattern}</span>
-              {#if filter.builtin}
-                <span class="builtin-tag">built-in</span>
-              {:else}
-                <button class="remove-btn" onclick={() => removeFilter(idx)}>&times;</button>
-              {/if}
-            </div>
-          {/if}
+        <h4>Hide patterns</h4>
+        <p class="filter-hint">Matching events are hidden from view (recoverable).</p>
+        {#each hideFilters as filter}
+          {@const idx = filters.indexOf(filter)}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div class="filter-row"
+            onmouseenter={() => hoveredFilter = filter.pattern}
+            onmouseleave={() => hoveredFilter = null}
+          >
+            <input type="checkbox" checked={filter.enabled} onchange={() => toggleFilter(idx)} />
+            <span class="filter-pattern" class:disabled={!filter.enabled}>{filter.pattern}</span>
+            {#if filter.builtin}
+              <span class="builtin-tag">built-in</span>
+            {:else}
+              <button class="remove-btn" onclick={() => removeFilter(idx)}>&times;</button>
+            {/if}
+          </div>
         {/each}
       </div>
 
       <div class="filter-section">
-        <h4>Include patterns</h4>
-        {#each filters as filter, idx}
-          {#if filter.type === 'include'}
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div class="filter-row"
-              onmouseenter={() => hoveredFilter = filter.pattern}
-              onmouseleave={() => hoveredFilter = null}
-            >
-              <input type="checkbox" checked={filter.enabled} onchange={() => toggleFilter(idx)} />
-              <span class="filter-pattern" class:disabled={!filter.enabled}>{filter.pattern}</span>
-              {#if filter.builtin}
-                <span class="builtin-tag">built-in</span>
-              {:else}
-                <button class="remove-btn" onclick={() => removeFilter(idx)}>&times;</button>
-              {/if}
-            </div>
-          {/if}
+        <h4>Select patterns</h4>
+        <p class="filter-hint">Matching events are pre-selected for import.</p>
+        {#each selectFilters as filter}
+          {@const idx = filters.indexOf(filter)}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div class="filter-row"
+            onmouseenter={() => hoveredFilter = filter.pattern}
+            onmouseleave={() => hoveredFilter = null}
+          >
+            <input type="checkbox" checked={filter.enabled} onchange={() => toggleFilter(idx)} />
+            <span class="filter-pattern" class:disabled={!filter.enabled}>{filter.pattern}</span>
+            {#if filter.builtin}
+              <span class="builtin-tag">built-in</span>
+            {:else}
+              <button class="remove-btn" onclick={() => removeFilter(idx)}>&times;</button>
+            {/if}
+          </div>
         {/each}
       </div>
 
@@ -283,14 +311,14 @@
         <input type="text" placeholder="New pattern..." bind:value={newFilterPattern}
           onkeydown={(e) => e.key === 'Enter' && addFilter()} />
         <select bind:value={newFilterType}>
-          <option value="exclude">Exclude</option>
-          <option value="include">Include</option>
+          <option value="hide">Hide</option>
+          <option value="select">Select</option>
         </select>
         <button class="btn-sm" onclick={addFilter} disabled={!newFilterPattern.trim()}>Add</button>
       </div>
 
       <p class="hint">
-        Hover a filter to highlight matching events. Filters apply on the next sync.
+        Hover a filter to highlight matching events. Changes apply immediately.
       </p>
     </div>
   </div>
@@ -308,7 +336,7 @@
     border-bottom: 1px solid #eee;
   }
   .toolbar h2 { margin: 0; font-size: 1.1rem; }
-  .event-count { font-size: 0.8rem; color: #888; }
+  .counts { font-size: 0.75rem; color: #888; }
   .toolbar-spacer { flex: 1; }
 
   .btn {
@@ -323,11 +351,8 @@
     padding: 0.4rem 1.25rem; background: #fef2f2;
   }
 
-  .layout {
-    display: flex; flex: 1; overflow: hidden;
-  }
+  .layout { display: flex; flex: 1; overflow: hidden; }
 
-  /* Left pane: events */
   .events-pane {
     flex: 1; display: flex; flex-direction: column;
     border-right: 1px solid #eee;
@@ -336,7 +361,6 @@
   .events-toolbar {
     display: flex; align-items: center; gap: 0.5rem;
     padding: 0.5rem 0.75rem; background: white; border-bottom: 1px solid #eee;
-    flex-wrap: wrap;
   }
 
   .search {
@@ -346,10 +370,11 @@
   }
   .search:focus { outline: none; border-color: #333; }
 
-  .state-select {
-    padding: 0.3rem 0.4rem; border: 1px solid #ddd; border-radius: 6px;
-    font-size: 0.8rem; background: white;
+  .show-hidden-toggle {
+    display: flex; align-items: center; gap: 0.3rem;
+    font-size: 0.75rem; color: #888; cursor: pointer; white-space: nowrap;
   }
+  .show-hidden-toggle input { margin: 0; }
 
   .bulk-bar {
     display: flex; align-items: center; justify-content: space-between;
@@ -374,9 +399,7 @@
   .btn-primary-sm { background: #333; color: white; border-color: #333; }
   .btn-primary-sm:hover { background: #555; }
 
-  .events-list {
-    flex: 1; overflow-y: auto; background: white;
-  }
+  .events-list { flex: 1; overflow-y: auto; background: white; }
 
   .event-row {
     display: flex; align-items: center; gap: 0.5rem;
@@ -387,7 +410,7 @@
   .event-row:hover { background: #f8f9fa; }
   .event-row.highlighted { background: #fef3c7; }
   .event-row.imported { opacity: 0.5; }
-  .event-row.hidden-ev { opacity: 0.35; text-decoration: line-through; }
+  .event-row.hidden-ev { opacity: 0.4; }
   .event-row input { margin: 0; flex-shrink: 0; }
 
   .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
@@ -402,21 +425,17 @@
   .tag-imported { background: #dcfce7; color: #166534; }
   .tag-hidden { background: #f3f4f6; color: #9ca3af; }
 
-  /* Right pane: filters */
   .filters-pane {
     width: 320px; padding: 0.75rem; overflow-y: auto; background: white;
   }
-  .filters-pane h3 {
-    margin: 0 0 0.75rem; font-size: 0.95rem;
-    display: flex; align-items: baseline; gap: 0.5rem;
-  }
-  .filter-summary { font-size: 0.7rem; color: #888; font-weight: 400; }
+  .filters-pane h3 { margin: 0 0 0.75rem; font-size: 0.95rem; }
 
   .filter-section { margin-bottom: 1rem; }
   .filter-section h4 {
     font-size: 0.75rem; color: #999; text-transform: uppercase;
-    letter-spacing: 0.05em; margin: 0 0 0.35rem; font-weight: 600;
+    letter-spacing: 0.05em; margin: 0 0 0.15rem; font-weight: 600;
   }
+  .filter-hint { font-size: 0.7rem; color: #bbb; margin: 0 0 0.35rem; }
 
   .filter-row {
     display: flex; align-items: center; gap: 0.4rem;
@@ -437,9 +456,7 @@
   }
   .remove-btn:hover { color: #dc2626; }
 
-  .add-filter {
-    display: flex; gap: 0.3rem; margin-top: 0.5rem;
-  }
+  .add-filter { display: flex; gap: 0.3rem; margin-top: 0.5rem; }
   .add-filter input {
     flex: 1; padding: 0.25rem 0.4rem; border: 1px solid #ddd;
     border-radius: 4px; font-size: 0.8rem; font-family: inherit;
@@ -450,7 +467,5 @@
     border-radius: 4px; font-size: 0.75rem;
   }
 
-  .hint {
-    font-size: 0.7rem; color: #aaa; margin-top: 0.75rem;
-  }
+  .hint { font-size: 0.7rem; color: #aaa; margin-top: 0.75rem; }
 </style>
