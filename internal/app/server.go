@@ -334,6 +334,8 @@ func (s *ActivityServer) DeleteActivity(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
+	s.hideStagedEventForActivity(id)
+
 	if err := s.store.Delete(id); err != nil {
 		server.RespondError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -359,6 +361,7 @@ func (s *ActivityServer) BulkDeleteActivities(w http.ResponseWriter, r *http.Req
 		if err != nil || a == nil || a.UserID != userID {
 			continue
 		}
+		s.hideStagedEventForActivity(id)
 		if err := s.store.Delete(id); err == nil {
 			deleted++
 		}
@@ -1044,6 +1047,21 @@ func (s *ActivityServer) HandlePublicDashboard(w http.ResponseWriter, r *http.Re
 	w.Write([]byte("<html><body><p>Public dashboard frontend not available. Use /public/" + p.Handle + ".json for data.</p></body></html>"))
 }
 
+
+// hideStagedEventForActivity marks the staged event linked to an activity as hidden.
+// Called when an imported activity is deleted — prevents the event from resurfacing.
+func (s *ActivityServer) hideStagedEventForActivity(activityID string) {
+	if s.stagedEvents == nil {
+		return
+	}
+	staged, err := s.stagedEvents.FindByActivityID(activityID)
+	if err != nil || staged == nil {
+		return
+	}
+	staged.State = "hidden"
+	staged.ActivityID = ""
+	s.stagedEvents.Update(staged)
+}
 
 // --- conflict detection ---
 

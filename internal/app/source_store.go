@@ -154,6 +154,17 @@ func (s *StagedEventStore) Update(e *StagedEvent) error {
 	return s.coll.Update(e.ID, e)
 }
 
+func (s *StagedEventStore) FindByActivityID(activityID string) (*StagedEvent, error) {
+	events, err := s.coll.Where("activity_id", "==", activityID).All()
+	if err != nil {
+		return nil, err
+	}
+	if len(events) == 0 {
+		return nil, nil
+	}
+	return &events[0], nil
+}
+
 func (s *StagedEventStore) Delete(id string) error {
 	return s.coll.Delete(id)
 }
