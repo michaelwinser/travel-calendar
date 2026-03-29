@@ -263,6 +263,7 @@ func renderFlexDisplay(w http.ResponseWriter, handle, theme string, showHeader b
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: sans-serif; background: #fff; color: #000; width: 800px; height: 480px; overflow: hidden; }
+.day-num.past { font-weight: 400; }
 .header { display: flex; justify-content: space-between; align-items: center; padding: 4px 12px; background: #000; color: #fff; height: %dpx; }
 .title { font-size: 14px; font-weight: 700; }
 .now-loc { font-size: 13px; font-weight: 700; }
@@ -321,6 +322,8 @@ body { font-family: sans-serif; background: #fff; color: #000; width: 800px; hei
 			}
 			if d.IsToday {
 				fmt.Fprintf(w, `<span class="day-num today">%d</span>`, d.Day)
+			} else if d.IsPast {
+				fmt.Fprintf(w, `<span class="day-num past">%d</span>`, d.Day)
 			} else {
 				fmt.Fprintf(w, `<span class="day-num">%d</span>`, d.Day)
 			}
