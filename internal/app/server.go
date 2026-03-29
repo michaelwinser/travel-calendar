@@ -1032,7 +1032,7 @@ func (s *ActivityServer) HandlePublicDashboard(w http.ResponseWriter, r *http.Re
 
 	if isJSON {
 		server.RespondJSON(w, http.StatusOK, api.SharedCalendarResponse{
-			Label:      "Where is " + p.Handle + "?",
+			Label:      "Where is " + capitalizeFirst(p.Handle) + "?",
 			OwnerEmail: nil,
 			Activities: shared,
 		})
@@ -1501,6 +1501,13 @@ func validateHandle(h string) error {
 		return fmt.Errorf("handle must be 3-30 chars, lowercase alphanumeric and hyphens")
 	}
 	return nil
+}
+
+func capitalizeFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 func ptr(s string) *string { return &s }

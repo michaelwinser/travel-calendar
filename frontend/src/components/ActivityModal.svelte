@@ -64,11 +64,8 @@
   let titleInput: HTMLInputElement;
 
   onMount(() => {
-    if (props.focusText) {
-      textInput?.focus();
-    } else {
-      titleInput?.focus();
-    }
+    // Always focus the quick-add text input — it's the primary input mode
+    textInput?.focus();
     // Generate initial text from fields if editing
     if (props.mode === 'edit') {
       quickText = generateText();

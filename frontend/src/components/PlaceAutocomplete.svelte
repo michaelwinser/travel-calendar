@@ -157,10 +157,39 @@
     }, 150);
   }
 
+  const usStates: Record<string, string> = {
+    AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',
+    CO:'Colorado',CT:'Connecticut',DE:'Delaware',FL:'Florida',GA:'Georgia',
+    HI:'Hawaii',ID:'Idaho',IL:'Illinois',IN:'Indiana',IA:'Iowa',KS:'Kansas',
+    KY:'Kentucky',LA:'Louisiana',ME:'Maine',MD:'Maryland',MA:'Massachusetts',
+    MI:'Michigan',MN:'Minnesota',MS:'Mississippi',MO:'Missouri',MT:'Montana',
+    NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',NJ:'New Jersey',NM:'New Mexico',
+    NY:'New York',NC:'North Carolina',ND:'North Dakota',OH:'Ohio',OK:'Oklahoma',
+    OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',
+    SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',
+    VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',
+    DC:'District of Columbia',
+  };
+
+  const countryNames: Record<string, string> = {
+    US:'United States',GB:'United Kingdom',CA:'Canada',FR:'France',DE:'Germany',
+    IT:'Italy',ES:'Spain',NL:'Netherlands',BE:'Belgium',CH:'Switzerland',
+    JP:'Japan',AU:'Australia',NZ:'New Zealand',BR:'Brazil',MX:'Mexico',
+    IE:'Ireland',SE:'Sweden',NO:'Norway',DK:'Denmark',AT:'Austria',
+  };
+
+  const wellKnown = new Set(['london','paris','tokyo','berlin','rome','amsterdam','brussels','vienna','sydney','dublin','singapore']);
+
   function formatSuggestion(sug: PlaceSuggestion): string {
     const parts = [sug.name];
-    if (sug.admin1) parts.push(sug.admin1);
-    if (sug.country) parts.push(sug.country);
+    if (sug.admin1 && sug.country === 'US') {
+      parts.push(usStates[sug.admin1] ?? sug.admin1);
+    } else if (sug.admin1) {
+      parts.push(sug.admin1);
+    }
+    if (sug.country && !wellKnown.has(sug.name.toLowerCase())) {
+      parts.push(countryNames[sug.country] ?? sug.country);
+    }
     return parts.join(', ');
   }
 

@@ -107,7 +107,7 @@ func (s *ActivityServer) HandlePublicFeed(w http.ResponseWriter, r *http.Request
 	// Public feed: no titles, location + type only
 	events := activitiesToIcalEvents(activities, tripMap, false)
 
-	serveIcalFeed(w, "Where is "+p.Handle+"?", events)
+	serveIcalFeed(w, "Where is "+capitalizeFirst(p.Handle)+"?", events)
 }
 
 func activitiesToIcalEvents(activities []Activity, tripMap map[string]Trip, showTitle bool) []ical.CalendarEvent {
