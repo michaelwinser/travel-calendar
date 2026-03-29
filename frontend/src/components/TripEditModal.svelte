@@ -3,13 +3,16 @@
   import { ACTIVITY_COLORS, type Activity } from '../lib/api';
   import { formatDateRange } from '../lib/date-utils';
 
+  type TripStatus = 'planned' | 'confirmed' | 'tentative';
+
   interface Props {
     name: string;
     color: string;
     startDate?: string;
     endDate?: string;
+    status?: string;
     unassignedActivities?: Activity[];
-    onsubmit: (data: { name: string; color: string; startDate?: string; endDate?: string }) => void;
+    onsubmit: (data: { name: string; color: string; startDate?: string; endDate?: string; status?: TripStatus }) => void;
     ondelete: () => void;
     oncancel: () => void;
     onassign?: (activityId: string) => void;
@@ -21,6 +24,7 @@
   let color = $state(props.color);
   let startDate = $state(props.startDate ?? '');
   let endDate = $state(props.endDate ?? '');
+  let status = $state<TripStatus>((props.status as TripStatus) ?? 'planned');
   let confirmingDelete = $state(false);
   let nameInput: HTMLInputElement;
 
@@ -40,6 +44,7 @@
       color,
       startDate: startDate || undefined,
       endDate: endDate || undefined,
+      status,
     });
   }
 </script>
@@ -66,6 +71,20 @@
           <input type="date" bind:value={endDate} />
         </label>
       </div>
+
+      <label>
+        <span>Status</span>
+        <div class="status-picker">
+          {#each ['planned', 'confirmed', 'tentative'] as s}
+            <button
+              type="button"
+              class="status-btn"
+              class:selected={status === s}
+              onclick={() => status = s as TripStatus}
+            >{s}</button>
+          {/each}
+        </div>
+      </label>
 
       <label>
         <span>Color</span>
@@ -182,6 +201,34 @@
 
   .date-row label {
     flex: 1;
+  }
+
+  .status-picker {
+    display: flex;
+    gap: 0.4rem;
+  }
+
+  .status-btn {
+    flex: 1;
+    padding: 0.4rem;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: white;
+    font-size: 0.8rem;
+    font-family: inherit;
+    cursor: pointer;
+    text-transform: capitalize;
+    color: #666;
+  }
+
+  .status-btn:hover {
+    background: #f5f5f5;
+  }
+
+  .status-btn.selected {
+    border-color: #333;
+    background: #333;
+    color: white;
   }
 
   input[type="date"] {

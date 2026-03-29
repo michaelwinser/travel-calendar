@@ -418,6 +418,11 @@ export interface components {
             name: string;
             /** @description Hex color for visual grouping */
             color: string;
+            /**
+             * @description Trip status
+             * @enum {string}
+             */
+            status: "planned" | "confirmed" | "tentative";
             /** Format: date-time */
             createdAt: string;
         };
@@ -425,6 +430,8 @@ export interface components {
             id: string;
             name: string;
             color: string;
+            /** @enum {string} */
+            status: "planned" | "confirmed" | "tentative";
             /**
              * Format: date
              * @description Trip start date (explicit or earliest activity)
@@ -442,6 +449,8 @@ export interface components {
             name: string;
             /** @description Hex color (auto-assigned if omitted) */
             color?: string;
+            /** @enum {string} */
+            status?: "planned" | "confirmed" | "tentative";
             /** Format: date */
             startDate?: string;
             /** Format: date */
@@ -450,6 +459,8 @@ export interface components {
         UpdateTripRequest: {
             name?: string;
             color?: string;
+            /** @enum {string} */
+            status?: "planned" | "confirmed" | "tentative";
             /** Format: date */
             startDate?: string;
             /** Format: date */

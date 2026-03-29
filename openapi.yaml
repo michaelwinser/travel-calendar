@@ -865,7 +865,7 @@ components:
 
     Trip:
       type: object
-      required: [id, userId, name, color, createdAt]
+      required: [id, userId, name, color, status, createdAt]
       properties:
         id:
           type: string
@@ -876,13 +876,17 @@ components:
         color:
           type: string
           description: Hex color for visual grouping
+        status:
+          type: string
+          enum: [planned, confirmed, tentative]
+          description: Trip status
         createdAt:
           type: string
           format: date-time
 
     TripSummary:
       type: object
-      required: [id, name, color, startDate, endDate, activityCount]
+      required: [id, name, color, status, startDate, endDate, activityCount]
       properties:
         id:
           type: string
@@ -890,6 +894,9 @@ components:
           type: string
         color:
           type: string
+        status:
+          type: string
+          enum: [planned, confirmed, tentative]
         startDate:
           type: string
           format: date
@@ -915,6 +922,9 @@ components:
         color:
           type: string
           description: Hex color (auto-assigned if omitted)
+        status:
+          type: string
+          enum: [planned, confirmed, tentative]
         startDate:
           type: string
           format: date
@@ -929,6 +939,9 @@ components:
           type: string
         color:
           type: string
+        status:
+          type: string
+          enum: [planned, confirmed, tentative]
         startDate:
           type: string
           format: date

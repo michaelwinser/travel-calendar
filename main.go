@@ -274,6 +274,7 @@ func main() {
 	tripCreateCmd.Flags().String("color", "", "Hex color (auto-assigned if omitted)")
 	tripCreateCmd.Flags().String("from", "", "Start date (YYYY-MM-DD)")
 	tripCreateCmd.Flags().String("to", "", "End date (YYYY-MM-DD)")
+	tripCreateCmd.Flags().String("status", "", "Trip status: planned, confirmed, tentative")
 	tripCmd.AddCommand(tripCreateCmd)
 
 	tripDeleteCmd := &cobra.Command{
@@ -1295,14 +1296,14 @@ func listTripsCmd(cmd *cobra.Command, args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "ID\tNAME\tDATES\tLOCATIONS\tACTIVITIES\n")
+	fmt.Fprintf(w, "ID\tNAME\tSTATUS\tDATES\tLOCATIONS\tACTIVITIES\n")
 	for _, t := range trips {
 		dates := t.StartDate.Format("2006-01-02") + " -> " + t.EndDate.Format("2006-01-02")
 		locs := ""
 		if t.Locations != nil {
 			locs = strings.Join(*t.Locations, ", ")
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\n", t.Id[:8], t.Name, dates, locs, t.ActivityCount)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%d\n", t.Id[:8], t.Name, t.Status, dates, locs, t.ActivityCount)
 	}
 	w.Flush()
 	return nil
@@ -1400,6 +1401,11 @@ func createTripCmd(cmd *cobra.Command, args []string) error {
 		req.EndDate = &ed
 	}
 
+	if st, _ := cmd.Flags().GetString("status"); st != "" {
+		s := api.CreateTripRequestStatus(st)
+		req.Status = &s
+	}
+
 	resp, err := client.CreateTripWithResponse(context.Background(), req)
 	if err != nil {
 		return err
@@ -1409,7 +1415,7 @@ func createTripCmd(cmd *cobra.Command, args []string) error {
 	}
 
 	t := resp.JSON201
-	fmt.Printf("Created trip: %s (%s) color: %s\n", t.Name, t.Id[:8], t.Color)
+	fmt.Printf("Created trip: %s (%s) color: %s status: %s\n", t.Name, t.Id[:8], t.Color, t.Status)
 	return nil
 }
 

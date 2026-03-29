@@ -516,7 +516,7 @@
     if (trip) editingTrip = trip;
   }
 
-  async function handleTripUpdate(data: { name: string; color: string; startDate?: string; endDate?: string }) {
+  async function handleTripUpdate(data: { name: string; color: string; startDate?: string; endDate?: string; status?: string }) {
     if (!editingTrip) return;
     try {
       await updateTrip(editingTrip.id, {
@@ -524,6 +524,7 @@
         color: data.color,
         startDate: data.startDate,
         endDate: data.endDate,
+        status: data.status as any,
       });
       editingTrip = null;
       await refreshActivities();
@@ -798,6 +799,7 @@
       color={editingTrip.color}
       startDate={editingTrip.startDate}
       endDate={editingTrip.endDate}
+      status={editingTrip.status}
       unassignedActivities={tripUnassigned}
       onsubmit={handleTripUpdate}
       ondelete={handleTripDelete}

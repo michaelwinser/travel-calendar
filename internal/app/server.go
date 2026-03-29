@@ -488,10 +488,15 @@ func (s *ActivityServer) ListTrips(w http.ResponseWriter, r *http.Request) {
 			locs = append(locs, l)
 		}
 
+		tripStatus := t.Status
+		if tripStatus == "" {
+			tripStatus = "planned"
+		}
 		summary := api.TripSummary{
 			Id:            t.ID,
 			Name:          t.Name,
 			Color:         t.Color,
+			Status:        api.TripSummaryStatus(tripStatus),
 			StartDate:     openapi_types.Date{Time: sd},
 			EndDate:       openapi_types.Date{Time: ed},
 			ActivityCount: count,
@@ -545,7 +550,12 @@ func (s *ActivityServer) CreateTrip(w http.ResponseWriter, r *http.Request) {
 		endDate = req.EndDate.Time.Format("2006-01-02")
 	}
 
-	t, err := s.trips.Create(userID, req.Name, color, startDate, endDate)
+	status := ""
+	if req.Status != nil {
+		status = string(*req.Status)
+	}
+
+	t, err := s.trips.Create(userID, req.Name, color, startDate, endDate, status)
 	if err != nil {
 		server.RespondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -557,6 +567,7 @@ func (s *ActivityServer) CreateTrip(w http.ResponseWriter, r *http.Request) {
 		UserId:    t.UserID,
 		Name:      t.Name,
 		Color:     t.Color,
+		Status:    api.TripStatus(t.Status),
 		CreatedAt: createdAt,
 	})
 }
@@ -591,6 +602,9 @@ func (s *ActivityServer) UpdateTrip(w http.ResponseWriter, r *http.Request, id s
 	if req.EndDate != nil {
 		t.EndDate = req.EndDate.Time.Format("2006-01-02")
 	}
+	if req.Status != nil {
+		t.Status = string(*req.Status)
+	}
 
 	if err := s.trips.Update(t); err != nil {
 		server.RespondError(w, http.StatusBadRequest, err.Error())
@@ -603,6 +617,7 @@ func (s *ActivityServer) UpdateTrip(w http.ResponseWriter, r *http.Request, id s
 		UserId:    t.UserID,
 		Name:      t.Name,
 		Color:     t.Color,
+		Status:    api.TripStatus(t.Status),
 		CreatedAt: createdAt,
 	})
 }
