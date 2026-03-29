@@ -109,7 +109,38 @@ Three runtime modes:
 - **Web server**: `./dev serve` — full OAuth, persistent server
 - **Remote CLI**: `./travel list --server https://...` — keychain auth
 
+Identity: `./travel info` shows the current mode, user identity, and database path.
+
+Environment overrides:
+- `DEV_USER_EMAIL` — override the local-mode user identity
+- `TRAVEL_TEST_MODE=true` — accept `X-Test-User` header for API test auth (never in production)
+
 Config: `app.yaml` (loaded by appbase). Env var overrides still work (`STORE_TYPE`, `PORT`, etc).
+
+## Sandboxing
+
+All development sessions should run inside a [nono](https://github.com/always-further/nono) sandbox:
+
+```bash
+# Recommended: start Claude Code with project capabilities
+cd ~/claude/travel-calendar
+scripts/sandbox.sh claude
+
+# Run CI sandboxed
+scripts/sandbox.sh ./dev ci
+
+# Run a CLI command sandboxed
+scripts/sandbox.sh ./travel list
+```
+
+The sandbox extends the `claude-code` profile with:
+- `~/.config/travel` (app data) — read+write
+- `~/go` (Go module cache) — read+write
+- Port 3001 binding (dev server)
+
+Two audit layers are active:
+- **nono audit**: records every sandboxed session, capabilities granted, and commands run (`nono audit list`)
+- **Claude Code tool audit**: `.claude/hooks/audit-tool.sh` logs every tool call to `.claude/audit.jsonl`
 
 ## Git Workflow
 
