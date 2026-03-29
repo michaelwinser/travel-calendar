@@ -103,6 +103,52 @@ func TestParse_UC2010_FromToAsLocations(t *testing.T) {
 	assertLocation(t, r, "London → Paris")
 }
 
+// --- Issue #71 test cases ---
+
+func TestParse_71_BrusselsConference(t *testing.T) {
+	r := Parse("Brussels conference Feb 3", testToday)
+	assertLocation(t, r, "Brussels")
+	assertStartDate(t, r, "2027-02-03")
+	// Title should be "conference", not "Brussels conference"
+	assertTitle(t, r, "conference")
+}
+
+func TestParse_71_FlightEWRtoCDG(t *testing.T) {
+	r := Parse("Flight EWR to CDG March 5", testToday)
+	assertType(t, r, TypeTravel)
+	assertStartDate(t, r, "2027-03-05")
+	assertLocation(t, r, "EWR → CDG")
+}
+
+func TestParse_71_TripToLondon(t *testing.T) {
+	r := Parse("Trip to London March 12-16", testToday)
+	assertLocation(t, r, "London")
+	assertStartDate(t, r, "2027-03-12")
+	assertEndDate(t, r, "2027-03-16")
+}
+
+func TestParse_71_OffsiteMilan(t *testing.T) {
+	r := Parse("EF Security Team Offsite Milan Mar 17-19", testToday)
+	assertLocation(t, r, "Milan")
+	assertStartDate(t, r, "2027-03-17")
+	assertEndDate(t, r, "2027-03-19")
+	assertTitle(t, r, "EF Security Team Offsite")
+}
+
+func TestParse_71_DriveHomeToEWR(t *testing.T) {
+	r := Parse("Drive Home to EWR March 12", testToday)
+	assertType(t, r, TypeTravel)
+	assertLocation(t, r, "Home → EWR")
+	assertStartDate(t, r, "2027-03-12")
+}
+
+func TestParse_71_DentistAppointment(t *testing.T) {
+	r := Parse("Dentist appointment March 3", testToday)
+	assertType(t, r, TypeCommitment)
+	assertStartDate(t, r, "2027-03-03")
+	assertTitle(t, r, "Dentist appointment")
+}
+
 // --- Helpers ---
 
 func assertTitle(t *testing.T, r ParsedResult, expected string) {

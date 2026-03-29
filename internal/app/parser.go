@@ -4,6 +4,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/michaelwinser/travel-calendar/gazetteer"
 )
 
 // Confidence levels for parsed fields.
@@ -75,6 +77,37 @@ func Parse(text string, today time.Time) ParsedResult {
 	consumed := make([]bool, n)
 	conf := map[string]string{}
 
+	// --- Pass 0: Find place tokens via gazetteer ---
+	var placeTokens []gazetteer.PlaceToken
+	gaz, gazErr := gazetteer.Get()
+	if gazErr == nil {
+		placeTokens = gaz.FindPlaceTokens(tokens, consumed)
+	}
+	// Also check for "Home" (common user-defined place, not in gazetteer)
+	for i, tok := range tokens {
+		if !consumed[i] && strings.ToLower(tok) == "home" {
+			// Check it's not already found by gazetteer
+			alreadyFound := false
+			for _, pt := range placeTokens {
+				if pt.Start == i {
+					alreadyFound = true
+					break
+				}
+			}
+			if !alreadyFound {
+				placeTokens = append(placeTokens, gazetteer.PlaceToken{
+					Start: i, End: i + 1, Text: tok,
+				})
+			}
+		}
+	}
+	// Sort place tokens by position
+	for i := 1; i < len(placeTokens); i++ {
+		for j := i; j > 0 && placeTokens[j].Start < placeTokens[j-1].Start; j-- {
+			placeTokens[j], placeTokens[j-1] = placeTokens[j-1], placeTokens[j]
+		}
+	}
+
 	// --- Pass 1: Find dates ---
 	var dates []parsedDate
 
@@ -114,6 +147,24 @@ func Parse(text string, today time.Time) ParsedResult {
 
 		d := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 		dates = append(dates, parsedDate{t: d, hasYear: hasYear, startToken: i, endToken: endIdx})
+
+		// Check for same-month range: "March 12-16" or "March 12 - 16"
+		rangeEndIdx := endIdx
+		if rangeEndIdx < n && tokens[rangeEndIdx] == "-" && rangeEndIdx+1 < n {
+			endDay := parseDay(tokens[rangeEndIdx+1])
+			if endDay > 0 {
+				endYear := year
+				if !hasYear {
+					endYear = inferYear(month, endDay, today)
+				}
+				d2 := time.Date(endYear, month, endDay, 0, 0, 0, 0, time.UTC)
+				dates = append(dates, parsedDate{t: d2, hasYear: hasYear, startToken: rangeEndIdx, endToken: rangeEndIdx + 2})
+				for j := rangeEndIdx; j < rangeEndIdx+2; j++ {
+					consumed[j] = true
+				}
+				endIdx = rangeEndIdx + 2
+			}
+		}
 
 		// Mark tokens as consumed
 		for j := i; j < endIdx; j++ {
@@ -157,59 +208,112 @@ func Parse(text string, today time.Time) ParsedResult {
 	// --- Pass 3: Location extraction ---
 	location := ""
 	locationConf := ConfLow
+	routeFrom := ""
 
-	// Check for "from X to Y" pattern where X and Y are NOT dates (route pattern)
-	// Must run BEFORE consuming "from" as a date keyword
-	routeFrom, routeTo, routeConsumed := extractRoute(tokens, consumed, dates)
+	// Strategy: use place tokens first, fall back to keyword extraction
 
-	// Consume "from" before first date only if it's not part of a route
-	if routeFrom == "" && len(dates) >= 1 {
-		for i := 0; i < dates[0].startToken; i++ {
+	if len(placeTokens) >= 2 {
+		// Check for route pattern: PLACE "to" PLACE
+		p1 := placeTokens[0]
+		p2 := placeTokens[1]
+
+		isRoute := false
+		// Check for "to" between the two place tokens
+		for i := p1.End; i < p2.Start; i++ {
+			if strings.ToLower(tokens[i]) == "to" {
+				isRoute = true
+				consumed[i] = true
+				break
+			}
+		}
+		// Also check for "from" before the first place
+		for i := 0; i < p1.Start; i++ {
 			if strings.ToLower(tokens[i]) == "from" && !consumed[i] {
 				consumed[i] = true
 				break
 			}
 		}
-	}
 
-	if routeFrom != "" && routeTo != "" {
-		location = routeFrom + " → " + routeTo
+		if isRoute {
+			routeFrom = p1.Text
+			location = p1.Text + " → " + p2.Text
+			locationConf = ConfHigh
+			for i := p1.Start; i < p1.End; i++ { consumed[i] = true }
+			for i := p2.Start; i < p2.End; i++ { consumed[i] = true }
+		} else {
+			// Two places but no "to" — use the first as location
+			location = p1.Text
+			locationConf = ConfHigh
+			for i := p1.Start; i < p1.End; i++ { consumed[i] = true }
+		}
+	} else if len(placeTokens) == 1 {
+		// Single place token
+		p := placeTokens[0]
+		location = p.Text
 		locationConf = ConfHigh
-		for _, idx := range routeConsumed {
-			consumed[idx] = true
+		for i := p.Start; i < p.End; i++ { consumed[i] = true }
+
+		// Consume preceding "in", "at", "to" if present
+		if p.Start > 0 {
+			prev := strings.ToLower(tokens[p.Start-1])
+			if (prev == "in" || prev == "at" || prev == "to") && !consumed[p.Start-1] {
+				consumed[p.Start-1] = true
+			}
 		}
 	}
 
-	// Check for "in <location>" or "at <location>"
+	// Fall back to keyword-based extraction if no place tokens found
 	if location == "" {
-		for i := 0; i < n-1; i++ {
-			if consumed[i] {
-				continue
+		rf, rt, rc := extractRoute(tokens, consumed, dates)
+		if rf != "" && rt != "" {
+			routeFrom = rf
+			location = rf + " → " + rt
+			locationConf = ConfHigh
+			for _, idx := range rc {
+				consumed[idx] = true
 			}
-			lower := strings.ToLower(tokens[i])
-			if lower == "in" || lower == "at" {
-				// Collect tokens until next keyword or end
-				locParts := []string{}
-				consumed[i] = true
-				for j := i + 1; j < n; j++ {
-					if consumed[j] {
-						break
-					}
-					jLower := strings.ToLower(tokens[j])
-					if jLower == "from" || jLower == "to" || jLower == "on" {
-						break
-					}
-					if _, isMonth := months[jLower]; isMonth {
-						break
-					}
-					locParts = append(locParts, tokens[j])
-					consumed[j] = true
+		}
+
+		// Consume "from" before first date only if it's not part of a route
+		if routeFrom == "" && len(dates) >= 1 {
+			for i := 0; i < dates[0].startToken; i++ {
+				if strings.ToLower(tokens[i]) == "from" && !consumed[i] {
+					consumed[i] = true
+					break
 				}
-				if len(locParts) > 0 {
-					location = strings.Join(locParts, " ")
-					locationConf = ConfHigh
+			}
+		}
+
+		// Check for "in <location>" or "at <location>"
+		if location == "" {
+			for i := 0; i < n-1; i++ {
+				if consumed[i] {
+					continue
 				}
-				break
+				lower := strings.ToLower(tokens[i])
+				if lower == "in" || lower == "at" {
+					locParts := []string{}
+					consumed[i] = true
+					for j := i + 1; j < n; j++ {
+						if consumed[j] {
+							break
+						}
+						jLower := strings.ToLower(tokens[j])
+						if jLower == "from" || jLower == "to" || jLower == "on" {
+							break
+						}
+						if _, isMonth := months[jLower]; isMonth {
+							break
+						}
+						locParts = append(locParts, tokens[j])
+						consumed[j] = true
+					}
+					if len(locParts) > 0 {
+						location = strings.Join(locParts, " ")
+						locationConf = ConfHigh
+					}
+					break
+				}
 			}
 		}
 	}
