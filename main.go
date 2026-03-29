@@ -119,6 +119,9 @@ func setup() error {
 		return err
 	}
 
+	// Test auth: when TRAVEL_TEST_MODE=true, accept X-Test-User header
+	app.Server().Router().Use(travelapp.TestAuthMiddleware())
+
 	// Register API routes
 	activityServer = travelapp.NewActivityServer(activities, trips, parseHistory, shareLinks, shares, publicProfiles, places)
 	activityServer.SetSyncStores(syncTargets, syncRecords)
@@ -3132,6 +3135,7 @@ func showInfo(cmd *cobra.Command, args []string) error {
 
 	if appcli.IsLocalMode {
 		fmt.Println("Mode:     local")
+		fmt.Printf("User:     %s\n", appcli.LocalUserID())
 		fmt.Printf("Data:     %s/app.db\n", appcli.LocalDataPath)
 	} else {
 		serverURL := appcli.ResolveServerURL(serverFlag, cliName)
@@ -3140,6 +3144,12 @@ func showInfo(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("App:      %s\n", appName)
+	if os.Getenv("TRAVEL_TEST_MODE") == "true" {
+		fmt.Println("Test:     ENABLED (X-Test-User header accepted)")
+	}
+	if email := os.Getenv("DEV_USER_EMAIL"); email != "" {
+		fmt.Printf("Override: DEV_USER_EMAIL=%s\n", email)
+	}
 	return nil
 }
 
