@@ -172,6 +172,24 @@ A corresponding `appbase logout --app NAME` (or extending the existing logout) w
 
 **Proposed:** On `NewCollection`, compare struct tags to `PRAGMA table_info` and add missing columns automatically. travel-calendar implemented this as a workaround in `internal/app/migrate.go` but it belongs in appbase. See travel-calendar #138.
 
+### 12. Test auth support in appbase auth middleware
+
+**Severity:** Medium — blocks API-level testing and CI
+
+Consumer apps need a way to authenticate test requests without OAuth. Attempted to add a chi middleware in the consumer app but chi requires all middleware before routes, and appbase registers its own auth middleware + routes in `New()` before the consumer can add middleware.
+
+**Proposed:** appbase auth middleware checks for `APPBASE_TEST_MODE=true` env var. When enabled:
+- Accept `X-Test-User` header as identity (sets context the same way `auth.WithIdentity` does)
+- Log `WARNING: test authentication enabled` on startup
+- No-op when env var is not set (zero cost in production)
+
+This belongs in appbase because:
+1. The middleware ordering is an appbase concern (chi routes are registered in `New()`)
+2. Every appbase app will need test auth for CI
+3. The identity injection is the same `auth.WithIdentity` pattern appbase already uses for local mode
+
+See travel-calendar #140. The consumer-side middleware (`internal/app/testauth.go`) and tests exist but can't be wired in due to chi ordering.
+
 ## Notes
 
 (none yet)

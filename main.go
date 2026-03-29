@@ -119,8 +119,7 @@ func setup() error {
 		return err
 	}
 
-	// Test auth: when TRAVEL_TEST_MODE=true, accept X-Test-User header
-	app.Server().Router().Use(travelapp.TestAuthMiddleware())
+	// Test auth: deferred to appbase (see appbase feedback #12)
 
 	// Register API routes
 	activityServer = travelapp.NewActivityServer(activities, trips, parseHistory, shareLinks, shares, publicProfiles, places)
