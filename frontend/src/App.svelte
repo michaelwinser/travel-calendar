@@ -516,10 +516,15 @@
     if (trip) editingTrip = trip;
   }
 
-  async function handleTripUpdate(data: { name: string; color: string }) {
+  async function handleTripUpdate(data: { name: string; color: string; startDate?: string; endDate?: string }) {
     if (!editingTrip) return;
     try {
-      await updateTrip(editingTrip.id, data);
+      await updateTrip(editingTrip.id, {
+        name: data.name,
+        color: data.color,
+        startDate: data.startDate,
+        endDate: data.endDate,
+      });
       editingTrip = null;
       await refreshActivities();
       error = '';
@@ -791,6 +796,8 @@
     <TripEditModal
       name={editingTrip.name}
       color={editingTrip.color}
+      startDate={editingTrip.startDate}
+      endDate={editingTrip.endDate}
       unassignedActivities={tripUnassigned}
       onsubmit={handleTripUpdate}
       ondelete={handleTripDelete}

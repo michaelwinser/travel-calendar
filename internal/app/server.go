@@ -89,6 +89,29 @@ func (s *ActivityServer) ListActivities(w http.ResponseWriter, r *http.Request, 
 	server.RespondJSON(w, http.StatusOK, result)
 }
 
+// autoExtendTrip extends a trip's date range if the activity falls outside it.
+func (s *ActivityServer) autoExtendTrip(tripID, startDate, endDate string) {
+	if tripID == "" {
+		return
+	}
+	t, err := s.trips.Get(tripID)
+	if err != nil || t == nil {
+		return
+	}
+	changed := false
+	if t.StartDate == "" || startDate < t.StartDate {
+		t.StartDate = startDate
+		changed = true
+	}
+	if t.EndDate == "" || endDate > t.EndDate {
+		t.EndDate = endDate
+		changed = true
+	}
+	if changed {
+		s.trips.Update(t)
+	}
+}
+
 func (s *ActivityServer) CreateActivity(w http.ResponseWriter, r *http.Request) {
 	userID := requireUser(w, r)
 	if userID == "" {
@@ -141,6 +164,9 @@ func (s *ActivityServer) CreateActivity(w http.ResponseWriter, r *http.Request) 
 		server.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+
+	// Auto-extend trip dates if activity falls outside
+	s.autoExtendTrip(a.TripID, a.StartDate, a.EndDate)
 
 	// Link to parse history if provided
 	if req.ParseHistoryId != nil && *req.ParseHistoryId != "" && s.parseHistory != nil {
@@ -232,6 +258,9 @@ func (s *ActivityServer) UpdateActivity(w http.ResponseWriter, r *http.Request, 
 		server.RespondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+
+	// Auto-extend trip dates if activity falls outside
+	s.autoExtendTrip(a.TripID, a.StartDate, a.EndDate)
 
 	server.RespondJSON(w, http.StatusOK, entityToAPI(*a))
 }
@@ -422,7 +451,7 @@ func (s *ActivityServer) ListTrips(w http.ResponseWriter, r *http.Request) {
 	result := make([]api.TripSummary, 0, len(trips))
 	for _, t := range trips {
 		// Compute derived fields from activities
-		var startDate, endDate string
+		var actStart, actEnd string
 		locSet := map[string]bool{}
 		count := 0
 		for _, a := range activities {
@@ -430,15 +459,25 @@ func (s *ActivityServer) ListTrips(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			count++
-			if startDate == "" || a.StartDate < startDate {
-				startDate = a.StartDate
+			if actStart == "" || a.StartDate < actStart {
+				actStart = a.StartDate
 			}
-			if endDate == "" || a.EndDate > endDate {
-				endDate = a.EndDate
+			if actEnd == "" || a.EndDate > actEnd {
+				actEnd = a.EndDate
 			}
 			if a.Location != "" {
 				locSet[a.Location] = true
 			}
+		}
+
+		// Use explicit dates if set, otherwise fall back to computed from activities
+		startDate := t.StartDate
+		if startDate == "" {
+			startDate = actStart
+		}
+		endDate := t.EndDate
+		if endDate == "" {
+			endDate = actEnd
 		}
 
 		sd, _ := time.Parse("2006-01-02", startDate)
@@ -498,7 +537,15 @@ func (s *ActivityServer) CreateTrip(w http.ResponseWriter, r *http.Request) {
 		color = tripColors[hash%len(tripColors)]
 	}
 
-	t, err := s.trips.Create(userID, req.Name, color)
+	var startDate, endDate string
+	if req.StartDate != nil {
+		startDate = req.StartDate.Time.Format("2006-01-02")
+	}
+	if req.EndDate != nil {
+		endDate = req.EndDate.Time.Format("2006-01-02")
+	}
+
+	t, err := s.trips.Create(userID, req.Name, color, startDate, endDate)
 	if err != nil {
 		server.RespondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -537,6 +584,12 @@ func (s *ActivityServer) UpdateTrip(w http.ResponseWriter, r *http.Request, id s
 	}
 	if req.Color != nil {
 		t.Color = *req.Color
+	}
+	if req.StartDate != nil {
+		t.StartDate = req.StartDate.Time.Format("2006-01-02")
+	}
+	if req.EndDate != nil {
+		t.EndDate = req.EndDate.Time.Format("2006-01-02")
 	}
 
 	if err := s.trips.Update(t); err != nil {

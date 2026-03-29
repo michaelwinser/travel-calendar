@@ -272,6 +272,8 @@ func main() {
 		RunE:  createTripCmd,
 	}
 	tripCreateCmd.Flags().String("color", "", "Hex color (auto-assigned if omitted)")
+	tripCreateCmd.Flags().String("from", "", "Start date (YYYY-MM-DD)")
+	tripCreateCmd.Flags().String("to", "", "End date (YYYY-MM-DD)")
 	tripCmd.AddCommand(tripCreateCmd)
 
 	tripDeleteCmd := &cobra.Command{
@@ -1380,6 +1382,22 @@ func createTripCmd(cmd *cobra.Command, args []string) error {
 	req := api.CreateTripRequest{Name: name}
 	if color, _ := cmd.Flags().GetString("color"); color != "" {
 		req.Color = &color
+	}
+	if from, _ := cmd.Flags().GetString("from"); from != "" {
+		d, err := time.Parse("2006-01-02", from)
+		if err != nil {
+			return fmt.Errorf("invalid --from date: %w", err)
+		}
+		sd := openapi_types.Date{Time: d}
+		req.StartDate = &sd
+	}
+	if to, _ := cmd.Flags().GetString("to"); to != "" {
+		d, err := time.Parse("2006-01-02", to)
+		if err != nil {
+			return fmt.Errorf("invalid --to date: %w", err)
+		}
+		ed := openapi_types.Date{Time: d}
+		req.EndDate = &ed
 	}
 
 	resp, err := client.CreateTripWithResponse(context.Background(), req)

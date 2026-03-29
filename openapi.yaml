@@ -893,11 +893,11 @@ components:
         startDate:
           type: string
           format: date
-          description: Earliest activity start date
+          description: Trip start date (explicit or earliest activity)
         endDate:
           type: string
           format: date
-          description: Latest activity end date
+          description: Trip end date (explicit or latest activity)
         locations:
           type: array
           items:
@@ -915,6 +915,12 @@ components:
         color:
           type: string
           description: Hex color (auto-assigned if omitted)
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
 
     UpdateTripRequest:
       type: object
@@ -923,6 +929,12 @@ components:
           type: string
         color:
           type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
 
     ShareLink:
       type: object

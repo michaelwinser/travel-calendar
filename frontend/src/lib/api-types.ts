@@ -41,6 +41,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/activities/bulk-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete multiple activities by ID */
+        post: operations["bulkDeleteActivities"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/activities/parse": {
         parameters: {
             query?: never;
@@ -75,6 +92,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/places": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the authenticated user's places */
+        get: operations["listPlaces"];
+        put?: never;
+        /** Create a new place */
+        post: operations["createPlace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/places/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a place by ID */
+        get: operations["getPlace"];
+        /** Update a place */
+        put: operations["updatePlace"];
+        post?: never;
+        /** Delete a place */
+        delete: operations["deletePlace"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/places/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve a text string to matching places */
+        post: operations["resolvePlaces"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/public-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the authenticated user's public profile settings */
+        get: operations["getPublicProfile"];
+        /** Create or update public profile settings */
+        put: operations["updatePublicProfile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/trips": {
         parameters: {
             query?: never;
@@ -87,6 +176,110 @@ export interface paths {
         put?: never;
         /** Create a new trip */
         post: operations["createTrip"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/share-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List share links created by the authenticated user */
+        get: operations["listShareLinks"];
+        put?: never;
+        /** Create a new share link */
+        post: operations["createShareLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/share-links/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a share link */
+        delete: operations["deleteShareLink"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List calendar shares created by the authenticated user */
+        get: operations["listShares"];
+        put?: never;
+        /** Share calendar with another user by email */
+        post: operations["createShare"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shares/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a share */
+        delete: operations["deleteShare"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shared-with-me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List calendars shared with the authenticated user */
+        get: operations["listSharedWithMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shared-with-me/{email}/activities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get privacy-filtered activities from a user who shared with you */
+        get: operations["getSharedActivities"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -129,6 +322,12 @@ export interface components {
             notes?: string;
             /** @description Optional trip ID this activity belongs to */
             tripId?: string;
+            /** @description Optional reference to a Place entity */
+            placeId?: string;
+            /** @description Origin place for travel activities */
+            originPlaceId?: string;
+            /** @description Destination place for travel activities */
+            destinationPlaceId?: string;
             /** @enum {string} */
             source: "manual" | "google_calendar" | "system";
             /** Format: date-time */
@@ -148,6 +347,9 @@ export interface components {
             location?: string;
             notes?: string;
             tripId?: string;
+            placeId?: string;
+            originPlaceId?: string;
+            destinationPlaceId?: string;
             /** @description Optional ID from a prior parse, to link creation to parse history */
             parseHistoryId?: string;
         };
@@ -163,6 +365,9 @@ export interface components {
             location?: string;
             notes?: string;
             tripId?: string;
+            placeId?: string;
+            originPlaceId?: string;
+            destinationPlaceId?: string;
         };
         DateCheck: {
             /** Format: date */
@@ -222,12 +427,12 @@ export interface components {
             color: string;
             /**
              * Format: date
-             * @description Earliest activity start date
+             * @description Trip start date (explicit or earliest activity)
              */
             startDate: string;
             /**
              * Format: date
-             * @description Latest activity end date
+             * @description Trip end date (explicit or latest activity)
              */
             endDate: string;
             locations?: string[];
@@ -237,10 +442,193 @@ export interface components {
             name: string;
             /** @description Hex color (auto-assigned if omitted) */
             color?: string;
+            /** Format: date */
+            startDate?: string;
+            /** Format: date */
+            endDate?: string;
         };
         UpdateTripRequest: {
             name?: string;
             color?: string;
+            /** Format: date */
+            startDate?: string;
+            /** Format: date */
+            endDate?: string;
+        };
+        ShareLink: {
+            id: string;
+            /** @description URL-safe token for accessing the shared calendar */
+            token: string;
+            /** @description User-friendly name for this link */
+            label: string;
+            /**
+             * Format: date-time
+             * @description When this link expires (empty = never)
+             */
+            expiresAt?: string;
+            /**
+             * Format: date
+             * @description Only share activities starting from this date
+             */
+            fromDate?: string;
+            /**
+             * Format: date
+             * @description Only share activities ending before this date
+             */
+            toDate?: string;
+            /** @description Comma-separated trip IDs to filter by (empty = all) */
+            tripIds?: string;
+            /** @description Whether activity titles are visible to viewers */
+            showTitle: boolean;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreateShareLinkRequest: {
+            /** @description User-friendly name (auto-generated if omitted) */
+            label?: string;
+            /** Format: date-time */
+            expiresAt?: string;
+            /** Format: date */
+            fromDate?: string;
+            /** Format: date */
+            toDate?: string;
+            /** @description Comma-separated trip IDs to filter by */
+            tripIds?: string;
+            /** @description Whether activity titles are visible (default false) */
+            showTitle?: boolean;
+        };
+        SharedActivity: {
+            /** @description Included only if showTitle is enabled on the share */
+            title?: string;
+            /** @enum {string} */
+            type: "travel" | "stay" | "conference" | "vacation" | "commitment";
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            endDate: string;
+            location?: string;
+            /** @description Trip name for context (not the ID) */
+            tripName?: string;
+            /** @description Trip hex color */
+            tripColor?: string;
+        };
+        SharedCalendarResponse: {
+            /** @description Share link label or sharer description */
+            label: string;
+            /** @description Email of the calendar owner */
+            ownerEmail?: string;
+            activities: components["schemas"]["SharedActivity"][];
+        };
+        Share: {
+            id: string;
+            /** @description Email of the user who created this share */
+            ownerEmail: string;
+            /** @description Email of the recipient */
+            sharedWith: string;
+            /** @description Whether activity titles are visible to the recipient */
+            showTitle: boolean;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreateShareRequest: {
+            /** @description Email of the user to share with */
+            email: string;
+            /** @description Whether activity titles are visible (default false) */
+            showTitle?: boolean;
+        };
+        SharedWithMeEntry: {
+            shareId: string;
+            /** @description Email of the person who shared with you */
+            ownerEmail: string;
+        };
+        Place: {
+            id: string;
+            /** @description User's preferred name for this place */
+            name: string;
+            /** @description Alternative names */
+            aliases?: string[];
+            /** @description Normalized city name */
+            city?: string;
+            /** @description ISO 3166-1 alpha-2 country code */
+            country?: string;
+            /** Format: double */
+            latitude?: number;
+            /** Format: double */
+            longitude?: number;
+            /** @description IANA timezone */
+            timezone?: string;
+            /** @enum {string} */
+            kind: "home" | "work" | "airport" | "city" | "venue" | "other";
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreatePlaceRequest: {
+            name: string;
+            aliases?: string[];
+            city?: string;
+            country?: string;
+            /** Format: double */
+            latitude?: number;
+            /** Format: double */
+            longitude?: number;
+            timezone?: string;
+            /** @enum {string} */
+            kind?: "home" | "work" | "airport" | "city" | "venue" | "other";
+        };
+        UpdatePlaceRequest: {
+            name?: string;
+            aliases?: string[];
+            city?: string;
+            country?: string;
+            /** Format: double */
+            latitude?: number;
+            /** Format: double */
+            longitude?: number;
+            timezone?: string;
+            /** @enum {string} */
+            kind?: "home" | "work" | "airport" | "city" | "venue" | "other";
+        };
+        PlaceResolveRequest: {
+            text: string;
+        };
+        PlaceResolveResponse: {
+            exact?: components["schemas"]["Place"];
+            suggestions: components["schemas"]["PlaceSuggestion"][];
+        };
+        PlaceSuggestion: {
+            /** @enum {string} */
+            source: "user" | "gazetteer";
+            /** @description Present when source is user */
+            place?: components["schemas"]["Place"];
+            name: string;
+            country?: string;
+            /** @description State/province code (e.g. CT, ON) */
+            admin1?: string;
+            /** Format: double */
+            latitude?: number;
+            /** Format: double */
+            longitude?: number;
+            timezone?: string;
+            population?: number;
+            /** Format: double */
+            score: number;
+        };
+        PublicProfile: {
+            /** @description URL slug for the public page (e.g. michael) */
+            handle: string;
+            /** @description Whether the public page is active */
+            enabled: boolean;
+        };
+        UpdatePublicProfileRequest: {
+            /** @description URL slug (lowercase alphanumeric + hyphens, 3-30 chars) */
+            handle: string;
+            enabled: boolean;
+        };
+        BulkDeleteRequest: {
+            ids: string[];
+        };
+        BulkDeleteResponse: {
+            deleted: number;
         };
         OkResponse: {
             ok?: string;
@@ -416,6 +804,31 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    bulkDeleteActivities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Deletion result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkDeleteResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
     parseActivity: {
         parameters: {
             query?: never;
@@ -466,6 +879,202 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
+    listPlaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of places */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Place"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createPlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePlaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Created place */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Place"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getPlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The place */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Place"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updatePlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePlaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated place */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Place"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deletePlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    resolvePlaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaceResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description Resolution results */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaceResolveResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getPublicProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Public profile (may not exist yet) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicProfile"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    updatePublicProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePublicProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated public profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
     listTrips: {
         parameters: {
             query?: never;
@@ -511,6 +1120,201 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    listShareLinks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of share links */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareLink"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createShareLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateShareLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Created share link */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareLink"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    deleteShareLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listShares: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of shares */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Share"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateShareRequest"];
+            };
+        };
+        responses: {
+            /** @description Created share */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Share"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    deleteShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listSharedWithMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of shares where current user is the recipient */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedWithMeEntry"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getSharedActivities: {
+        parameters: {
+            query?: {
+                /** @description Filter by month (YYYY-MM) */
+                month?: string;
+                /** @description Filter start (YYYY-MM-DD) */
+                from?: string;
+                /** @description Filter end (YYYY-MM-DD) */
+                to?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Email of the user who shared their calendar */
+                email: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Privacy-filtered activities */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedCalendarResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     updateTrip: {

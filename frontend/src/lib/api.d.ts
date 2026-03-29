@@ -427,12 +427,12 @@ export interface components {
             color: string;
             /**
              * Format: date
-             * @description Earliest activity start date
+             * @description Trip start date (explicit or earliest activity)
              */
             startDate: string;
             /**
              * Format: date
-             * @description Latest activity end date
+             * @description Trip end date (explicit or latest activity)
              */
             endDate: string;
             locations?: string[];
@@ -442,10 +442,18 @@ export interface components {
             name: string;
             /** @description Hex color (auto-assigned if omitted) */
             color?: string;
+            /** Format: date */
+            startDate?: string;
+            /** Format: date */
+            endDate?: string;
         };
         UpdateTripRequest: {
             name?: string;
             color?: string;
+            /** Format: date */
+            startDate?: string;
+            /** Format: date */
+            endDate?: string;
         };
         ShareLink: {
             id: string;

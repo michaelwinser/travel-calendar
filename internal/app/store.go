@@ -21,6 +21,8 @@ type Trip struct {
 	Name      string `json:"name"      store:"name"`
 	Color     string `json:"color"     store:"color"`
 	Key       string `json:"key"       store:"key"`
+	StartDate string `json:"startDate" store:"start_date"`
+	EndDate   string `json:"endDate"   store:"end_date"`
 	CreatedAt string `json:"createdAt" store:"created_at"`
 }
 
@@ -69,13 +71,15 @@ func NewTripStore(d *db.DB) (*TripStore, error) {
 	return &TripStore{coll: coll}, nil
 }
 
-func (s *TripStore) Create(userID, name, color string) (*Trip, error) {
+func (s *TripStore) Create(userID, name, color, startDate, endDate string) (*Trip, error) {
 	t := &Trip{
 		ID:        uuid.New().String(),
 		UserID:    userID,
 		Name:      name,
 		Color:     color,
 		Key:       tripKey(name),
+		StartDate: startDate,
+		EndDate:   endDate,
 		CreatedAt: time.Now().Format(time.RFC3339),
 	}
 	if err := s.coll.Create(t); err != nil {

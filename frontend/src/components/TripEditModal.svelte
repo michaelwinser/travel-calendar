@@ -6,8 +6,10 @@
   interface Props {
     name: string;
     color: string;
+    startDate?: string;
+    endDate?: string;
     unassignedActivities?: Activity[];
-    onsubmit: (data: { name: string; color: string }) => void;
+    onsubmit: (data: { name: string; color: string; startDate?: string; endDate?: string }) => void;
     ondelete: () => void;
     oncancel: () => void;
     onassign?: (activityId: string) => void;
@@ -17,6 +19,8 @@
 
   let name = $state(props.name);
   let color = $state(props.color);
+  let startDate = $state(props.startDate ?? '');
+  let endDate = $state(props.endDate ?? '');
   let confirmingDelete = $state(false);
   let nameInput: HTMLInputElement;
 
@@ -31,7 +35,12 @@
   function handleSubmit(e: Event) {
     e.preventDefault();
     if (!name.trim()) return;
-    props.onsubmit({ name: name.trim(), color });
+    props.onsubmit({
+      name: name.trim(),
+      color,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+    });
   }
 </script>
 
@@ -46,6 +55,17 @@
         <span>Name</span>
         <input type="text" bind:value={name} bind:this={nameInput} />
       </label>
+
+      <div class="date-row">
+        <label>
+          <span>Start</span>
+          <input type="date" bind:value={startDate} />
+        </label>
+        <label>
+          <span>End</span>
+          <input type="date" bind:value={endDate} />
+        </label>
+      </div>
 
       <label>
         <span>Color</span>
@@ -153,6 +173,25 @@
   input:focus {
     outline: none;
     border-color: #333;
+  }
+
+  .date-row {
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  .date-row label {
+    flex: 1;
+  }
+
+  input[type="date"] {
+    padding: 0.5rem 0.6rem;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .color-picker {
