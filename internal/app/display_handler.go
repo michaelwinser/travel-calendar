@@ -43,11 +43,12 @@ func (s *ActivityServer) HandleDisplay(w http.ResponseWriter, r *http.Request) {
 	if theme == "" {
 		theme = "desk"
 	}
+	showHeader := r.URL.Query().Get("header") == "true"
 
 	now := time.Now()
 	today := now.Format("2006-01-02")
 	from := now.AddDate(0, 0, -7).Format("2006-01-02")
-	to := now.AddDate(0, 0, 21).Format("2006-01-02")
+	to := now.AddDate(0, 0, 42).Format("2006-01-02")
 
 	activities, err := s.store.ListRange(p.UserID, from, to)
 	if err != nil {
@@ -72,10 +73,10 @@ func (s *ActivityServer) HandleDisplay(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Build 4 weeks starting from the previous Sunday
+	// Build 6 weeks starting from the previous Sunday
 	startDate := now.AddDate(0, 0, -int(now.Weekday()))
 	var weeks [][]displayDay
-	for week := 0; week < 4; week++ {
+	for week := 0; week < 6; week++ {
 		var days []displayDay
 		for dow := 0; dow < 7; dow++ {
 			d := startDate.AddDate(0, 0, week*7+dow)
@@ -111,7 +112,7 @@ func (s *ActivityServer) HandleDisplay(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=1800")
-	renderDisplay(w, handle, theme, currentLoc, currentTrip, now, weeks)
+	renderDisplay(w, handle, theme, showHeader, currentLoc, currentTrip, now, weeks)
 }
 
 func displayColor(actType, theme string) string {
@@ -134,16 +135,11 @@ func displayColor(actType, theme string) string {
 	}
 }
 
-func renderDisplay(w http.ResponseWriter, handle, theme, currentLoc, currentTrip string, now time.Time, weeks [][]displayDay) {
-	bg := "#fff"
-	fg := "#000"
-	muted := "#888"
+func renderDisplay(w http.ResponseWriter, handle, theme string, showHeader bool, currentLoc, currentTrip string, now time.Time, weeks [][]displayDay) {
 	todayBg := "#e8e8ff"
-	pastOp := "0.4"
-
+	pastOp := "0.35"
 	if theme == "eink" {
-		todayBg = "#eee"
-		muted = "#666"
+		todayBg = "#ddd"
 	}
 
 	fmt.Fprintf(w, `<!DOCTYPE html>
@@ -154,45 +150,42 @@ func renderDisplay(w http.ResponseWriter, handle, theme, currentLoc, currentTrip
 <title>Where is %s?</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: sans-serif; background: %s; color: %s; width: 800px; height: 480px; overflow: hidden; }
-.header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 2px solid %s; }
-.title { font-size: 20px; font-weight: 700; }
-.now { text-align: right; font-size: 14px; }
-.now-loc { font-size: 18px; font-weight: 700; }
-.now-trip { font-size: 13px; color: %s; }
-.now-time { font-size: 12px; color: %s; }
+body { font-family: sans-serif; background: #fff; color: #000; width: 800px; overflow: hidden; }
+.header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 2px solid #000; }
+.title { font-size: 18px; font-weight: 700; }
+.now { text-align: right; }
+.now-loc { font-size: 16px; font-weight: 700; }
+.now-trip { font-size: 12px; color: #666; }
 .cal { width: 100%%; border-collapse: collapse; table-layout: fixed; }
-.cal th { font-size: 11px; color: %s; padding: 6px 2px; text-align: center; font-weight: 500; text-transform: uppercase; }
-.cal td { height: 80px; border: 1px solid #e0e0e0; vertical-align: top; padding: 3px 5px; font-size: 12px; }
+.cal th { font-size: 13px; color: #666; padding: 4px 2px; text-align: center; font-weight: 600; text-transform: uppercase; }
+.cal td { border: 1px solid #ccc; vertical-align: top; padding: 2px 4px; height: 68px; }
 .cal td.today { background: %s; outline: 2px solid #0000ff; outline-offset: -2px; }
 .cal td.past { opacity: %s; }
-.day-num { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
-.month-lbl { font-size: 10px; color: %s; font-weight: 700; }
-.loc { font-size: 11px; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bar { height: 4px; border-radius: 2px; margin-top: 2px; }
-.trip { font-size: 10px; color: %s; font-style: italic; }
+.day-num { font-size: 15px; font-weight: 700; }
+.month-lbl { font-size: 11px; color: #666; }
+.loc { font-size: 13px; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar { height: 5px; border-radius: 2px; margin-top: 2px; }
+.trip { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 </head>
-<body>
-<div class="header">
+<body>`, handle, todayBg, pastOp)
+
+	if showHeader {
+		fmt.Fprintf(w, `<div class="header">
   <div class="title">Where is %s?</div>
   <div class="now">
-    <div class="now-loc">%s</div>`, handle, bg, fg, fg, muted, muted, muted, todayBg, pastOp, muted, muted, handle, currentLoc)
-
-	if currentTrip != "" {
-		fmt.Fprintf(w, `
-    <div class="now-trip">%s</div>`, currentTrip)
+    <div class="now-loc">%s</div>`, handle, currentLoc)
+		if currentTrip != "" {
+			fmt.Fprintf(w, `<div class="now-trip">%s</div>`, currentTrip)
+		}
+		fmt.Fprint(w, `</div></div>`)
 	}
 
-	fmt.Fprintf(w, `
-    <div class="now-time">%s</div>
-  </div>
-</div>
-<table class="cal">
+	fmt.Fprint(w, `<table class="cal">
 <thead><tr>
   <th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th>
 </tr></thead>
-<tbody>`, now.Format("Mon Jan 2, 3:04 PM"))
+<tbody>`)
 
 	for _, week := range weeks {
 		fmt.Fprint(w, "<tr>")
@@ -206,23 +199,21 @@ body { font-family: sans-serif; background: %s; color: %s; width: 800px; height:
 
 			fmt.Fprintf(w, `<td class="%s">`, cls)
 
-			// Day number + month label on 1st
 			if d.Day == 1 {
-				fmt.Fprintf(w, `<div class="day-num"><span class="month-lbl">%s</span> %d</div>`, d.Month, d.Day)
+				fmt.Fprintf(w, `<div class="day-num"><span class="month-lbl">%s </span>%d</div>`, d.Month, d.Day)
 			} else {
 				fmt.Fprintf(w, `<div class="day-num">%d</div>`, d.Day)
 			}
 
+			// Show trip name if present (takes priority for display)
+			if d.TripName != "" {
+				fmt.Fprintf(w, `<div class="trip" style="color:%s">%s</div>`, d.Color, d.TripName)
+			}
+
 			if d.Location != "" {
 				fmt.Fprintf(w, `<div class="loc">%s</div>`, d.Location)
-			}
-
-			if d.Color != "" {
+			} else if d.Color != "" {
 				fmt.Fprintf(w, `<div class="bar" style="background:%s"></div>`, d.Color)
-			}
-
-			if d.TripName != "" {
-				fmt.Fprintf(w, `<div class="trip">%s</div>`, d.TripName)
 			}
 
 			fmt.Fprint(w, "</td>")
