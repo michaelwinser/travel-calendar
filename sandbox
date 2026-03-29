@@ -72,6 +72,7 @@ exec nono run \
     --allow "$HOME/.config/travel" \
     --allow "$HOME/go" \
     --read "$HOME/sdk" \
+    --read "$HOME/.docker" \
     --allow-bind 3001 \
     $APPBASE_FLAG \
     $GO_FLAG \
