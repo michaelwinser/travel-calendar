@@ -143,6 +143,8 @@ func main() {
 		// Public dashboard (unauthenticated — outside /api/ prefix)
 		r.Get("/public/{handle}.json", activityServer.HandlePublicDashboard)
 		r.Get("/public/{handle}/feed.ics", activityServer.HandlePublicFeed)
+
+		// Display endpoint must be registered before the /public/* wildcard
 		r.Get("/public/{handle}/display", activityServer.HandleDisplay)
 
 		// Public dashboard frontend (separate entry point, no login required)
@@ -254,7 +256,42 @@ func main() {
 		RunE:  listTripsCmd,
 	}
 	tripCmd.AddCommand(tripListCmd)
+
+	tripShowCmd := &cobra.Command{
+		Use:   "show [name-or-id]",
+		Short: "Show trip details with activities",
+		Args:  cobra.ExactArgs(1),
+		RunE:  showTripCmd,
+	}
+	tripCmd.AddCommand(tripShowCmd)
+
+	tripCreateCmd := &cobra.Command{
+		Use:   "create [name]",
+		Short: "Create a new trip",
+		Args:  cobra.ExactArgs(1),
+		RunE:  createTripCmd,
+	}
+	tripCreateCmd.Flags().String("color", "", "Hex color (auto-assigned if omitted)")
+	tripCmd.AddCommand(tripCreateCmd)
+
+	tripDeleteCmd := &cobra.Command{
+		Use:   "delete [name-or-id]",
+		Short: "Delete a trip (activities become standalone)",
+		Args:  cobra.ExactArgs(1),
+		RunE:  deleteTripCmd,
+	}
+	tripCmd.AddCommand(tripDeleteCmd)
+
 	cli.AddCommand(tripCmd)
+
+	// --- Show command (activity details) ---
+	showCmd := &cobra.Command{
+		Use:   "show [id-prefix]",
+		Short: "Show full activity details",
+		Args:  cobra.ExactArgs(1),
+		RunE:  showActivityCmd,
+	}
+	cli.AddCommand(showCmd)
 
 	// --- Share link commands ---
 
@@ -1266,6 +1303,172 @@ func listTripsCmd(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\n", t.Id[:8], t.Name, dates, locs, t.ActivityCount)
 	}
 	w.Flush()
+	return nil
+}
+
+func showTripCmd(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	// Find trip by name or ID prefix
+	listResp, err := client.ListTripsWithResponse(context.Background())
+	if err != nil {
+		return err
+	}
+	if listResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d", listResp.StatusCode())
+	}
+
+	query := strings.ToLower(args[0])
+	var match *api.TripSummary
+	for _, t := range *listResp.JSON200 {
+		if strings.HasPrefix(t.Id, args[0]) || strings.ToLower(t.Name) == query {
+			match = &t
+			break
+		}
+	}
+	if match == nil {
+		return fmt.Errorf("no trip found matching %q", args[0])
+	}
+
+	fmt.Printf("Trip:       %s\n", match.Name)
+	fmt.Printf("ID:         %s\n", match.Id)
+	fmt.Printf("Color:      %s\n", match.Color)
+	fmt.Printf("Dates:      %s → %s\n", match.StartDate.Format("2006-01-02"), match.EndDate.Format("2006-01-02"))
+	if match.Locations != nil && len(*match.Locations) > 0 {
+		fmt.Printf("Locations:  %s\n", strings.Join(*match.Locations, ", "))
+	}
+	fmt.Printf("Activities: %d\n", match.ActivityCount)
+
+	// List the trip's activities
+	actsResp, err := client.ListActivitiesWithResponse(context.Background(), &api.ListActivitiesParams{})
+	if err == nil && actsResp.StatusCode() == http.StatusOK {
+		fmt.Println()
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintf(w, "  ID\tDATES\tTYPE\tLOCATION\tTITLE\n")
+		for _, a := range *actsResp.JSON200 {
+			if a.TripId == nil || *a.TripId != match.Id {
+				continue
+			}
+			dates := a.StartDate.Format("2006-01-02")
+			endStr := a.EndDate.Format("2006-01-02")
+			if endStr != dates {
+				dates += " -> " + endStr
+			}
+			loc := ""
+			if a.Location != nil {
+				loc = *a.Location
+			}
+			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n", a.Id[:8], dates, a.Type, loc, a.Title)
+		}
+		w.Flush()
+	}
+	return nil
+}
+
+func createTripCmd(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	name := args[0]
+	req := api.CreateTripRequest{Name: name}
+	if color, _ := cmd.Flags().GetString("color"); color != "" {
+		req.Color = &color
+	}
+
+	resp, err := client.CreateTripWithResponse(context.Background(), req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode() != http.StatusCreated {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+	}
+
+	t := resp.JSON201
+	fmt.Printf("Created trip: %s (%s) color: %s\n", t.Name, t.Id[:8], t.Color)
+	return nil
+}
+
+func deleteTripCmd(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	// Find trip
+	listResp, err := client.ListTripsWithResponse(context.Background())
+	if err != nil {
+		return err
+	}
+	if listResp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d", listResp.StatusCode())
+	}
+
+	query := strings.ToLower(args[0])
+	var match *api.TripSummary
+	for _, t := range *listResp.JSON200 {
+		if strings.HasPrefix(t.Id, args[0]) || strings.ToLower(t.Name) == query {
+			match = &t
+			break
+		}
+	}
+	if match == nil {
+		return fmt.Errorf("no trip found matching %q", args[0])
+	}
+
+	resp, err := client.DeleteTripWithResponse(context.Background(), match.Id)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("server returned %d: %s", resp.StatusCode(), string(resp.Body))
+	}
+
+	fmt.Printf("Deleted trip: %s (activities are now standalone)\n", match.Name)
+	return nil
+}
+
+func showActivityCmd(cmd *cobra.Command, args []string) error {
+	client, cleanup, err := apiClient(cmd)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	a, err := resolveByPrefix(client, args[0])
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Title:      %s\n", a.Title)
+	fmt.Printf("ID:         %s\n", a.Id)
+	fmt.Printf("Type:       %s\n", a.Type)
+	fmt.Printf("Dates:      %s → %s\n", a.StartDate.Format("2006-01-02"), a.EndDate.Format("2006-01-02"))
+	if a.Location != nil && *a.Location != "" {
+		fmt.Printf("Location:   %s\n", *a.Location)
+	}
+	if a.Notes != nil && *a.Notes != "" {
+		fmt.Printf("Notes:      %s\n", *a.Notes)
+	}
+	if a.TripId != nil && *a.TripId != "" {
+		// Look up trip name
+		if tripsResp, err := client.ListTripsWithResponse(context.Background()); err == nil && tripsResp.JSON200 != nil {
+			for _, t := range *tripsResp.JSON200 {
+				if t.Id == *a.TripId {
+					fmt.Printf("Trip:       %s\n", t.Name)
+					break
+				}
+			}
+		}
+	}
+	fmt.Printf("Source:     %s\n", a.Source)
 	return nil
 }
 
