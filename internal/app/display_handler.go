@@ -266,10 +266,10 @@ body { font-family: sans-serif; background: #fff; color: #000; width: 800px; hei
 .week { position: relative; display: flex; border-bottom: 1px solid #ccc; height: %dpx; overflow: hidden; }
 .day { flex: 1; border-right: 1px solid #ddd; padding: 2px 4px; display: flex; flex-direction: column; overflow: hidden; }
 .day:last-child { border-right: none; }
-.day.past { opacity: 0.35; }
 .day-num { font-size: 15px; font-weight: 700; text-align: right; }
-.day-num.today { display: inline-block; background: #ff0000; color: #fff; border-radius: 50%%; width: 22px; height: 22px; line-height: 22px; text-align: center; float: right; font-size: 14px; }
-.month-lbl { font-size: 10px; color: #666; float: left; line-height: 22px; }
+.day-num.today { background: #ff0000; color: #fff; border-radius: 50%%; width: 22px; height: 22px; line-height: 22px; text-align: center; font-size: 14px; display: inline-block; }
+.day-top { display: flex; justify-content: space-between; align-items: center; }
+.month-lbl { font-size: 10px; color: #666; }
 .trip-bar { position: absolute; height: 20px; background: #0000ff; color: #fff; font-size: 12px; font-weight: 700; line-height: 20px; padding: 0 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; z-index: 1; }
 .act-label { font-size: 10px; color: #000; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px; }
 .loc { font-size: 10px; color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px; }
@@ -304,28 +304,33 @@ body { font-family: sans-serif; background: #fff; color: #000; width: 800px; hei
 
 		// Day cells
 		for _, d := range week.Days {
-			cls := "day"
-			if d.IsPast {
-				cls += " past"
-			}
-			fmt.Fprintf(w, `<div class="%s">`, cls)
+			fmt.Fprint(w, `<div class="day">`)
 
-			// Day number
+			// Day number row: month label left, date right
+			fmt.Fprint(w, `<div class="day-top">`)
 			if d.Day == 1 {
 				fmt.Fprintf(w, `<span class="month-lbl">%s</span>`, d.Month)
+			} else {
+				fmt.Fprint(w, `<span></span>`)
 			}
 			if d.IsToday {
-				fmt.Fprintf(w, `<div class="day-num today">%d</div>`, d.Day)
+				fmt.Fprintf(w, `<span class="day-num today">%d</span>`, d.Day)
 			} else {
-				fmt.Fprintf(w, `<div class="day-num">%d</div>`, d.Day)
+				fmt.Fprintf(w, `<span class="day-num">%d</span>`, d.Day)
+			}
+			fmt.Fprint(w, `</div>`)
+
+			// Activity label (below trip bar — needs to clear the bar)
+			hasTripBar := d.TripColor != ""
+			topMargin := "0"
+			if hasTripBar {
+				topMargin = "22px"
 			}
 
-			// Activity label (below trip bar area)
 			if d.ActivityLabel != "" {
-				fmt.Fprintf(w, `<div class="act-label" style="margin-top:26px">%s</div>`, d.ActivityLabel)
+				fmt.Fprintf(w, `<div class="act-label" style="margin-top:%s">%s</div>`, topMargin, d.ActivityLabel)
 			} else if d.Location != "" && d.TripName == "" {
-				// Show location only for non-trip activities
-				fmt.Fprintf(w, `<div class="loc" style="margin-top:26px">%s</div>`, d.Location)
+				fmt.Fprintf(w, `<div class="loc" style="margin-top:%s">%s</div>`, topMargin, d.Location)
 			}
 
 			fmt.Fprint(w, `</div>`)
