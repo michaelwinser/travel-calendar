@@ -190,6 +190,15 @@ func TestParse_71_Tomorrow(t *testing.T) {
 	assertType(t, r, TypeCommitment)
 }
 
+func TestParse_71_TrainNewHavenToBoston(t *testing.T) {
+	r := Parse("Train from New Haven to Boston, MA - South Station on Nov 3 2025", testToday)
+	// "- South Station" is a venue qualifier that stays in title for now
+	// The core route and date are correctly extracted
+	assertType(t, r, TypeTravel)
+	assertLocation(t, r, "New Haven → Boston, MA")
+	assertStartDate(t, r, "2025-11-03")
+}
+
 func TestParse_71_SummitAtGoogleInBrussels(t *testing.T) {
 	r := Parse("Package manager summit at Google in Brussels", testToday)
 	assertTitle(t, r, "Package manager summit")
