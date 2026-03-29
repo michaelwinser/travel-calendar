@@ -139,6 +139,7 @@
         id: `trip-${name}`,
         name,
         color: info.color,
+        status: 'confirmed',
         startDate,
         endDate,
         activityCount: acts.length,

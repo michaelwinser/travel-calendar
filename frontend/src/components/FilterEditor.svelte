@@ -63,15 +63,6 @@
     selectedIds = ids;
   }
 
-  async function handleSync() {
-    try {
-      await syncSource(source.id);
-      await refresh();
-    } catch (e: any) {
-      error = e.message;
-    }
-  }
-
   function toggleFilter(idx: number) {
     filters[idx].enabled = !filters[idx].enabled;
     dirty = true;

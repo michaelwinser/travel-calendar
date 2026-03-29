@@ -55,7 +55,30 @@ dev_build() {
     esac
 }
 
+_check_frontend() {
+    echo "Type-checking frontend..."
+    _dc_file=".devcontainer/docker-compose.yml"
+
+    docker compose -f "$_dc_file" run --rm -T frontend sh -c "
+        cd /app/frontend
+        if [ ! -d node_modules ]; then pnpm install; fi
+        pnpm check
+    "
+}
+
+# Override dev_ci to include frontend type checking
+dev_ci() {
+    appbase lint-api 2>/dev/null || true
+    go vet ./...
+    go build ./...
+    _check_frontend
+    _build_frontend
+    go test -v -count=1 ./...
+    dev_e2e
+}
+
 # Dispatch — add app-specific commands before the fallthrough
 case "${1:-help}" in
+    check)  _check_frontend ;;
     *)  dev_dispatch "$@" ;;
 esac
