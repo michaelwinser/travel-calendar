@@ -214,6 +214,62 @@ func Parse(text string, today time.Time) ParsedResult {
 		}
 	}
 
+	// --- Pass 1c: Find relative dates (tomorrow, Tuesday, next Friday) ---
+	if len(dates) == 0 {
+		for i := 0; i < n; i++ {
+			if consumed[i] {
+				continue
+			}
+			lower := strings.ToLower(tokens[i])
+
+			var resolved time.Time
+			resolvedEnd := i + 1
+			found := false
+
+			switch lower {
+			case "today":
+				resolved = today
+				found = true
+			case "tomorrow":
+				resolved = today.AddDate(0, 0, 1)
+				found = true
+			case "yesterday":
+				resolved = today.AddDate(0, 0, -1)
+				found = true
+			default:
+				// Check for day of week
+				if dow, isDow := dayOfWeek[lower]; isDow {
+					// "next Friday" or "this Thursday"
+					hasPrefix := false
+					if i > 0 {
+						prev := strings.ToLower(tokens[i-1])
+						if prev == "next" || prev == "this" || prev == "on" {
+							hasPrefix = true
+							resolvedEnd = i + 1
+							// Consume the prefix
+							consumed[i-1] = true
+						}
+					}
+					_ = hasPrefix
+					resolved = nextDayOfWeek(today, dow)
+					found = true
+				}
+			}
+
+			if found {
+				// Consume preceding "on" if present
+				if i > 0 && strings.ToLower(tokens[i-1]) == "on" && !consumed[i-1] {
+					consumed[i-1] = true
+				}
+
+				dates = append(dates, parsedDate{t: resolved, hasYear: true, startToken: i, endToken: resolvedEnd})
+				for j := i; j < resolvedEnd; j++ {
+					consumed[j] = true
+				}
+			}
+		}
+	}
+
 	// --- Pass 2: Find connectors and assign dates to start/end ---
 	var startDate, endDate *time.Time
 	startHasYear, endHasYear := false, false
@@ -540,6 +596,26 @@ func isAllUpper(s string) bool {
 		}
 	}
 	return true
+}
+
+var dayOfWeek = map[string]time.Weekday{
+	"sunday": time.Sunday, "sun": time.Sunday,
+	"monday": time.Monday, "mon": time.Monday,
+	"tuesday": time.Tuesday, "tue": time.Tuesday, "tues": time.Tuesday,
+	"wednesday": time.Wednesday, "wed": time.Wednesday,
+	"thursday": time.Thursday, "thu": time.Thursday, "thurs": time.Thursday,
+	"friday": time.Friday, "fri": time.Friday,
+	"saturday": time.Saturday, "sat": time.Saturday,
+}
+
+// nextDayOfWeek returns the next occurrence of the given weekday after today.
+// If today IS that weekday, returns next week's.
+func nextDayOfWeek(today time.Time, target time.Weekday) time.Time {
+	daysAhead := int(target) - int(today.Weekday())
+	if daysAhead <= 0 {
+		daysAhead += 7
+	}
+	return today.AddDate(0, 0, daysAhead)
 }
 
 func isLikelyUnparsedDateWord(s string) bool {

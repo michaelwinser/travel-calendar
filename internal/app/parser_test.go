@@ -51,21 +51,9 @@ func TestParse_UC2005_ExplicitYear(t *testing.T) {
 
 func TestParse_UC2006_MinimalInput(t *testing.T) {
 	r := Parse("meeting tomorrow", testToday)
-	assertTitle(t, r, "meeting tomorrow")
+	assertTitle(t, r, "meeting")
 	assertType(t, r, TypeCommitment) // "meeting" keyword
-	if r.StartDate != nil {
-		t.Errorf("expected no start date, got %s", r.StartDate.Format("2006-01-02"))
-	}
-	// "tomorrow" should be in unparsed
-	found := false
-	for _, u := range r.Unparsed {
-		if u == "tomorrow" {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("expected 'tomorrow' in unparsed, got %v", r.Unparsed)
-	}
+	assertStartDate(t, r, "2026-03-23") // tomorrow resolved
 }
 
 func TestParse_UC2007_YearInferencePastMonth(t *testing.T) {
@@ -177,6 +165,29 @@ func TestParse_71_VenueWithAt(t *testing.T) {
 	r := Parse("Bob's birthday party at The Shed", testToday)
 	assertTitle(t, r, "Bob's birthday party")
 	assertLocation(t, r, "The Shed")
+}
+
+func TestParse_71_RelativeDayOfWeek(t *testing.T) {
+	// testToday is March 22, 2026 (Sunday)
+	r := Parse("Bob's birthday party at The Shed on Tuesday", testToday)
+	assertTitle(t, r, "Bob's birthday party")
+	assertLocation(t, r, "The Shed")
+	assertStartDate(t, r, "2026-03-24") // next Tuesday
+}
+
+func TestParse_71_NextFriday(t *testing.T) {
+	// testToday is March 22, 2026 (Sunday)
+	r := Parse("Bob's birthday party at The Shed next Friday", testToday)
+	assertTitle(t, r, "Bob's birthday party")
+	assertLocation(t, r, "The Shed")
+	assertStartDate(t, r, "2026-03-27") // next Friday
+}
+
+func TestParse_71_Tomorrow(t *testing.T) {
+	r := Parse("Dentist tomorrow", testToday)
+	assertTitle(t, r, "Dentist")
+	assertStartDate(t, r, "2026-03-23")
+	assertType(t, r, TypeCommitment)
 }
 
 // --- Helpers ---
