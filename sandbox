@@ -66,13 +66,19 @@ if [ -n "$GO_BIN_DIR" ] && [ "$GO_BIN_DIR" != "/usr/bin" ]; then
     GO_FLAG="--read $GO_BIN_DIR"
 fi
 
+# Suppress Docker config warning (nono blocks ~/.docker as a sensitive path — correct behavior)
+# Create a local empty config and point Docker at it
+DOCKER_DIR="$PROJECT_DIR/.docker"
+mkdir -p "$DOCKER_DIR" 2>/dev/null
+[ -f "$DOCKER_DIR/config.json" ] || echo '{}' > "$DOCKER_DIR/config.json"
+export DOCKER_CONFIG="$DOCKER_DIR"
+
 exec nono run \
     --profile claude-code \
     --allow "$PROJECT_DIR" \
     --allow "$HOME/.config/travel" \
     --allow "$HOME/go" \
     --read "$HOME/sdk" \
-    --read "$HOME/.docker" \
     --allow-bind 3001 \
     $APPBASE_FLAG \
     $GO_FLAG \

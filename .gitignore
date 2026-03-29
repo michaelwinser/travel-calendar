@@ -42,3 +42,4 @@ blog/.current.md
 
 # Logs
 *.log
+.docker/
