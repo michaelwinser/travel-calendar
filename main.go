@@ -197,6 +197,7 @@ func main() {
 	addCmd.Flags().String("loc", "", "Location (e.g. Brussels, Home)")
 	addCmd.Flags().String("type", "stay", fmt.Sprintf("Activity type (%s)", strings.Join(travelapp.ValidTypes, ", ")))
 	addCmd.Flags().String("notes", "", "Optional notes")
+	addCmd.Flags().String("trip", "", "Trip name (creates trip if needed)")
 	addCmd.MarkFlagRequired("from")
 	cli.AddCommand(addCmd)
 
@@ -241,6 +242,7 @@ func main() {
 		RunE:  quickAdd,
 	}
 	quickCmd.Flags().BoolP("yes", "y", false, "Skip confirmation and create immediately")
+	quickCmd.Flags().String("trip", "", "Trip name (creates trip if needed)")
 	cli.AddCommand(quickCmd)
 
 	delCmd := &cobra.Command{
@@ -710,6 +712,13 @@ func addActivity(cmd *cobra.Command, args []string) error {
 	if notes != "" {
 		req.Notes = &notes
 	}
+	if tripName, _ := cmd.Flags().GetString("trip"); tripName != "" {
+		tripID, err := resolveTripForCLI(client, tripName)
+		if err != nil {
+			return err
+		}
+		req.TripId = &tripID
+	}
 
 	resp, err := client.CreateActivityWithResponse(context.Background(), req)
 	if err != nil {
@@ -846,6 +855,13 @@ func quickAdd(cmd *cobra.Command, args []string) error {
 	}
 	if historyID != "" {
 		req.ParseHistoryId = &historyID
+	}
+	if tripName, _ := cmd.Flags().GetString("trip"); tripName != "" {
+		tripID, err := resolveTripForCLI(client, tripName)
+		if err != nil {
+			return err
+		}
+		req.TripId = &tripID
 	}
 
 	createResp, err := client.CreateActivityWithResponse(context.Background(), req)
@@ -3150,6 +3166,30 @@ func showInfo(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Override: DEV_USER_EMAIL=%s\n", email)
 	}
 	return nil
+}
+
+// resolveTripForCLI finds an existing trip by name or creates one.
+func resolveTripForCLI(client *api.ClientWithResponses, name string) (string, error) {
+	listResp, err := client.ListTripsWithResponse(context.Background())
+	if err != nil {
+		return "", err
+	}
+	if listResp.JSON200 != nil {
+		for _, t := range *listResp.JSON200 {
+			if strings.EqualFold(t.Name, name) {
+				return t.Id, nil
+			}
+		}
+	}
+	// Create new trip
+	createResp, err := client.CreateTripWithResponse(context.Background(), api.CreateTripRequest{Name: name})
+	if err != nil {
+		return "", err
+	}
+	if createResp.StatusCode() != http.StatusCreated {
+		return "", fmt.Errorf("failed to create trip %q: %s", name, string(createResp.Body))
+	}
+	return createResp.JSON201.Id, nil
 }
 
 // --- Calendar import ---

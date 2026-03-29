@@ -17,6 +17,10 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BINARY="$PROJECT_DIR/travel"
 FAILURES=0
 
+# Isolated temp database — each run starts clean
+TEST_DATA=$(mktemp -d)
+export DEV_USER_EMAIL="smoke-test@localhost"
+
 # Colors
 if [ -t 1 ]; then
     GREEN='\033[0;32m'
@@ -28,7 +32,7 @@ else
 fi
 
 cleanup() {
-    rm -f "$BINARY"
+    rm -rf "$TEST_DATA"
 }
 trap cleanup EXIT
 
@@ -71,58 +75,58 @@ echo ""
 echo "--- Planning a conference trip to Brussels ---"
 echo ""
 run_check "Create conference" "European Summit" \
-    "$BINARY" add "European Summit" --from 2026-10-04 --to 2026-10-07 --loc Brussels --type conference
+    "$BINARY" --data "$TEST_DATA" add "European Summit" --from 2026-10-04 --to 2026-10-07 --loc Brussels --type conference
 
 # --- Quick add a vacation ---
 
 echo "--- Quick-adding a Hawaiian vacation ---"
 echo ""
 run_check "Quick add vacation" "Hawaii Vacation" \
-    "$BINARY" quick "Hawaii Vacation Oct 15 - Oct 22 in Maui" --yes
+    "$BINARY" --data "$TEST_DATA" quick "Hawaii Vacation Oct 15 - Oct 22 in Maui" --yes
 
 # --- Create a conflict ---
 
 echo "--- Oops, dentist appointment during the conference ---"
 echo ""
 run_check "Create conflicting appointment" "Overlapping activities" \
-    "$BINARY" add "Dentist Appointment" --from 2026-10-05 --loc Home --type commitment
+    "$BINARY" --data "$TEST_DATA" add "Dentist Appointment" --from 2026-10-05 --loc Home --type commitment
 
 # --- List everything ---
 
 echo "--- What does October look like? ---"
 echo ""
 run_check "List October" "European Summit" \
-    "$BINARY" list --month 2026-10
+    "$BINARY" --data "$TEST_DATA" list --month 2026-10
 
 # --- Check a conflict date ---
 
 echo "--- Am I free on October 5? ---"
 echo ""
 run_check "Check conflict date" "Location conflict" \
-    "$BINARY" check 2026-10-05
+    "$BINARY" --data "$TEST_DATA" check 2026-10-05
 
 # --- Check a non-conflict date ---
 
 echo "--- What about October 6? ---"
 echo ""
 run_check "Check clean date" "Brussels" \
-    "$BINARY" check 2026-10-06
+    "$BINARY" --data "$TEST_DATA" check 2026-10-06
 
 # --- Check a day with nothing ---
 
 echo "--- How about November 1? ---"
 echo ""
 run_check "Check empty date" "Home" \
-    "$BINARY" check 2026-11-01
+    "$BINARY" --data "$TEST_DATA" check 2026-11-01
 
 # --- Delete the conflicting appointment ---
 
 echo "--- Cancel the dentist, resolve the conflict ---"
 echo ""
-DENTIST_PREFIX=$("$BINARY" list 2>/dev/null | grep "Dentist" | awk '{print $1}')
+DENTIST_PREFIX=$("$BINARY" --data "$TEST_DATA" list 2>/dev/null | grep "Dentist" | awk '{print $1}')
 if [ -n "$DENTIST_PREFIX" ]; then
     run_check "Delete dentist" "Deleted" \
-        "$BINARY" delete "$DENTIST_PREFIX"
+        "$BINARY" --data "$TEST_DATA" delete "$DENTIST_PREFIX"
 else
     printf "${RED}  Could not find Dentist Appointment to delete${NC}\n\n"
     FAILURES=$((FAILURES + 1))
@@ -133,14 +137,14 @@ fi
 echo "--- October 5 after cancelling the dentist ---"
 echo ""
 run_check "Conflict resolved" "Brussels" \
-    "$BINARY" check 2026-10-05
+    "$BINARY" --data "$TEST_DATA" check 2026-10-05
 
 # --- Final list ---
 
 echo "--- Final schedule ---"
 echo ""
 run_check "Final list" "Hawaii Vacation" \
-    "$BINARY" list
+    "$BINARY" --data "$TEST_DATA" list
 
 # ============================================
 # Results
