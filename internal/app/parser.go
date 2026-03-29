@@ -191,6 +191,29 @@ func Parse(text string, today time.Time) ParsedResult {
 		i = endIdx - 1
 	}
 
+	// --- Pass 1b: Find numeric dates (M/D, MM/DD, M/D/YYYY) ---
+	for i := 0; i < n; i++ {
+		if consumed[i] {
+			continue
+		}
+		m, d, y, ok := parseNumericDate(tokens[i])
+		if !ok {
+			continue
+		}
+		hasYear := y > 0
+		if !hasYear {
+			y = inferYear(time.Month(m), d, today)
+		}
+		dt := time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC)
+		dates = append(dates, parsedDate{t: dt, hasYear: hasYear, startToken: i, endToken: i + 1})
+		consumed[i] = true
+
+		// Consume preceding "on"
+		if i > 0 && strings.ToLower(tokens[i-1]) == "on" && !consumed[i-1] {
+			consumed[i-1] = true
+		}
+	}
+
 	// --- Pass 2: Find connectors and assign dates to start/end ---
 	var startDate, endDate *time.Time
 	startHasYear, endHasYear := false, false
@@ -576,6 +599,49 @@ func parseDay(s string) int {
 		return 0
 	}
 	return day
+}
+
+// parseNumericDate parses "4/12", "04/12", "4/12/2026" into month, day, year.
+// Returns (month, day, year, ok). Year is 0 if not specified.
+func parseNumericDate(s string) (int, int, int, bool) {
+	parts := strings.Split(s, "/")
+	if len(parts) < 2 || len(parts) > 3 {
+		return 0, 0, 0, false
+	}
+
+	m := parseSmallInt(parts[0])
+	d := parseSmallInt(parts[1])
+	if m < 1 || m > 12 || d < 1 || d > 31 {
+		return 0, 0, 0, false
+	}
+
+	y := 0
+	if len(parts) == 3 {
+		y = parseYear(parts[2])
+		if y == 0 {
+			// Try 2-digit year
+			yy := parseSmallInt(parts[2])
+			if yy >= 0 && yy <= 99 {
+				y = 2000 + yy
+			}
+		}
+	}
+
+	return m, d, y, true
+}
+
+func parseSmallInt(s string) int {
+	if len(s) == 0 || len(s) > 4 {
+		return -1
+	}
+	val := 0
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return -1
+		}
+		val = val*10 + int(c-'0')
+	}
+	return val
 }
 
 func parseYear(s string) int {

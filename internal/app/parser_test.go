@@ -165,6 +165,20 @@ func TestParse_71_PyCon(t *testing.T) {
 	assertEndDate(t, r, "2026-05-15")
 }
 
+func TestParse_71_NumericDate(t *testing.T) {
+	r := Parse("UA 16 from EWR to CDG on 4/12", testToday)
+	assertTitle(t, r, "UA 16")
+	assertType(t, r, TypeTravel)
+	assertLocation(t, r, "EWR → CDG")
+	assertStartDate(t, r, "2026-04-12")
+}
+
+func TestParse_71_VenueWithAt(t *testing.T) {
+	r := Parse("Bob's birthday party at The Shed", testToday)
+	assertTitle(t, r, "Bob's birthday party")
+	assertLocation(t, r, "The Shed")
+}
+
 // --- Helpers ---
 
 func assertTitle(t *testing.T, r ParsedResult, expected string) {
