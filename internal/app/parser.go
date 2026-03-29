@@ -148,21 +148,39 @@ func Parse(text string, today time.Time) ParsedResult {
 		d := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 		dates = append(dates, parsedDate{t: d, hasYear: hasYear, startToken: i, endToken: endIdx})
 
-		// Check for same-month range: "March 12-16" or "March 12 - 16"
+		// Check for same-month range: "March 12-16", "March 12 - 16", or "March 12 to 16"
 		rangeEndIdx := endIdx
-		if rangeEndIdx < n && tokens[rangeEndIdx] == "-" && rangeEndIdx+1 < n {
-			endDay := parseDay(tokens[rangeEndIdx+1])
+		rangeConnector := ""
+		rangeConnectorIdx := -1
+
+		if rangeEndIdx < n {
+			tok := strings.ToLower(tokens[rangeEndIdx])
+			if tok == "-" || tok == "to" || tok == "through" || tok == "–" || tok == "—" {
+				rangeConnector = tok
+				rangeConnectorIdx = rangeEndIdx
+				rangeEndIdx++
+			}
+		}
+
+		if rangeConnector != "" && rangeEndIdx < n {
+			endDay := parseDay(tokens[rangeEndIdx])
 			if endDay > 0 {
-				endYear := year
-				if !hasYear {
-					endYear = inferYear(month, endDay, today)
+				// Check that the next token is NOT a month (that would be a separate date)
+				isStandaloneDay := true
+				if _, isMonth := months[strings.ToLower(tokens[rangeEndIdx])]; isMonth {
+					isStandaloneDay = false
 				}
-				d2 := time.Date(endYear, month, endDay, 0, 0, 0, 0, time.UTC)
-				dates = append(dates, parsedDate{t: d2, hasYear: hasYear, startToken: rangeEndIdx, endToken: rangeEndIdx + 2})
-				for j := rangeEndIdx; j < rangeEndIdx+2; j++ {
-					consumed[j] = true
+				if isStandaloneDay {
+					endYear := year
+					if !hasYear {
+						endYear = inferYear(month, endDay, today)
+					}
+					d2 := time.Date(endYear, month, endDay, 0, 0, 0, 0, time.UTC)
+					dates = append(dates, parsedDate{t: d2, hasYear: hasYear, startToken: rangeConnectorIdx, endToken: rangeEndIdx + 1})
+					consumed[rangeConnectorIdx] = true
+					consumed[rangeEndIdx] = true
+					endIdx = rangeEndIdx + 1
 				}
-				endIdx = rangeEndIdx + 2
 			}
 		}
 
@@ -313,6 +331,29 @@ func Parse(text string, today time.Time) ParsedResult {
 						locationConf = ConfHigh
 					}
 					break
+				}
+			}
+		}
+	}
+
+	// Consume stray "from" and "to" that are date connectors (not route parts)
+	if routeFrom == "" && len(dates) >= 1 {
+		for i := 0; i < n; i++ {
+			if consumed[i] {
+				continue
+			}
+			lower := strings.ToLower(tokens[i])
+			if lower == "from" || lower == "to" {
+				// Check if this is adjacent to a date token
+				isDateConnector := false
+				for _, d := range dates {
+					if i == d.startToken-1 || i == d.endToken {
+						isDateConnector = true
+						break
+					}
+				}
+				if isDateConnector {
+					consumed[i] = true
 				}
 			}
 		}

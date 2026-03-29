@@ -149,6 +149,22 @@ func TestParse_71_DentistAppointment(t *testing.T) {
 	assertTitle(t, r, "Dentist appointment")
 }
 
+func TestParse_71_OSSNAMinneapolis(t *testing.T) {
+	r := Parse("OSSNA in Minneapolis from May 18 to 21", testToday)
+	assertTitle(t, r, "OSSNA")
+	assertLocation(t, r, "Minneapolis")
+	assertStartDate(t, r, "2026-05-18")
+	assertEndDate(t, r, "2026-05-21")
+}
+
+func TestParse_71_PyCon(t *testing.T) {
+	r := Parse("PyCon May 14 - May 15 in Long Beach, CA", testToday)
+	assertTitle(t, r, "PyCon")
+	assertLocation(t, r, "Long Beach, CA")
+	assertStartDate(t, r, "2026-05-14")
+	assertEndDate(t, r, "2026-05-15")
+}
+
 // --- Helpers ---
 
 func assertTitle(t *testing.T, r ParsedResult, expected string) {
