@@ -124,13 +124,13 @@ All development sessions should run inside a [nono](https://github.com/always-fu
 ```bash
 # Recommended: start Claude Code with project capabilities
 cd ~/claude/travel-calendar
-scripts/sandbox.sh claude
+./sandbox claude
 
 # Run CI sandboxed
-scripts/sandbox.sh ./dev ci
+./sandbox ./dev ci
 
 # Run a CLI command sandboxed
-scripts/sandbox.sh ./travel list
+./sandbox ./travel list
 ```
 
 The sandbox extends the `claude-code` profile with:

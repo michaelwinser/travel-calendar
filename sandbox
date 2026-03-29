@@ -2,10 +2,10 @@
 # Run a command inside a nono sandbox with project-specific capabilities.
 #
 # Usage:
-#   scripts/sandbox.sh claude                    # Interactive Claude Code session
-#   scripts/sandbox.sh ./dev ci                  # CI pipeline
-#   scripts/sandbox.sh ./travel list             # CLI command
-#   TRAVEL_TEST_MODE=true scripts/sandbox.sh ... # With test auth
+#   ./sandbox claude                    # Interactive Claude Code session
+#   ./sandbox ./dev ci                  # CI pipeline
+#   ./sandbox ./travel list             # CLI command
+#   TRAVEL_TEST_MODE=true ./sandbox ... # With test auth
 #
 # The sandbox provides:
 #   - Read+write: project directory, app data, Go module cache
@@ -15,8 +15,7 @@
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Check nono is available
 if ! command -v nono >/dev/null 2>&1; then
