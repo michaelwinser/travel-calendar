@@ -1,0 +1,46 @@
+main.go
+  c4b81f6d41e4e10c 275-276,1386-1401
+internal/app/server.go
+  c4b81f6d41e4e10c 92-114,168-170,262-264,454,462-463,465-466,473-480,540-548,588-593
+frontend/src/App.svelte
+  c4b81f6d41e4e10c 519,522-527,799-800
+frontend/src/components/TripEditModal.svelte
+  c4b81f6d41e4e10c 9-10,12,22-23,38-43,59-69,178-196
+openapi.yaml
+  c4b81f6d41e4e10c 896,900,918-923,932-937
+internal/app/store.go
+  c4b81f6d41e4e10c 24-25,74,81-82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "b8bc7e53951cf5c5e92e30abef687d82c2c28c77",
+  "prompts": {
+    "c4b81f6d41e4e10c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1068418b-2d23-4075-8b99-24178f7ad113",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 146,
+      "total_deletions": 13,
+      "accepted_lines": 146,
+      "overriden_lines": 0
+    },
+    "db0ccec4fd040162": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f91b5184-5d36-475e-a387-fb6a0cd69653",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 364,
+      "overriden_lines": 0
+    }
+  }
+}
