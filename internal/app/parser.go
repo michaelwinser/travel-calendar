@@ -191,12 +191,17 @@ func Parse(text string, today time.Time) ParsedResult {
 		i = endIdx - 1
 	}
 
-	// --- Pass 1b: Find numeric dates (M/D, MM/DD, M/D/YYYY) ---
+	// --- Pass 1b: Find numeric and ISO dates (M/D, MM/DD, YYYY-MM-DD) ---
 	for i := 0; i < n; i++ {
 		if consumed[i] {
 			continue
 		}
-		m, d, y, ok := parseNumericDate(tokens[i])
+		// Try ISO format first (2026-04-07)
+		m, d, y, ok := parseISODate(tokens[i])
+		if !ok {
+			// Try numeric format (4/12, 04/12/2026)
+			m, d, y, ok = parseNumericDate(tokens[i])
+		}
 		if !ok {
 			continue
 		}
@@ -682,6 +687,12 @@ func tokenize(text string) []string {
 		if t == "" {
 			continue
 		}
+		// Keep ISO dates whole: "2026-04-07" stays as one token
+		if _, _, _, ok := parseISODate(t); ok {
+			result = append(result, t)
+			continue
+		}
+
 		// Split embedded dashes: "22-Feb" → ["22", "-", "Feb"]
 		// But keep hyphenated words together: "Alpha-Omega" stays as one token
 		if strings.Contains(t, "-") && len(t) > 1 {
@@ -731,6 +742,20 @@ func parseDay(s string) int {
 		return 0
 	}
 	return day
+}
+
+// parseISODate parses "2026-04-07" into month, day, year.
+func parseISODate(s string) (int, int, int, bool) {
+	if len(s) != 10 || s[4] != '-' || s[7] != '-' {
+		return 0, 0, 0, false
+	}
+	y := parseSmallInt(s[0:4])
+	m := parseSmallInt(s[5:7])
+	d := parseSmallInt(s[8:10])
+	if y < 2000 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31 {
+		return 0, 0, 0, false
+	}
+	return m, d, y, true
 }
 
 // parseNumericDate parses "4/12", "04/12", "4/12/2026" into month, day, year.

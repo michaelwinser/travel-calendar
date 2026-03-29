@@ -190,6 +190,17 @@ func TestParse_71_Tomorrow(t *testing.T) {
 	assertType(t, r, TypeCommitment)
 }
 
+func TestParse_71_FlightToLondonFromEWR(t *testing.T) {
+	r := Parse("Flight to London (UA 904) 2026-04-07 in Newark EWR", testToday)
+	assertType(t, r, TypeTravel)
+	assertStartDate(t, r, "2026-04-07")
+	// The parser sees "to London" and "in Newark EWR" — it chains "in" as location
+	// but doesn't reconstruct the route since "to" and "in" are split by (UA 904) and date
+	// This is a known limitation — the "to DEST (info) DATE in ORIGIN" pattern
+	// would need the formal parser (#122) to handle correctly
+	t.Logf("title=%q location=%q", r.Title, r.Location)
+}
+
 func TestParse_71_TrainNewHavenToBoston(t *testing.T) {
 	r := Parse("Train from New Haven to Boston, MA - South Station on Nov 3 2025", testToday)
 	// "- South Station" is a venue qualifier that stays in title for now
