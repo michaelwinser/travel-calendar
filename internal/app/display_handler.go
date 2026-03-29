@@ -56,10 +56,19 @@ func (s *ActivityServer) HandleDisplay(w http.ResponseWriter, r *http.Request) {
 	}
 	showHeader := r.URL.Query().Get("header") == "true"
 
+	numWeeks := 6
+	if w := r.URL.Query().Get("weeks"); w != "" {
+		if n, err := fmt.Sscanf(w, "%d", &numWeeks); n == 1 && err == nil && numWeeks >= 2 && numWeeks <= 12 {
+			// valid
+		} else {
+			numWeeks = 6
+		}
+	}
+
 	now := time.Now()
 	today := now.Format("2006-01-02")
 	from := now.AddDate(0, 0, -7).Format("2006-01-02")
-	to := now.AddDate(0, 0, 42).Format("2006-01-02")
+	to := now.AddDate(0, 0, numWeeks*7).Format("2006-01-02")
 
 	activities, err := s.store.ListRange(p.UserID, from, to)
 	if err != nil {
@@ -129,7 +138,7 @@ func (s *ActivityServer) HandleDisplay(w http.ResponseWriter, r *http.Request) {
 	startDate := now.AddDate(0, 0, -int(now.Weekday()))
 
 	var weeks []displayWeek
-	for week := 0; week < 6; week++ {
+	for week := 0; week < numWeeks; week++ {
 		wd := displayWeek{}
 		for dow := 0; dow < 7; dow++ {
 			d := startDate.AddDate(0, 0, week*7+dow)
@@ -207,7 +216,7 @@ func (s *ActivityServer) HandleDisplay(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=1800")
-	renderFlexDisplay(w, handle, theme, showHeader, currentLoc, currentTrip, now, weeks)
+	renderFlexDisplay(w, handle, theme, showHeader, numWeeks, currentLoc, currentTrip, now, weeks)
 }
 
 func displayColor(actType, theme string) string {
@@ -230,7 +239,15 @@ func displayColor(actType, theme string) string {
 	}
 }
 
-func renderFlexDisplay(w http.ResponseWriter, handle, theme string, showHeader bool, currentLoc, currentTrip string, now time.Time, weeks []displayWeek) {
+func renderFlexDisplay(w http.ResponseWriter, handle, theme string, showHeader bool, numWeeks int, currentLoc, currentTrip string, now time.Time, weeks []displayWeek) {
+	// Compute row height to fill 480px
+	headerHeight := 0
+	if showHeader {
+		headerHeight = 30
+	}
+	dowHeight := 24
+	available := 480 - headerHeight - dowHeight
+	rowHeight := available / numWeeks
 
 	fmt.Fprintf(w, `<!DOCTYPE html>
 <html lang="en">
@@ -240,25 +257,25 @@ func renderFlexDisplay(w http.ResponseWriter, handle, theme string, showHeader b
 <title>Where is %s?</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: sans-serif; background: #fff; color: #000; width: 800px; overflow: hidden; }
-.header { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; background: #000; color: #fff; }
-.title { font-size: 16px; font-weight: 700; }
-.now-loc { font-size: 14px; font-weight: 700; }
-.dow-row { display: flex; background: #000; color: #fff; }
-.dow-cell { flex: 1; text-align: center; padding: 4px 0; font-size: 13px; font-weight: 600; }
-.week { position: relative; display: flex; border-bottom: 1px solid #ccc; min-height: 68px; }
-.day { flex: 1; border-right: 1px solid #ddd; padding: 3px 5px; min-height: 68px; display: flex; flex-direction: column; }
+body { font-family: sans-serif; background: #fff; color: #000; width: 800px; height: 480px; overflow: hidden; }
+.header { display: flex; justify-content: space-between; align-items: center; padding: 4px 12px; background: #000; color: #fff; height: %dpx; }
+.title { font-size: 14px; font-weight: 700; }
+.now-loc { font-size: 13px; font-weight: 700; }
+.dow-row { display: flex; background: #000; color: #fff; height: %dpx; }
+.dow-cell { flex: 1; text-align: center; font-size: 13px; font-weight: 600; line-height: %dpx; }
+.week { position: relative; display: flex; border-bottom: 1px solid #ccc; height: %dpx; overflow: hidden; }
+.day { flex: 1; border-right: 1px solid #ddd; padding: 2px 4px; display: flex; flex-direction: column; overflow: hidden; }
 .day:last-child { border-right: none; }
 .day.past { opacity: 0.35; }
-.day-num { font-size: 16px; font-weight: 700; text-align: right; }
-.day-num.today { display: inline-block; background: #ff0000; color: #fff; border-radius: 50%%; width: 24px; height: 24px; line-height: 24px; text-align: center; float: right; }
-.month-lbl { font-size: 11px; color: #666; float: left; line-height: 24px; }
-.trip-bar { position: absolute; height: 22px; background: #0000ff; color: #fff; font-size: 13px; font-weight: 700; line-height: 22px; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; z-index: 1; }
-.act-label { font-size: 11px; color: #000; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.loc { font-size: 11px; color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.day-num { font-size: 15px; font-weight: 700; text-align: right; }
+.day-num.today { display: inline-block; background: #ff0000; color: #fff; border-radius: 50%%; width: 22px; height: 22px; line-height: 22px; text-align: center; float: right; font-size: 14px; }
+.month-lbl { font-size: 10px; color: #666; float: left; line-height: 22px; }
+.trip-bar { position: absolute; height: 20px; background: #0000ff; color: #fff; font-size: 12px; font-weight: 700; line-height: 20px; padding: 0 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; z-index: 1; }
+.act-label { font-size: 10px; color: #000; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px; }
+.loc { font-size: 10px; color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px; }
 </style>
 </head>
-<body>`, handle)
+<body>`, handle, headerHeight, dowHeight, dowHeight, rowHeight)
 
 	if showHeader {
 		fmt.Fprintf(w, `<div class="header"><div class="title">%s</div><div class="now-loc">%s</div></div>`, handle, currentLoc)
