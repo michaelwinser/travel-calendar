@@ -108,6 +108,13 @@ func TestParse_71_FlightEWRtoCDG(t *testing.T) {
 	assertLocation(t, r, "EWR → CDG")
 }
 
+func TestParse_ArrowRoute(t *testing.T) {
+	r := Parse("Flight EWR -> CDG March 5", testToday)
+	assertType(t, r, TypeTravel)
+	assertStartDate(t, r, "2027-03-05")
+	assertLocation(t, r, "EWR → CDG")
+}
+
 func TestParse_71_TripToLondon(t *testing.T) {
 	r := Parse("Trip to London March 12-16", testToday)
 	assertLocation(t, r, "London")

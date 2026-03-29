@@ -323,7 +323,7 @@ func Parse(text string, today time.Time) ParsedResult {
 		p2 := placeTokens[1]
 		isRoute := false
 		for i := p1.End; i < p2.Start; i++ {
-			if strings.ToLower(tokens[i]) == "to" {
+			if isRouteSep(tokens[i]) {
 				isRoute = true
 				consumed[i] = true
 				break
@@ -540,6 +540,11 @@ func Parse(text string, today time.Time) ParsedResult {
 }
 
 // extractRoute looks for "from X to Y" where X and Y are not dates.
+func isRouteSep(token string) bool {
+	t := strings.ToLower(token)
+	return t == "to" || t == "->" || t == "→"
+}
+
 func extractRoute(tokens []string, consumed []bool, dates []parsedDate) (from, to string, consumedIdxs []int) {
 	n := len(tokens)
 	for i := 0; i < n; i++ {
@@ -556,12 +561,12 @@ func extractRoute(tokens []string, consumed []bool, dates []parsedDate) (from, t
 		fromParts := []string{}
 		fromIdxs := []int{i}
 		j := i + 1
-		for j < n && !consumed[j] && strings.ToLower(tokens[j]) != "to" {
+		for j < n && !consumed[j] && !isRouteSep(tokens[j]) {
 			fromParts = append(fromParts, tokens[j])
 			fromIdxs = append(fromIdxs, j)
 			j++
 		}
-		if j < n && strings.ToLower(tokens[j]) == "to" {
+		if j < n && isRouteSep(tokens[j]) {
 			toIdx := j
 			toParts := []string{}
 			toIdxs := []int{toIdx}
@@ -689,6 +694,12 @@ func tokenize(text string) []string {
 		}
 		// Keep ISO dates whole: "2026-04-07" stays as one token
 		if _, _, _, ok := parseISODate(t); ok {
+			result = append(result, t)
+			continue
+		}
+
+		// Keep route arrow as a single token
+		if t == "->" {
 			result = append(result, t)
 			continue
 		}
