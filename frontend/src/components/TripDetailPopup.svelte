@@ -31,7 +31,7 @@
 <div class="popup-overlay" onclick={onclose}>
   <div
     class="popup"
-    style="left: {Math.min(x, window.innerWidth - 320)}px; top: {Math.min(y, window.innerHeight - 300)}px;"
+    style="left: {Math.min(x, window.innerWidth - 380)}px; top: {Math.min(y, window.innerHeight - 340)}px;"
     onclick={(e) => e.stopPropagation()}
   >
     <div class="popup-header" style="border-left: 4px solid {color};">
@@ -49,11 +49,15 @@
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div class="popup-activity" onclick={() => { onclose(); onedit(activity); }}>
           <span class="popup-dot" style="background: {ACTIVITY_COLORS[activity.type]}"></span>
-          <span class="popup-dates">{formatDates(activity)}</span>
-          <span class="popup-name">{activity.title}</span>
-          {#if activity.location}
-            <span class="popup-location">{activity.location}</span>
-          {/if}
+          <div class="popup-activity-info">
+            <div class="popup-activity-top">
+              <span class="popup-dates">{formatDates(activity)}</span>
+              <span class="popup-name">{activity.title}</span>
+            </div>
+            {#if activity.location}
+              <div class="popup-location">{activity.location}</div>
+            {/if}
+          </div>
         </div>
       {/each}
     </div>
@@ -72,8 +76,8 @@
     background: white;
     border-radius: 10px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-    width: 300px;
-    max-height: 280px;
+    width: 360px;
+    max-height: 320px;
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -118,9 +122,9 @@
 
   .popup-activity {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.5rem;
-    padding: 0.4rem 0.75rem;
+    padding: 0.45rem 0.75rem;
     cursor: pointer;
     font-size: 0.8rem;
   }
@@ -134,13 +138,25 @@
     height: 7px;
     border-radius: 50%;
     flex-shrink: 0;
+    margin-top: 5px;
+  }
+
+  .popup-activity-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .popup-activity-top {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
   }
 
   .popup-dates {
     color: #888;
     font-size: 0.7rem;
-    min-width: 80px;
     white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .popup-name {
@@ -153,8 +169,11 @@
   }
 
   .popup-location {
-    color: #aaa;
+    color: #888;
     font-size: 0.7rem;
-    flex-shrink: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: 1px;
   }
 </style>

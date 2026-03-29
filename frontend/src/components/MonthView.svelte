@@ -526,7 +526,8 @@
   }
 
   .bar-segment.is-trip {
-    height: 26px;
+    /* Same height as regular bars for consistent lane layout */
+    height: 18px;
   }
 
   .bar-segment.no-activity {
@@ -568,7 +569,7 @@
   }
 
   .is-trip .bar-label {
-    font-size: 0.55rem;
+    font-size: 0.6rem;
   }
 
   .trip-label {
