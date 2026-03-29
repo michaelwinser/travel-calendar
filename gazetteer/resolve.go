@@ -255,13 +255,6 @@ var usStatesMap = map[string]string{
 	"dc": "DC", "district of columbia": "DC",
 }
 
-// Canadian province: GeoNames admin1 code → standard abbreviation
-var caProvinceAdmin1 = map[string]string{
-	"01": "AB", "02": "BC", "03": "MB", "04": "NB",
-	"05": "NL", "07": "NS", "08": "ON", "09": "PE",
-	"10": "QC", "11": "SK", "12": "NU", "13": "NT", "14": "YT",
-}
-
 var caProvinceNames = map[string]string{
 	"ab": "01", "alberta": "01",
 	"bc": "02", "british columbia": "02",

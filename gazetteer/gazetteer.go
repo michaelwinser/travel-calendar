@@ -120,7 +120,7 @@ func load(citiesData, airportsData string) (*Gazetteer, error) {
 		}
 
 		addName(city.Name)
-		if strings.ToLower(city.ASCIIName) != strings.ToLower(city.Name) {
+		if !strings.EqualFold(city.ASCIIName, city.Name) {
 			addName(city.ASCIIName)
 		}
 		for _, alt := range altNames {
@@ -175,7 +175,7 @@ func load(citiesData, airportsData string) (*Gazetteer, error) {
 		// Index by IATA code (primary), airport name, and city name
 		index = append(index, nameEntry{lower: strings.ToLower(iata), cityIdx: idx})
 		index = append(index, nameEntry{lower: strings.ToLower(name), cityIdx: idx})
-		if strings.ToLower(airportCity) != strings.ToLower(name) {
+		if !strings.EqualFold(airportCity, name) {
 			index = append(index, nameEntry{lower: strings.ToLower(airportCity) + " airport", cityIdx: idx})
 		}
 	}
@@ -296,12 +296,8 @@ func (g *Gazetteer) ExactSearch(name string) *City {
 		return g.nameIndex[i].lower >= lower
 	})
 
-	for i := start; i < len(g.nameIndex); i++ {
-		entry := g.nameIndex[i]
-		if entry.lower != lower {
-			break
-		}
-		c := g.cities[entry.cityIdx]
+	if start < len(g.nameIndex) && g.nameIndex[start].lower == lower {
+		c := g.cities[g.nameIndex[start].cityIdx]
 		return &c
 	}
 	return nil

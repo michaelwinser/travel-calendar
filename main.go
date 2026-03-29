@@ -2356,7 +2356,7 @@ func namedSet(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(gazetteerSugs) == 0 {
-		return fmt.Errorf("no matches found for %q. Try a more specific location.", location)
+		return fmt.Errorf("no matches found for %q", location)
 	}
 
 	// Check for ambiguity: if top two results are close in score, different countries,
@@ -2406,7 +2406,7 @@ func namedSet(cmd *cobra.Command, args []string) error {
 
 	// Add the original name as an alias so "Home" resolves to this place
 	aliases := []string{name}
-	if strings.ToLower(name) != strings.ToLower(best.Name) {
+	if !strings.EqualFold(name, best.Name) {
 		aliases = append(aliases, best.Name)
 	}
 	req.Aliases = &aliases

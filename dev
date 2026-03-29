@@ -70,6 +70,9 @@ _check_frontend() {
 dev_ci() {
     appbase lint-api 2>/dev/null || true
     go vet ./...
+    if command -v staticcheck >/dev/null 2>&1; then
+        staticcheck ./internal/... ./gazetteer/... .
+    fi
     go build -o "$APP_BINARY_NAME" .
     _check_frontend
     _build_frontend

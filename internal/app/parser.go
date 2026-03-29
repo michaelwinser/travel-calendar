@@ -738,7 +738,7 @@ func tokenize(text string) []string {
 
 func parseDay(s string) int {
 	// Strip ordinal suffixes: "22nd" → "22"
-	s = strings.TrimRight(s, "stndrdth")
+	s = strings.TrimRight(s, "stndrh")
 	if len(s) == 0 || len(s) > 2 {
 		return 0
 	}
