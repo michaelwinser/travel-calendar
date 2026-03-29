@@ -23,6 +23,14 @@ if ! command -v nono >/dev/null 2>&1; then
     exec "$@"
 fi
 
+# Ensure Go and homebrew are on PATH (nono doesn't source shell profiles)
+for p in /opt/homebrew/bin /usr/local/bin "$HOME/go/bin"; do
+    case ":$PATH:" in
+        *":$p:"*) ;;
+        *) [ -d "$p" ] && export PATH="$p:$PATH" ;;
+    esac
+done
+
 # Pre-resolve GOROOT so Go works inside the sandbox
 if command -v go >/dev/null 2>&1 && [ -z "$GOROOT" ]; then
     export GOROOT="$(go env GOROOT)"
