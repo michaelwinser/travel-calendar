@@ -80,8 +80,24 @@ dev_ci() {
     dev_e2e
 }
 
+dev_deploy() {
+    # Deploy gate: CI must pass before deploying
+    echo "Running CI checks before deploy..."
+    dev_ci || { echo "CI failed. Fix errors before deploying."; return 1; }
+
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "Working tree is dirty. Commit changes before deploying."
+        return 1
+    fi
+
+    echo "CI passed. Deploying..."
+    _load_secrets && appbase deploy
+}
+
 # Dispatch — add app-specific commands before the fallthrough
 case "${1:-help}" in
-    check)  _check_frontend ;;
+    check)   _check_frontend ;;
+    deploy)  dev_deploy ;;
+    release) shift; scripts/release.sh "$@" ;;
     *)  dev_dispatch "$@" ;;
 esac
