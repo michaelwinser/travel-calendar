@@ -59,6 +59,15 @@
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
   let textEditing = $state(false); // true when user is actively typing in text box
 
+  // Context values (from props — day click, drag select, edit mode)
+  // Used to restore fields when quick-add text is cleared
+  const contextTitle = props.title ?? '';
+  const contextType = props.type ?? 'stay';
+  const contextStartDate = props.startDate ?? '';
+  const contextEndDate = props.endDate ?? '';
+  const contextLocation = props.location ?? '';
+  const contextPlaceId = props.placeId ?? '';
+
   // Refs
   let textInput: HTMLInputElement;
   let titleInput: HTMLInputElement;
@@ -138,6 +147,14 @@
 
     if (!quickText.trim()) {
       parseResult = null;
+      // Restore context-provided values, clear parse-derived fields
+      title = contextTitle;
+      type = contextType;
+      startDate = contextStartDate;
+      endDate = contextEndDate;
+      location = contextLocation;
+      placeId = contextPlaceId;
+      locationAnnotation = '';
       return;
     }
 
