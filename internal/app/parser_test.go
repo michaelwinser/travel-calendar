@@ -192,8 +192,8 @@ func TestParse_71_Tomorrow(t *testing.T) {
 
 func TestParse_71_SummitAtGoogleInBrussels(t *testing.T) {
 	r := Parse("Package manager summit at Google in Brussels", testToday)
-	assertTitle(t, r, "Package manager summit at Google")
-	assertLocation(t, r, "Brussels")
+	assertTitle(t, r, "Package manager summit")
+	assertLocation(t, r, "Google in Brussels")
 	assertType(t, r, TypeConference) // "summit" keyword
 }
 

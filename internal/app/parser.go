@@ -352,22 +352,59 @@ func Parse(text string, today time.Time) ParsedResult {
 		}
 	}
 
-	// Step 2: Keyword "in"/"at" extraction — finds the LAST "in"/"at" for full phrases
+	// Step 2: Keyword "in"/"at" extraction
+	// Finds location phrases, supporting "venue in city" chains:
+	// "at Google in Brussels" → "Google in Brussels"
 	if location == "" {
-		bestLocStart := -1
-		for i := 0; i < n-1; i++ {
+		// Find all "in"/"at" positions
+		var prepPositions []int
+		for i := 0; i < n; i++ {
 			if consumed[i] {
 				continue
 			}
 			lower := strings.ToLower(tokens[i])
 			if lower == "in" || lower == "at" {
-				bestLocStart = i
+				prepPositions = append(prepPositions, i)
 			}
 		}
-		if bestLocStart >= 0 {
+
+		if len(prepPositions) > 0 {
+			// Start from the earliest "at"/"in" that chains to the last one.
+			// "summit at Google in Brussels" has preps at positions for "at" and "in".
+			// Walk backward from the last prep: if the preceding prep's content
+			// flows into this one (no dates or stop-words between), chain them.
+			locStart := prepPositions[len(prepPositions)-1]
+			for pi := len(prepPositions) - 2; pi >= 0; pi-- {
+				candidate := prepPositions[pi]
+				// Check that tokens between candidate and the next prep are all
+				// simple words (not dates, not consumed)
+				allSimple := true
+				for j := candidate + 1; j < prepPositions[pi+1]; j++ {
+					if consumed[j] {
+						allSimple = false
+						break
+					}
+					jLower := strings.ToLower(tokens[j])
+					if jLower == "from" || jLower == "to" || jLower == "on" || jLower == "with" {
+						allSimple = false
+						break
+					}
+					if _, isMonth := months[jLower]; isMonth {
+						allSimple = false
+						break
+					}
+				}
+				if allSimple {
+					locStart = candidate
+				} else {
+					break
+				}
+			}
+
+			// Collect everything from locStart to end (or next stop)
 			locParts := []string{}
-			consumed[bestLocStart] = true
-			for j := bestLocStart + 1; j < n; j++ {
+			consumed[locStart] = true
+			for j := locStart + 1; j < n; j++ {
 				if consumed[j] {
 					break
 				}
