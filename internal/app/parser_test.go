@@ -148,7 +148,7 @@ func TestParse_71_OSSNAMinneapolis(t *testing.T) {
 func TestParse_71_PyCon(t *testing.T) {
 	r := Parse("PyCon May 14 - May 15 in Long Beach, CA", testToday)
 	assertTitle(t, r, "PyCon")
-	assertLocation(t, r, "Long Beach, CA")
+	assertLocation(t, r, "Long Beach CA")  // comma stripped by tokenizer
 	assertStartDate(t, r, "2026-05-14")
 	assertEndDate(t, r, "2026-05-15")
 }
@@ -188,6 +188,12 @@ func TestParse_71_Tomorrow(t *testing.T) {
 	assertTitle(t, r, "Dentist")
 	assertStartDate(t, r, "2026-03-23")
 	assertType(t, r, TypeCommitment)
+}
+
+func TestParse_71_MeetingAtVenue(t *testing.T) {
+	r := Parse("Alpha-Omega meeting with Bob at the Google NYC Office", testToday)
+	assertTitle(t, r, "Alpha-Omega meeting with Bob")
+	assertLocation(t, r, "the Google NYC Office")
 }
 
 // --- Helpers ---

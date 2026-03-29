@@ -307,15 +307,16 @@ func Parse(text string, today time.Time) ParsedResult {
 	locationConf := ConfLow
 	routeFrom := ""
 
-	// Strategy: use place tokens first, fall back to keyword extraction
+	// Strategy:
+	// 1. Route detection (2 place tokens with "to") — most specific
+	// 2. Keyword extraction ("at"/"in") — gives full phrases like "the Google NYC Office"
+	// 3. Single place token from gazetteer — last resort
 
+	// Step 1: Route from place tokens
 	if len(placeTokens) >= 2 {
-		// Check for route pattern: PLACE "to" PLACE
 		p1 := placeTokens[0]
 		p2 := placeTokens[1]
-
 		isRoute := false
-		// Check for "to" between the two place tokens
 		for i := p1.End; i < p2.Start; i++ {
 			if strings.ToLower(tokens[i]) == "to" {
 				isRoute = true
@@ -323,43 +324,22 @@ func Parse(text string, today time.Time) ParsedResult {
 				break
 			}
 		}
-		// Also check for "from" before the first place
-		for i := 0; i < p1.Start; i++ {
-			if strings.ToLower(tokens[i]) == "from" && !consumed[i] {
-				consumed[i] = true
-				break
-			}
-		}
-
 		if isRoute {
+			for i := 0; i < p1.Start; i++ {
+				if strings.ToLower(tokens[i]) == "from" && !consumed[i] {
+					consumed[i] = true
+					break
+				}
+			}
 			routeFrom = p1.Text
 			location = p1.Text + " → " + p2.Text
 			locationConf = ConfHigh
 			for i := p1.Start; i < p1.End; i++ { consumed[i] = true }
 			for i := p2.Start; i < p2.End; i++ { consumed[i] = true }
-		} else {
-			// Two places but no "to" — use the first as location
-			location = p1.Text
-			locationConf = ConfHigh
-			for i := p1.Start; i < p1.End; i++ { consumed[i] = true }
-		}
-	} else if len(placeTokens) == 1 {
-		// Single place token
-		p := placeTokens[0]
-		location = p.Text
-		locationConf = ConfHigh
-		for i := p.Start; i < p.End; i++ { consumed[i] = true }
-
-		// Consume preceding "in", "at", "to" if present
-		if p.Start > 0 {
-			prev := strings.ToLower(tokens[p.Start-1])
-			if (prev == "in" || prev == "at" || prev == "to") && !consumed[p.Start-1] {
-				consumed[p.Start-1] = true
-			}
 		}
 	}
 
-	// Fall back to keyword-based extraction if no place tokens found
+	// Step 1b: Route from keyword extraction (fallback)
 	if location == "" {
 		rf, rt, rc := extractRoute(tokens, consumed, dates)
 		if rf != "" && rt != "" {
@@ -370,47 +350,64 @@ func Parse(text string, today time.Time) ParsedResult {
 				consumed[idx] = true
 			}
 		}
+	}
 
-		// Consume "from" before first date only if it's not part of a route
-		if routeFrom == "" && len(dates) >= 1 {
-			for i := 0; i < dates[0].startToken; i++ {
-				if strings.ToLower(tokens[i]) == "from" && !consumed[i] {
-					consumed[i] = true
-					break
-				}
+	// Step 2: Keyword "in"/"at" extraction — finds the LAST "in"/"at" for full phrases
+	if location == "" {
+		bestLocStart := -1
+		for i := 0; i < n-1; i++ {
+			if consumed[i] {
+				continue
+			}
+			lower := strings.ToLower(tokens[i])
+			if lower == "in" || lower == "at" {
+				bestLocStart = i
 			}
 		}
-
-		// Check for "in <location>" or "at <location>"
-		if location == "" {
-			for i := 0; i < n-1; i++ {
-				if consumed[i] {
-					continue
-				}
-				lower := strings.ToLower(tokens[i])
-				if lower == "in" || lower == "at" {
-					locParts := []string{}
-					consumed[i] = true
-					for j := i + 1; j < n; j++ {
-						if consumed[j] {
-							break
-						}
-						jLower := strings.ToLower(tokens[j])
-						if jLower == "from" || jLower == "to" || jLower == "on" {
-							break
-						}
-						if _, isMonth := months[jLower]; isMonth {
-							break
-						}
-						locParts = append(locParts, tokens[j])
-						consumed[j] = true
-					}
-					if len(locParts) > 0 {
-						location = strings.Join(locParts, " ")
-						locationConf = ConfHigh
-					}
+		if bestLocStart >= 0 {
+			locParts := []string{}
+			consumed[bestLocStart] = true
+			for j := bestLocStart + 1; j < n; j++ {
+				if consumed[j] {
 					break
 				}
+				jLower := strings.ToLower(tokens[j])
+				if jLower == "from" || jLower == "to" || jLower == "on" {
+					break
+				}
+				if _, isMonth := months[jLower]; isMonth {
+					break
+				}
+				locParts = append(locParts, tokens[j])
+				consumed[j] = true
+			}
+			if len(locParts) > 0 {
+				location = strings.Join(locParts, " ")
+				locationConf = ConfHigh
+			}
+		}
+	}
+
+	// Step 3: Single place token from gazetteer (no keyword needed)
+	if location == "" && len(placeTokens) >= 1 {
+		p := placeTokens[0]
+		location = p.Text
+		locationConf = ConfHigh
+		for i := p.Start; i < p.End; i++ { consumed[i] = true }
+		if p.Start > 0 {
+			prev := strings.ToLower(tokens[p.Start-1])
+			if (prev == "in" || prev == "at" || prev == "to") && !consumed[p.Start-1] {
+				consumed[p.Start-1] = true
+			}
+		}
+	}
+
+	// Consume "from" before first date if not part of a route
+	if routeFrom == "" && len(dates) >= 1 {
+		for i := 0; i < dates[0].startToken; i++ {
+			if strings.ToLower(tokens[i]) == "from" && !consumed[i] {
+				consumed[i] = true
+				break
 			}
 		}
 	}
@@ -589,6 +586,15 @@ func inferType(title, location string, isRoute bool) string {
 	return TypeStay
 }
 
+func isAlpha(s string) bool {
+	for _, r := range s {
+		if !unicode.IsLetter(r) && r != '\'' {
+			return false
+		}
+	}
+	return len(s) > 0
+}
+
 func isAllUpper(s string) bool {
 	for _, r := range s {
 		if !unicode.IsUpper(r) {
@@ -640,15 +646,28 @@ func tokenize(text string) []string {
 			continue
 		}
 		// Split embedded dashes: "22-Feb" → ["22", "-", "Feb"]
-		// But keep "Jan" as-is
+		// But keep hyphenated words together: "Alpha-Omega" stays as one token
 		if strings.Contains(t, "-") && len(t) > 1 {
 			parts := strings.Split(t, "-")
-			for i, p := range parts {
-				if p != "" {
-					result = append(result, p)
+			// Check if this looks like a hyphenated word (all parts are alpha)
+			allAlpha := true
+			for _, p := range parts {
+				if p == "" || !isAlpha(p) {
+					allAlpha = false
+					break
 				}
-				if i < len(parts)-1 {
-					result = append(result, "-")
+			}
+			if allAlpha && len(parts) == 2 {
+				// Keep as a single hyphenated word
+				result = append(result, t)
+			} else {
+				for i, p := range parts {
+					if p != "" {
+						result = append(result, p)
+					}
+					if i < len(parts)-1 {
+						result = append(result, "-")
+					}
 				}
 			}
 		} else {
