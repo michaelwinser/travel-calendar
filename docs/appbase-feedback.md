@@ -156,6 +156,22 @@ A corresponding `appbase logout --app NAME` (or extending the existing logout) w
 
 **Filed as:** [appbase #29](https://github.com/michaelwinser/appbase/issues/29)
 
+### 10. dev-template.sh sourced via relative sibling path breaks sandboxes and CI
+
+**Severity:** Medium — blocks sandboxed execution and CI environments
+
+`./dev` sources `../appbase/deploy/dev-template.sh` via a hardcoded relative path. This assumes appbase is checked out as a sibling directory, which breaks in nono sandboxes (Operation not permitted), CI, containers, and non-standard clone locations.
+
+**Proposed:** Distribute the template via `appbase` CLI (`appbase dev-template`), vendor a copy, or inline the functions. See travel-calendar #142.
+
+### 11. store.Collection should auto-migrate missing columns
+
+**Severity:** High — causes 500 errors every time a struct gains a field
+
+`CREATE TABLE IF NOT EXISTS` doesn't add columns to existing tables. Every new field on a store entity breaks all existing databases until manually patched with `ALTER TABLE ADD COLUMN`.
+
+**Proposed:** On `NewCollection`, compare struct tags to `PRAGMA table_info` and add missing columns automatically. travel-calendar implemented this as a workaround in `internal/app/migrate.go` but it belongs in appbase. See travel-calendar #138.
+
 ## Notes
 
 (none yet)

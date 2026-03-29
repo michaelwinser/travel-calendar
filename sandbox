@@ -9,7 +9,7 @@
 #
 # The sandbox provides:
 #   - Read+write: project directory, app data, Go module cache
-#   - Read-only:  Go toolchain, homebrew, system paths
+#   - Read-only:  Go toolchain, homebrew, appbase sibling (see #142), system paths
 #   - Network:    allowed (for go modules, docker, etc.)
 #   - Port 3001:  bound (for dev server)
 
@@ -36,6 +36,17 @@ case "$1" in
         ;;
 esac
 
+# Resolve appbase sibling directory (needed until #142 removes this dependency)
+APPBASE_DIR=""
+if [ -d "$PROJECT_DIR/../appbase" ]; then
+    APPBASE_DIR="$(cd "$PROJECT_DIR/../appbase" && pwd)"
+fi
+
+APPBASE_FLAG=""
+if [ -n "$APPBASE_DIR" ]; then
+    APPBASE_FLAG="--read $APPBASE_DIR"
+fi
+
 exec nono run \
     --profile claude-code \
     --allow "$PROJECT_DIR" \
@@ -43,5 +54,6 @@ exec nono run \
     --allow "$HOME/go" \
     --read "$HOME/sdk" \
     --allow-bind 3001 \
+    $APPBASE_FLAG \
     $EXEC_FLAG \
     -- "$@"
