@@ -64,6 +64,12 @@ func setup() error {
 	if err != nil {
 		return err
 	}
+
+	// Auto-migrate: add any missing columns to existing tables.
+	if err := travelapp.MigrateSchema(app.DB()); err != nil {
+		return fmt.Errorf("schema migration: %w", err)
+	}
+
 	activities, err := travelapp.NewActivityStore(app.DB())
 	if err != nil {
 		return err
