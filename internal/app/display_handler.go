@@ -264,15 +264,16 @@ body { font-family: sans-serif; background: #fff; color: #000; width: 800px; hei
 .dow-row { display: flex; background: #000; color: #fff; height: %dpx; }
 .dow-cell { flex: 1; text-align: center; font-size: 13px; font-weight: 600; line-height: %dpx; }
 .week { position: relative; display: flex; border-bottom: 1px solid #ccc; height: %dpx; overflow: hidden; }
-.day { flex: 1; border-right: 1px solid #ddd; padding: 2px 4px; display: flex; flex-direction: column; overflow: hidden; }
+.day { flex: 1; border-right: 1px solid #ddd; padding: 2px 3px; overflow: hidden; }
 .day:last-child { border-right: none; }
-.day-num { font-size: 15px; font-weight: 700; text-align: right; }
-.day-num.today { background: #ff0000; color: #fff; border-radius: 50%%; width: 22px; height: 22px; line-height: 22px; text-align: center; font-size: 14px; display: inline-block; }
-.day-top { display: flex; justify-content: space-between; align-items: center; }
-.month-lbl { font-size: 10px; color: #666; }
-.trip-bar { position: absolute; height: 20px; background: #0000ff; color: #fff; font-size: 12px; font-weight: 700; line-height: 20px; padding: 0 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; z-index: 1; }
-.act-label { font-size: 10px; color: #000; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px; }
-.loc { font-size: 10px; color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px; }
+.day-date { display: flex; justify-content: space-between; align-items: center; }
+.day-num { font-size: 18px; font-weight: 700; }
+.day-num.today { background: #ff0000; color: #fff; border-radius: 50%%; width: 24px; height: 24px; line-height: 24px; text-align: center; font-size: 16px; display: inline-block; }
+.month-lbl { font-size: 12px; font-weight: 700; color: #000; }
+.activities { }
+.act-label { font-size: 11px; color: #000; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.loc { font-size: 11px; color: #000; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trip-bar { position: absolute; height: 26px; background: #0000ff; color: #fff; font-size: 15px; font-weight: 700; line-height: 26px; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; z-index: 10; }
 </style>
 </head>
 <body>`, handle, headerHeight, dowHeight, dowHeight, rowHeight)
@@ -306,8 +307,8 @@ body { font-family: sans-serif; background: #fff; color: #000; width: 800px; hei
 		for _, d := range week.Days {
 			fmt.Fprint(w, `<div class="day">`)
 
-			// Day number row: month label left, date right
-			fmt.Fprint(w, `<div class="day-top">`)
+			// Date row
+			fmt.Fprint(w, `<div class="day-date">`)
 			if d.Day == 1 {
 				fmt.Fprintf(w, `<span class="month-lbl">%s</span>`, d.Month)
 			} else {
@@ -320,18 +321,15 @@ body { font-family: sans-serif; background: #fff; color: #000; width: 800px; hei
 			}
 			fmt.Fprint(w, `</div>`)
 
-			// Activity label (below trip bar — needs to clear the bar)
-			hasTripBar := d.TripColor != ""
-			topMargin := "0"
-			if hasTripBar {
-				topMargin = "22px"
-			}
-
+			// Activities (normal flow, trip bar overlays on top via z-index)
+			fmt.Fprint(w, `<div class="activities">`)
 			if d.ActivityLabel != "" {
-				fmt.Fprintf(w, `<div class="act-label" style="margin-top:%s">%s</div>`, topMargin, d.ActivityLabel)
-			} else if d.Location != "" && d.TripName == "" {
-				fmt.Fprintf(w, `<div class="loc" style="margin-top:%s">%s</div>`, topMargin, d.Location)
+				fmt.Fprintf(w, `<div class="act-label">%s</div>`, d.ActivityLabel)
 			}
+			if d.Location != "" && d.TripName == "" {
+				fmt.Fprintf(w, `<div class="loc">%s</div>`, d.Location)
+			}
+			fmt.Fprint(w, `</div>`)
 
 			fmt.Fprint(w, `</div>`)
 		}
