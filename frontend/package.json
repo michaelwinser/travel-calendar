@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "check": "svelte-check --tsconfig ./tsconfig.json --threshold error",
+    "check": "svelte-check --tsconfig ./tsconfig.json --threshold error --compiler-warnings state_referenced_locally:ignore,non_reactive_update:ignore,a11y_no_static_element_interactions:ignore,a11y_no_noninteractive_element_interactions:ignore,a11y_click_events_have_key_events:ignore,css_unused_selector:ignore",
     "preview": "vite preview",
     "typegen": "openapi-typescript ../openapi.yaml -o src/lib/api-types.ts"
   },

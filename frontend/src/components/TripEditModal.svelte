@@ -18,13 +18,18 @@
     onassign?: (activityId: string) => void;
   }
 
-  let props: Props = $props();
+  let {
+    name: initialName, color: initialColor,
+    startDate: initialStartDate, endDate: initialEndDate,
+    status: initialStatus,
+    unassignedActivities, onsubmit, ondelete, oncancel, onassign,
+  }: Props = $props();
 
-  let name = $state(props.name);
-  let color = $state(props.color);
-  let startDate = $state(props.startDate ?? '');
-  let endDate = $state(props.endDate ?? '');
-  let status = $state<TripStatus>((props.status as TripStatus) ?? 'planned');
+  let name = $state(initialName);
+  let color = $state(initialColor);
+  let startDate = $state(initialStartDate ?? '');
+  let endDate = $state(initialEndDate ?? '');
+  let status = $state<TripStatus>((initialStatus as TripStatus) ?? 'planned');
   let confirmingDelete = $state(false);
   let nameInput: HTMLInputElement;
 
@@ -39,7 +44,7 @@
   function handleSubmit(e: Event) {
     e.preventDefault();
     if (!name.trim()) return;
-    props.onsubmit({
+    onsubmit({
       name: name.trim(),
       color,
       startDate: startDate || undefined,
@@ -50,7 +55,7 @@
 </script>
 
 <!-- svelte-ignore a11y_interactive_supports_focus -->
-<div class="overlay" onclick={props.oncancel} onkeydown={(e) => e.key === 'Escape' && props.oncancel()} role="dialog">
+<div class="overlay" onclick={oncancel} onkeydown={(e) => e.key === 'Escape' && oncancel()} role="dialog">
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
   <div class="modal" onclick={(e) => e.stopPropagation()} role="document">
     <h2>Edit Trip</h2>
@@ -96,17 +101,18 @@
               class:selected={color === c}
               style="background: {c};"
               onclick={() => color = c}
+              aria-label="Color {c}"
             ></button>
           {/each}
         </div>
       </label>
 
-      {#if props.unassignedActivities && props.unassignedActivities.length > 0}
+      {#if unassignedActivities && unassignedActivities.length > 0}
         <div class="suggestions">
           <span class="suggestions-label">Unassigned activities in range</span>
           <div class="suggestion-list">
-            {#each props.unassignedActivities as activity (activity.id)}
-              <button type="button" class="suggestion-chip" onclick={() => props.onassign?.(activity.id)}>
+            {#each unassignedActivities as activity (activity.id)}
+              <button type="button" class="suggestion-chip" onclick={() => onassign?.(activity.id)}>
                 <span class="suggestion-dot" style="background: {ACTIVITY_COLORS[activity.type]}"></span>
                 <span class="suggestion-title">{activity.title}</span>
                 <span class="suggestion-dates">{formatDateRange(activity.startDate, activity.endDate)}</span>
@@ -120,7 +126,7 @@
         {#if confirmingDelete}
           <span class="delete-confirm">
             Delete this trip?
-            <button type="button" class="delete-yes" onclick={props.ondelete}>Yes, delete</button>
+            <button type="button" class="delete-yes" onclick={ondelete}>Yes, delete</button>
             <button type="button" class="cancel-btn" onclick={() => confirmingDelete = false}>No</button>
           </span>
         {:else}
@@ -128,7 +134,7 @@
         {/if}
         <div class="spacer"></div>
         {#if !confirmingDelete}
-          <button type="button" class="cancel-btn" onclick={props.oncancel}>Cancel</button>
+          <button type="button" class="cancel-btn" onclick={oncancel}>Cancel</button>
           <button type="submit" class="submit-btn" disabled={!name.trim()}>Save</button>
         {/if}
       </div>

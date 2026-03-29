@@ -273,16 +273,6 @@
     display: block;
   }
 
-  .linked-badge {
-    position: absolute;
-    right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #22c55e;
-    font-size: 0.6rem;
-    pointer-events: none;
-  }
-
   .dropdown {
     position: absolute;
     top: 100%;

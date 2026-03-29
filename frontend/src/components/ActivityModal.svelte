@@ -37,9 +37,11 @@
     onchange?: (data: { title: string; type: ActivityType; startDate: string; endDate: string }) => void;
   }
 
+  // svelte-ignore state_referenced_locally
   let props: Props = $props();
 
-  // Form state
+  // Form state — intentionally captures initial values.
+  // Reactive sync from parent is handled by $effect hooks below.
   let title = $state(props.title ?? '');
   let type = $state<ActivityType>(props.type ?? 'stay');
   let startDate = $state(props.startDate ?? '');
