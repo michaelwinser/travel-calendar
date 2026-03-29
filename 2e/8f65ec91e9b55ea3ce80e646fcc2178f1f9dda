@@ -1,0 +1,42 @@
+frontend/svelte.config.js
+  c4b81f6d41e4e10c 5-10
+frontend/package.json
+  c4b81f6d41e4e10c 9
+frontend/src/components/ActivityModal.svelte
+  c4b81f6d41e4e10c 40,43-44
+frontend/src/components/TripEditModal.svelte
+  c4b81f6d41e4e10c 21-26,28-32,47,58,104,110,114-115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "2e8f65ec91e9b55ea3ce80e646fcc2178f1f9dda",
+  "prompts": {
+    "c4b81f6d41e4e10c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1068418b-2d23-4075-8b99-24178f7ad113",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 93,
+      "total_deletions": 89,
+      "accepted_lines": 51,
+      "overriden_lines": 0
+    },
+    "db0ccec4fd040162": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f91b5184-5d36-475e-a387-fb6a0cd69653",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 364,
+      "overriden_lines": 0
+    }
+  }
+}
