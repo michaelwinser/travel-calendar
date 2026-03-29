@@ -24,12 +24,18 @@ if ! command -v nono >/dev/null 2>&1; then
 fi
 
 # Ensure Go and homebrew are on PATH (nono doesn't source shell profiles)
-for p in /opt/homebrew/bin /usr/local/bin "$HOME/go/bin"; do
+for p in /opt/homebrew/bin /usr/local/bin /usr/local/go/bin "$HOME/go/bin"; do
     case ":$PATH:" in
         *":$p:"*) ;;
         *) [ -d "$p" ] && export PATH="$p:$PATH" ;;
     esac
 done
+
+# Resolve Go binary location for sandbox allowlist
+GO_BIN_DIR=""
+if command -v go >/dev/null 2>&1; then
+    GO_BIN_DIR="$(dirname "$(command -v go)")"
+fi
 
 # Pre-resolve GOROOT so Go works inside the sandbox
 if command -v go >/dev/null 2>&1 && [ -z "$GOROOT" ]; then
@@ -55,6 +61,11 @@ if [ -n "$APPBASE_DIR" ]; then
     APPBASE_FLAG="--read $APPBASE_DIR"
 fi
 
+GO_FLAG=""
+if [ -n "$GO_BIN_DIR" ] && [ "$GO_BIN_DIR" != "/usr/bin" ]; then
+    GO_FLAG="--read $GO_BIN_DIR"
+fi
+
 exec nono run \
     --profile claude-code \
     --allow "$PROJECT_DIR" \
@@ -63,5 +74,6 @@ exec nono run \
     --read "$HOME/sdk" \
     --allow-bind 3001 \
     $APPBASE_FLAG \
+    $GO_FLAG \
     $EXEC_FLAG \
     -- "$@"
