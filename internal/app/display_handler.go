@@ -20,7 +20,8 @@ type displayDay struct {
 	IsPast     bool
 	TripName   string
 	TripColor  string
-	ActivityLabel string // e.g. "UA 16 EWR → CDG"
+	ActivityLabel string
+	TripLocation  string // trip's dominant location (for comparison)
 }
 
 type tripBar struct {
@@ -152,6 +153,13 @@ func (s *ActivityServer) HandleDisplay(w http.ResponseWriter, r *http.Request) {
 				IsPast:  dateStr < today,
 			}
 
+			// Set trip info for this day
+			if span, ok := tripByDate[dateStr]; ok {
+				dd.TripName = span.name
+				dd.TripColor = "#0000ff"
+				dd.TripLocation = span.location
+			}
+
 			// Activity on this day
 			for _, a := range activities {
 				if a.StartDate <= dateStr && a.EndDate >= dateStr {
@@ -160,10 +168,7 @@ func (s *ActivityServer) HandleDisplay(w http.ResponseWriter, r *http.Request) {
 					}
 					dd.Type = a.Type
 					dd.Color = displayColor(a.Type, theme)
-					// Build activity label for travel types
-					if a.Type == "travel" {
-						dd.ActivityLabel = a.Title
-					}
+					dd.ActivityLabel = a.Title
 					break
 				}
 			}
@@ -264,16 +269,16 @@ body { font-family: sans-serif; background: #fff; color: #000; width: 800px; hei
 .dow-row { display: flex; background: #000; color: #fff; height: %dpx; }
 .dow-cell { flex: 1; text-align: center; font-size: 13px; font-weight: 600; line-height: %dpx; }
 .week { position: relative; display: flex; border-bottom: 1px solid #ccc; height: %dpx; overflow: hidden; }
-.day { flex: 1; border-right: 1px solid #ddd; padding: 2px 3px; overflow: hidden; }
+.day { flex: 1; border-right: 1px solid #ddd; padding: 2px 3px; overflow: hidden; display: flex; flex-direction: column; }
 .day:last-child { border-right: none; }
-.day-date { display: flex; justify-content: space-between; align-items: center; }
+.day-date { display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; height: 26px; }
 .day-num { font-size: 18px; font-weight: 700; }
 .day-num.today { background: #ff0000; color: #fff; border-radius: 50%%; width: 24px; height: 24px; line-height: 24px; text-align: center; font-size: 16px; display: inline-block; }
 .month-lbl { font-size: 12px; font-weight: 700; color: #000; }
-.activities { }
-.act-label { font-size: 11px; color: #000; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.loc { font-size: 11px; color: #000; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.trip-bar { position: absolute; height: 26px; background: #0000ff; color: #fff; font-size: 15px; font-weight: 700; line-height: 26px; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; z-index: 10; }
+.activities { margin-top: auto; }
+.act-loc { font-size: 11px; font-weight: 700; color: #000; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-label { font-size: 10px; color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trip-bar { position: absolute; height: 26px; top: 28px; background: #0000ff; color: #fff; font-size: 15px; font-weight: 700; line-height: 26px; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; z-index: 10; }
 </style>
 </head>
 <body>`, handle, headerHeight, dowHeight, dowHeight, rowHeight)
@@ -321,13 +326,14 @@ body { font-family: sans-serif; background: #fff; color: #000; width: 800px; hei
 			}
 			fmt.Fprint(w, `</div>`)
 
-			// Activities (normal flow, trip bar overlays on top via z-index)
+			// Activities anchored to bottom, location emphasized when different from trip
 			fmt.Fprint(w, `<div class="activities">`)
+			showLoc := d.Location != "" && d.Location != d.TripLocation
+			if showLoc {
+				fmt.Fprintf(w, `<div class="act-loc">%s</div>`, d.Location)
+			}
 			if d.ActivityLabel != "" {
 				fmt.Fprintf(w, `<div class="act-label">%s</div>`, d.ActivityLabel)
-			}
-			if d.Location != "" && d.TripName == "" {
-				fmt.Fprintf(w, `<div class="loc">%s</div>`, d.Location)
 			}
 			fmt.Fprint(w, `</div>`)
 
