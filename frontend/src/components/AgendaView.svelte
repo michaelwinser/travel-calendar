@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ACTIVITY_COLORS, type Activity, type TripSummary, type OverlayCalendar } from '../lib/api';
+  import { formatDateShort, formatDateRange as fmtRange } from '../lib/date-utils';
 
   interface Props {
     activities: Activity[];
@@ -115,13 +116,11 @@
   });
 
   function formatDates(a: Activity): string {
-    if (a.startDate === a.endDate) return a.startDate;
-    return `${a.startDate} \u2192 ${a.endDate}`;
+    return fmtRange(a.startDate, a.endDate);
   }
 
-  function formatDateRange(start: string, end: string): string {
-    if (start === end) return start;
-    return `${start} \u2192 ${end}`;
+  function formatDateRangeLocal(start: string, end: string): string {
+    return fmtRange(start, end);
   }
 </script>
 
@@ -157,7 +156,7 @@
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div class="trip-header" style="border-left: 4px solid {group.tripColor};">
           <span class="trip-name">{group.tripName}</span>
-          <span class="trip-dates">{formatDateRange(group.startDate, group.endDate)}</span>
+          <span class="trip-dates">{formatDateRangeLocal(group.startDate, group.endDate)}</span>
           {#if group.locations.length > 0}
             <span class="trip-locations">{group.locations.join(', ')}</span>
           {/if}

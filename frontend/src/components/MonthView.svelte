@@ -26,10 +26,11 @@
     onresize?: (activityId: string, startDate: string, endDate: string) => void;
     onmove?: (activityId: string, startDate: string, endDate: string) => void;
     onedittrip?: (tripId: string) => void;
+    onassigntotrip?: (activityId: string, tripId: string) => void;
     onfocusdate?: (date: string) => void;
   }
 
-  let { activities, trips, ghostDates, overlayActivities, overlayCalendars, initialDate, onedit, ondayclick, ondragselect, onresize, onmove, onedittrip, onfocusdate }: Props = $props();
+  let { activities, trips, ghostDates, overlayActivities, overlayCalendars, initialDate, onedit, ondayclick, ondragselect, onresize, onmove, onedittrip, onassigntotrip, onfocusdate }: Props = $props();
 
   const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -122,6 +123,26 @@
   let popupTripLane = $state<TripLane | null>(null);
   let popupX = $state(0);
   let popupY = $state(0);
+
+  // Live-updating activities for the popup trip (reacts to assignment changes)
+  let popupTripActivities = $derived.by(() => {
+    if (!popupTripLane) return [];
+    return activities.filter(a => a.tripId === popupTripLane!.tripId);
+  });
+
+  // Unassigned activities overlapping the popup trip's date range
+  let popupUnassigned = $derived.by(() => {
+    if (!popupTripLane) return [];
+    const tripActs = popupTripActivities;
+    if (tripActs.length === 0) return [];
+    const tripStart = tripActs.reduce((min, a) => a.startDate < min ? a.startDate : min, tripActs[0].startDate);
+    const tripEnd = tripActs.reduce((max, a) => (a.endDate || a.startDate) > max ? (a.endDate || a.startDate) : max, tripActs[0].endDate);
+    return activities.filter(a =>
+      !a.tripId &&
+      a.startDate <= tripEnd &&
+      (a.endDate || a.startDate) >= tripStart
+    );
+  });
 
   // Tooltip
   let tooltipActivity = $state<Activity | null>(null);
@@ -253,20 +274,32 @@
     }
   }
 
-  function handleBarEnter(tripLane: TripLane, e: MouseEvent) {
-    if (dragMode) return;
-    if (tripLane.activities.length === 1) {
-      tooltipActivity = tripLane.activities[0];
-    } else {
-      // For trips, show first activity in tooltip (or could show trip summary)
-      tooltipActivity = tripLane.activities[0];
+  function nearestActivity(tripLane: TripLane, dateStr: string): Activity | null {
+    if (tripLane.activities.length === 0) return null;
+    if (tripLane.activities.length === 1) return tripLane.activities[0];
+    const d = stringToDate(dateStr).getTime();
+    let best = tripLane.activities[0];
+    let bestDist = Infinity;
+    for (const a of tripLane.activities) {
+      if (dateStr >= a.startDate && dateStr <= (a.endDate || a.startDate)) return a;
+      const startDist = Math.abs(stringToDate(a.startDate).getTime() - d);
+      const endDist = Math.abs(stringToDate(a.endDate || a.startDate).getTime() - d);
+      const dist = Math.min(startDist, endDist);
+      if (dist < bestDist) { bestDist = dist; best = a; }
     }
+    return best;
+  }
+
+  function handleBarEnter(tripLane: TripLane, dateStr: string, e: MouseEvent) {
+    if (dragMode) return;
+    tooltipActivity = nearestActivity(tripLane, dateStr);
     tooltipX = e.clientX;
     tooltipY = e.clientY;
   }
 
-  function handleBarHover(e: MouseEvent) {
+  function handleBarHover(tripLane: TripLane, dateStr: string, e: MouseEvent) {
     if (dragMode) { tooltipActivity = null; return; }
+    tooltipActivity = nearestActivity(tripLane, dateStr);
     tooltipX = e.clientX;
     tooltipY = e.clientY;
   }
@@ -340,8 +373,8 @@
                   class:is-overlay={isOverlay}
                   style="background: {seg.tripLane.color};"
                   onclick={(e) => handleBarClick(seg.tripLane, e)}
-                  onmouseenter={(e) => handleBarEnter(seg.tripLane, e)}
-                  onmousemove={handleBarHover}
+                  onmouseenter={(e) => handleBarEnter(seg.tripLane, dateStr, e)}
+                  onmousemove={(e) => handleBarHover(seg.tripLane, dateStr, e)}
                   onmouseleave={handleBarLeave}
                 >
                   {#if seg.isTripStart && seg.tripLane.tripId}
@@ -387,11 +420,13 @@
     tripId={popupTripLane.tripId}
     tripName={popupTripLane.tripName}
     color={popupTripLane.color}
-    activities={popupTripLane.activities}
+    activities={popupTripActivities}
+    unassignedActivities={popupUnassigned}
     x={popupX}
     y={popupY}
     {onedit}
     {onedittrip}
+    onassign={onassigntotrip}
     onclose={() => popupTripLane = null}
   />
 {/if}

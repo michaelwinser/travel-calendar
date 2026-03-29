@@ -81,6 +81,15 @@
     ).slice(0, 5);
   });
 
+  // Trips that overlap the current date range (for suggestion chips)
+  let overlappingTrips = $derived.by(() => {
+    if (!startDate || !props.trips || tripName) return [];
+    const end = endDate || startDate;
+    return props.trips.filter(t =>
+      t.startDate <= end && t.endDate >= startDate
+    );
+  });
+
   function selectTrip(trip: TripSummary) {
     tripName = trip.name;
     showTripSuggestions = false;
@@ -308,6 +317,16 @@
                 <span class="trip-swatch" style="background: {trip.color};"></span>
                 <span class="trip-suggestion-name">{trip.name}</span>
               </div>
+            {/each}
+          </div>
+        {/if}
+        {#if overlappingTrips.length > 0}
+          <div class="trip-chips">
+            {#each overlappingTrips as trip}
+              <button type="button" class="trip-chip" onmousedown={() => selectTrip(trip)}>
+                <span class="trip-swatch" style="background: {trip.color};"></span>
+                {trip.name}
+              </button>
             {/each}
           </div>
         {/if}
@@ -588,5 +607,31 @@
 
   .trip-suggestion-name {
     color: #333;
+  }
+
+  .trip-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.3rem;
+  }
+
+  .trip-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    background: #f8f9fa;
+    font-size: 0.75rem;
+    color: #555;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .trip-chip:hover {
+    background: #e8eaed;
+    border-color: #bbb;
   }
 </style>

@@ -33,6 +33,25 @@ export function today(): string {
   return dateToString(new Date());
 }
 
+const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+/** Format a YYYY-MM-DD date as "MMM D" (e.g., "Mar 28") or "MMM D, YYYY" if different year. */
+export function formatDateShort(dateStr: string): string {
+  const d = stringToDate(dateStr);
+  const now = new Date();
+  const m = MONTH_SHORT[d.getMonth()];
+  if (d.getFullYear() !== now.getFullYear()) {
+    return `${m} ${d.getDate()}, ${d.getFullYear()}`;
+  }
+  return `${m} ${d.getDate()}`;
+}
+
+/** Format a date range as "MMM D → MMM D" or just "MMM D" if same day. */
+export function formatDateRange(start: string, end: string): string {
+  if (!end || end === start) return formatDateShort(start);
+  return `${formatDateShort(start)} → ${formatDateShort(end)}`;
+}
+
 export function addDays(dateStr: string, n: number): string {
   const d = stringToDate(dateStr);
   d.setDate(d.getDate() + n);

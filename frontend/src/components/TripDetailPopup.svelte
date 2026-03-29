@@ -1,23 +1,25 @@
 <script lang="ts">
   import { ACTIVITY_COLORS, type Activity } from '../lib/api';
+  import { formatDateRange } from '../lib/date-utils';
 
   interface Props {
     tripId?: string | null;
     tripName: string;
     color: string;
     activities: Activity[];
+    unassignedActivities?: Activity[];
     x: number;
     y: number;
     onedit: (activity: Activity) => void;
     onedittrip?: (tripId: string) => void;
+    onassign?: (activityId: string, tripId: string) => void;
     onclose: () => void;
   }
 
-  let { tripId, tripName, color, activities, x, y, onedit, onedittrip, onclose }: Props = $props();
+  let { tripId, tripName, color, activities, unassignedActivities, x, y, onedit, onedittrip, onassign, onclose }: Props = $props();
 
   function formatDates(a: Activity): string {
-    if (a.startDate === a.endDate) return a.startDate;
-    return `${a.startDate} \u2192 ${a.endDate}`;
+    return formatDateRange(a.startDate, a.endDate);
   }
 
   // Sort activities by start date
@@ -61,6 +63,21 @@
         </div>
       {/each}
     </div>
+    {#if unassignedActivities && unassignedActivities.length > 0 && onassign && tripId}
+      <div class="popup-unassigned">
+        <div class="popup-unassigned-label">Unassigned in range</div>
+        {#each unassignedActivities as activity (activity.id)}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <div class="popup-unassigned-row" onclick={() => onassign!(activity.id, tripId!)}>
+            <span class="popup-dot" style="background: {ACTIVITY_COLORS[activity.type]}"></span>
+            <span class="popup-unassigned-name">{activity.title}</span>
+            <span class="popup-dates">{formatDates(activity)}</span>
+            <span class="popup-add">+</span>
+          </div>
+        {/each}
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -175,5 +192,46 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     margin-top: 1px;
+  }
+
+  .popup-unassigned {
+    border-top: 1px dashed #ddd;
+    padding: 0.25rem 0;
+  }
+
+  .popup-unassigned-label {
+    font-size: 0.65rem;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.2rem 0.75rem;
+  }
+
+  .popup-unassigned-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.75rem;
+    cursor: pointer;
+    font-size: 0.75rem;
+  }
+
+  .popup-unassigned-row:hover {
+    background: #f0fdf4;
+  }
+
+  .popup-unassigned-name {
+    flex: 1;
+    color: #666;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .popup-add {
+    color: #22c55e;
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex-shrink: 0;
   }
 </style>

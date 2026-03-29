@@ -1,12 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { ACTIVITY_COLORS, type Activity } from '../lib/api';
+  import { formatDateRange } from '../lib/date-utils';
 
   interface Props {
     name: string;
     color: string;
+    unassignedActivities?: Activity[];
     onsubmit: (data: { name: string; color: string }) => void;
     ondelete: () => void;
     oncancel: () => void;
+    onassign?: (activityId: string) => void;
   }
 
   let props: Props = $props();
@@ -57,6 +61,21 @@
           {/each}
         </div>
       </label>
+
+      {#if props.unassignedActivities && props.unassignedActivities.length > 0}
+        <div class="suggestions">
+          <span class="suggestions-label">Unassigned activities in range</span>
+          <div class="suggestion-list">
+            {#each props.unassignedActivities as activity (activity.id)}
+              <button type="button" class="suggestion-chip" onclick={() => props.onassign?.(activity.id)}>
+                <span class="suggestion-dot" style="background: {ACTIVITY_COLORS[activity.type]}"></span>
+                <span class="suggestion-title">{activity.title}</span>
+                <span class="suggestion-dates">{formatDateRange(activity.startDate, activity.endDate)}</span>
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/if}
 
       <div class="actions">
         {#if confirmingDelete}
@@ -224,4 +243,67 @@
   }
 
   .delete-yes:hover { background: #b91c1c; }
+
+  .suggestions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .suggestions-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .suggestion-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .suggestion-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: #f9fafb;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.8rem;
+    text-align: left;
+    width: 100%;
+  }
+
+  .suggestion-chip:hover {
+    background: #eef2ff;
+    border-color: #c7d2fe;
+  }
+
+  .suggestion-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .suggestion-title {
+    flex: 1;
+    font-weight: 500;
+    color: #333;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .suggestion-dates {
+    color: #888;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
 </style>

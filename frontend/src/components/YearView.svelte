@@ -17,10 +17,11 @@
     ondragselect: (startDate: string, endDate: string) => void;
     onswitchtomonth: (date: string) => void;
     onedittrip?: (tripId: string) => void;
+    onassigntotrip?: (activityId: string, tripId: string) => void;
     onfocusdate?: (date: string) => void;
   }
 
-  let { activities, trips, initialDate, onedit, ondayclick, ondragselect, onswitchtomonth, onedittrip, onfocusdate }: Props = $props();
+  let { activities, trips, initialDate, onedit, ondayclick, ondragselect, onswitchtomonth, onedittrip, onassigntotrip, onfocusdate }: Props = $props();
 
   const MAX_BAR_LANES = 3;
 
@@ -64,6 +65,24 @@
   let popupBar = $state<TripYearBar | null>(null);
   let popupX = $state(0);
   let popupY = $state(0);
+
+  let popupTripActivities = $derived.by(() => {
+    if (!popupBar) return [];
+    return activities.filter(a => a.tripId === popupBar!.tripId);
+  });
+
+  let popupUnassigned = $derived.by(() => {
+    if (!popupBar) return [];
+    const tripActs = popupTripActivities;
+    if (tripActs.length === 0) return [];
+    const tripStart = tripActs.reduce((min, a) => a.startDate < min ? a.startDate : min, tripActs[0].startDate);
+    const tripEnd = tripActs.reduce((max, a) => (a.endDate || a.startDate) > max ? (a.endDate || a.startDate) : max, tripActs[0].endDate);
+    return activities.filter(a =>
+      !a.tripId &&
+      a.startDate <= tripEnd &&
+      (a.endDate || a.startDate) >= tripStart
+    );
+  });
 
   // Scroll
   let scrollEl: HTMLElement;
@@ -275,11 +294,13 @@
     tripId={popupBar.tripId}
     tripName={popupBar.tripName}
     color={popupBar.color}
-    activities={popupBar.activities}
+    activities={popupTripActivities}
+    unassignedActivities={popupUnassigned}
     x={popupX}
     y={popupY}
     {onedit}
     {onedittrip}
+    onassign={onassigntotrip}
     onclose={() => popupBar = null}
   />
 {/if}

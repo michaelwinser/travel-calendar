@@ -528,6 +528,37 @@
     }
   }
 
+  // Unassigned activities that overlap the editing trip's date range
+  let tripUnassigned = $derived.by(() => {
+    if (!editingTrip) return [];
+    return activities.filter(a =>
+      !a.tripId &&
+      a.startDate <= editingTrip!.endDate &&
+      (a.endDate || a.startDate) >= editingTrip!.startDate
+    );
+  });
+
+  async function handleTripAssign(activityId: string) {
+    if (!editingTrip) return;
+    try {
+      await updateActivity(activityId, { tripId: editingTrip.id });
+      await refreshActivities();
+      error = '';
+    } catch (e: any) {
+      error = e.message || 'Failed to assign activity';
+    }
+  }
+
+  async function handleAssignToTrip(activityId: string, tripId: string) {
+    try {
+      await updateActivity(activityId, { tripId });
+      await refreshActivities();
+      error = '';
+    } catch (e: any) {
+      error = e.message || 'Failed to assign activity';
+    }
+  }
+
   async function handleTripDelete() {
     if (!editingTrip) return;
     try {
@@ -688,6 +719,7 @@
         onresize={handleResize}
         onmove={handleMove}
         onedittrip={handleEditTrip}
+        onassigntotrip={handleAssignToTrip}
         onfocusdate={handleFocusDate}
       />
     {:else if currentView === 'year'}
@@ -701,6 +733,7 @@
         ondragselect={handleDragSelect}
         onswitchtomonth={handleSwitchToMonth}
         onedittrip={handleEditTrip}
+        onassigntotrip={handleAssignToTrip}
         onfocusdate={handleFocusDate}
       />
     {:else if currentView === 'day'}
@@ -758,9 +791,11 @@
     <TripEditModal
       name={editingTrip.name}
       color={editingTrip.color}
+      unassignedActivities={tripUnassigned}
       onsubmit={handleTripUpdate}
       ondelete={handleTripDelete}
       oncancel={() => editingTrip = null}
+      onassign={handleTripAssign}
     />
   {/if}
 </main>
