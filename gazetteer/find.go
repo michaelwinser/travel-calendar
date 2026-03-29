@@ -106,8 +106,20 @@ func (g *Gazetteer) FindPlaceTokens(tokens []string, consumed []bool) []PlaceTok
 		}
 
 		if bestLen > 0 {
+			// Check if the next token is a state/country qualifier (e.g., "CA", "US", "UK")
+			// that should be consumed along with the place name
+			endIdx := bestMatch.End
+			if endIdx < n && !consumed[endIdx] {
+				next := tokens[endIdx]
+				if len(next) == 2 && isAllUpperASCII(next) {
+					// Likely a state or country code — include it
+					bestMatch.End = endIdx + 1
+					bestMatch.Text += ", " + next
+				}
+			}
+
 			found = append(found, bestMatch)
-			i += bestLen - 1 // skip ahead
+			i = bestMatch.End - 1 // skip ahead
 		}
 	}
 

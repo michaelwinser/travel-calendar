@@ -111,10 +111,11 @@
     return parts.join(' ');
   }
 
-  // Watch field changes to regenerate text and report to parent
+  // In edit mode, regenerate the text field from form values when user edits form fields directly.
+  // In create mode, never overwrite what the user typed — the quick-add text is their input.
   let generatedText = $derived(generateText());
   $effect(() => {
-    if (!textEditing) {
+    if (props.mode === 'edit' && !textEditing) {
       quickText = generatedText;
     }
   });
