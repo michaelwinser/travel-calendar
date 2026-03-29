@@ -10,23 +10,31 @@ import (
 )
 
 type displayDay struct {
-	Date     string
-	Weekday  string
-	Day      int
-	Month    string
-	Location string
-	Type      string
-	Color     string
-	IsToday   bool
-	IsPast    bool
-	TripName  string
-	TripColor string // background tint for trip bar
-	TripStart bool   // first day of trip in this week (show label)
-	TripEnd   bool   // last day of trip in this week
+	Date       string
+	Day        int
+	Month      string
+	Location   string
+	Type       string
+	Color      string
+	IsToday    bool
+	IsPast     bool
+	TripName   string
+	TripColor  string
+	ActivityLabel string // e.g. "UA 16 EWR → CDG"
 }
 
-// HandleDisplay serves a server-rendered HTML display optimized for
-// embedded devices (reTerminal, e-ink displays). No JavaScript required.
+type tripBar struct {
+	Name     string
+	Color    string
+	StartCol int
+	EndCol   int
+}
+
+type displayWeek struct {
+	Days     [7]displayDay
+	TripBars []tripBar
+}
+
 func (s *ActivityServer) HandleDisplay(w http.ResponseWriter, r *http.Request) {
 	handle := r.PathValue("handle")
 	if handle == "" {
@@ -61,13 +69,12 @@ func (s *ActivityServer) HandleDisplay(w http.ResponseWriter, r *http.Request) {
 
 	tripMap := s.buildTripMap(p.UserID)
 
-	// Compute trip spans: tripID → {startDate, endDate, name, color, dominantLocation}
+	// Compute trip spans
 	type tripSpan struct {
 		name      string
-		color     string
 		startDate string
 		endDate   string
-		location  string // dominant location
+		location  string
 	}
 	tripSpans := map[string]*tripSpan{}
 	for _, a := range activities {
@@ -80,12 +87,7 @@ func (s *ActivityServer) HandleDisplay(w http.ResponseWriter, r *http.Request) {
 		}
 		span, exists := tripSpans[a.TripID]
 		if !exists {
-			span = &tripSpan{
-				name:      t.Name,
-				color:     t.Color,
-				startDate: a.StartDate,
-				endDate:   a.EndDate,
-			}
+			span = &tripSpan{name: t.Name, startDate: a.StartDate, endDate: a.EndDate}
 			tripSpans[a.TripID] = span
 		}
 		if a.StartDate < span.startDate {
@@ -95,11 +97,11 @@ func (s *ActivityServer) HandleDisplay(w http.ResponseWriter, r *http.Request) {
 			span.endDate = a.EndDate
 		}
 		if a.Location != "" {
-			span.location = a.Location // last one wins; good enough for display
+			span.location = a.Location
 		}
 	}
 
-	// Build a lookup: date → tripSpan (for days within a trip but without an activity)
+	// Date → tripSpan lookup
 	tripByDate := map[string]*tripSpan{}
 	for _, span := range tripSpans {
 		sd, _ := time.Parse("2006-01-02", span.startDate)
@@ -116,7 +118,6 @@ func (s *ActivityServer) HandleDisplay(w http.ResponseWriter, r *http.Request) {
 		currentLoc = span.location
 		currentTrip = span.name
 	}
-	// Override with specific activity location if available
 	for _, a := range activities {
 		if a.StartDate <= today && a.EndDate >= today && a.Location != "" {
 			currentLoc = a.Location
@@ -124,68 +125,89 @@ func (s *ActivityServer) HandleDisplay(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Build 6 weeks starting from the previous Sunday
+	// Build 6 weeks
 	startDate := now.AddDate(0, 0, -int(now.Weekday()))
-	var weeks [][]displayDay
+
+	var weeks []displayWeek
 	for week := 0; week < 6; week++ {
-		var days []displayDay
+		wd := displayWeek{}
 		for dow := 0; dow < 7; dow++ {
 			d := startDate.AddDate(0, 0, week*7+dow)
 			dateStr := d.Format("2006-01-02")
 
-			di := displayDay{
+			dd := displayDay{
 				Date:    dateStr,
-				Weekday: d.Format("Mon"),
 				Day:     d.Day(),
 				Month:   d.Format("Jan"),
 				IsToday: dateStr == today,
 				IsPast:  dateStr < today,
 			}
 
-			// Check if this date falls within a trip
-			if span, ok := tripByDate[dateStr]; ok {
-				di.TripName = span.name
-				di.TripColor = displayColor("travel", theme)
-				// Show trip label on first day of trip or first day of week
-				if dateStr == span.startDate || dow == 0 {
-					di.TripStart = true
-				}
-				// Mark end of trip bar
-				nextDate := d.AddDate(0, 0, 1).Format("2006-01-02")
-				if nextDate > span.endDate || dow == 6 {
-					di.TripEnd = true
-				}
-				if span.location != "" {
-					di.Location = span.location
-				}
-			}
-
-			// Then: overlay specific activity data (more specific than trip)
+			// Activity on this day
 			for _, a := range activities {
 				if a.StartDate <= dateStr && a.EndDate >= dateStr {
 					if a.Location != "" {
-						di.Location = a.Location
+						dd.Location = a.Location
 					}
-					di.Type = a.Type
-					di.Color = displayColor(a.Type, theme)
-					// Keep trip name from span if activity is part of a trip
-					if a.TripID != "" {
-						if t, ok := tripMap[a.TripID]; ok {
-							di.TripName = t.Name
-						}
+					dd.Type = a.Type
+					dd.Color = displayColor(a.Type, theme)
+					// Build activity label for travel types
+					if a.Type == "travel" {
+						dd.ActivityLabel = a.Title
 					}
 					break
 				}
 			}
 
-			days = append(days, di)
+			wd.Days[dow] = dd
 		}
-		weeks = append(weeks, days)
+
+		// Compute trip bars for this week
+		weekStart := startDate.AddDate(0, 0, week*7).Format("2006-01-02")
+		weekEnd := startDate.AddDate(0, 0, week*7+6).Format("2006-01-02")
+
+		seen := map[string]bool{}
+		for _, span := range tripSpans {
+			if span.endDate < weekStart || span.startDate > weekEnd {
+				continue
+			}
+			if seen[span.name] {
+				continue
+			}
+			seen[span.name] = true
+
+			startCol := 0
+			if span.startDate > weekStart {
+				sd, _ := time.Parse("2006-01-02", span.startDate)
+				ws, _ := time.Parse("2006-01-02", weekStart)
+				startCol = int(sd.Sub(ws).Hours() / 24)
+			}
+			endCol := 6
+			if span.endDate < weekEnd {
+				ed, _ := time.Parse("2006-01-02", span.endDate)
+				ws, _ := time.Parse("2006-01-02", weekStart)
+				endCol = int(ed.Sub(ws).Hours() / 24)
+			}
+
+			label := span.name
+			if span.location != "" {
+				label += " in " + span.location
+			}
+
+			wd.TripBars = append(wd.TripBars, tripBar{
+				Name:     label,
+				Color:    "#0000ff",
+				StartCol: startCol,
+				EndCol:   endCol,
+			})
+		}
+
+		weeks = append(weeks, wd)
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=1800")
-	renderDisplay(w, handle, theme, showHeader, currentLoc, currentTrip, now, weeks)
+	renderFlexDisplay(w, handle, theme, showHeader, currentLoc, currentTrip, now, weeks)
 }
 
 func displayColor(actType, theme string) string {
@@ -208,12 +230,7 @@ func displayColor(actType, theme string) string {
 	}
 }
 
-func renderDisplay(w http.ResponseWriter, handle, theme string, showHeader bool, currentLoc, currentTrip string, now time.Time, weeks [][]displayDay) {
-	todayBg := "#e8e8ff"
-	pastOp := "0.35"
-	if theme == "eink" {
-		todayBg = "#ddd"
-	}
+func renderFlexDisplay(w http.ResponseWriter, handle, theme string, showHeader bool, currentLoc, currentTrip string, now time.Time, weeks []displayWeek) {
 
 	fmt.Fprintf(w, `<!DOCTYPE html>
 <html lang="en">
@@ -224,103 +241,81 @@ func renderDisplay(w http.ResponseWriter, handle, theme string, showHeader bool,
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: sans-serif; background: #fff; color: #000; width: 800px; overflow: hidden; }
-.header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 2px solid #000; }
-.title { font-size: 18px; font-weight: 700; }
-.now { text-align: right; }
-.now-loc { font-size: 16px; font-weight: 700; }
-.now-trip { font-size: 12px; color: #666; }
-.cal { width: 100%%; border-collapse: collapse; table-layout: fixed; }
-.cal th { font-size: 13px; color: #666; padding: 4px 2px; text-align: center; font-weight: 600; text-transform: uppercase; }
-.cal td { border: 1px solid #ccc; vertical-align: top; padding: 2px 4px; height: 68px; }
-.cal td.today { background: %s; outline: 2px solid #0000ff; outline-offset: -2px; }
-.cal td.past { opacity: %s; }
-.day-num { font-size: 15px; font-weight: 700; }
-.month-lbl { font-size: 11px; color: #666; }
-.loc { font-size: 13px; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bar { height: 5px; border-radius: 2px; margin-top: 2px; }
-.trip-bg { border-left: none !important; border-right: none !important; }
-.trip-start { border-left: 1px solid #ccc !important; }
-.trip-end { border-right: 1px solid #ccc !important; }
-.trip-label { font-size: 11px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.header { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; background: #000; color: #fff; }
+.title { font-size: 16px; font-weight: 700; }
+.now-loc { font-size: 14px; font-weight: 700; }
+.dow-row { display: flex; background: #000; color: #fff; }
+.dow-cell { flex: 1; text-align: center; padding: 4px 0; font-size: 13px; font-weight: 600; }
+.week { position: relative; display: flex; border-bottom: 1px solid #ccc; min-height: 68px; }
+.day { flex: 1; border-right: 1px solid #ddd; padding: 3px 5px; min-height: 68px; display: flex; flex-direction: column; }
+.day:last-child { border-right: none; }
+.day.past { opacity: 0.35; }
+.day-num { font-size: 16px; font-weight: 700; text-align: right; }
+.day-num.today { display: inline-block; background: #ff0000; color: #fff; border-radius: 50%%; width: 24px; height: 24px; line-height: 24px; text-align: center; float: right; }
+.month-lbl { font-size: 11px; color: #666; float: left; line-height: 24px; }
+.trip-bar { position: absolute; height: 22px; background: #0000ff; color: #fff; font-size: 13px; font-weight: 700; line-height: 22px; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; z-index: 1; }
+.act-label { font-size: 11px; color: #000; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.loc { font-size: 11px; color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 </head>
-<body>`, handle, todayBg, pastOp)
+<body>`, handle)
 
 	if showHeader {
-		fmt.Fprintf(w, `<div class="header">
-  <div class="title">Where is %s?</div>
-  <div class="now">
-    <div class="now-loc">%s</div>`, handle, currentLoc)
-		if currentTrip != "" {
-			fmt.Fprintf(w, `<div class="now-trip">%s</div>`, currentTrip)
-		}
-		fmt.Fprint(w, `</div></div>`)
+		fmt.Fprintf(w, `<div class="header"><div class="title">%s</div><div class="now-loc">%s</div></div>`, handle, currentLoc)
 	}
 
-	fmt.Fprint(w, `<table class="cal">
-<thead><tr>
-  <th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th>
-</tr></thead>
-<tbody>`)
+	// Day-of-week header
+	fmt.Fprint(w, `<div class="dow-row">`)
+	for _, d := range []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"} {
+		fmt.Fprintf(w, `<div class="dow-cell">%s</div>`, d)
+	}
+	fmt.Fprint(w, `</div>`)
+
+	dayWidth := 100.0 / 7.0
 
 	for _, week := range weeks {
-		fmt.Fprint(w, "<tr>")
-		for _, d := range week {
-			cls := ""
-			if d.IsToday {
-				cls = " today"
-			} else if d.IsPast {
-				cls = " past"
-			}
+		fmt.Fprint(w, `<div class="week">`)
 
-			// Build cell classes and style
-			if d.TripColor != "" {
-				cls += " trip-bg"
-				if d.TripStart {
-					cls += " trip-start"
-				}
-				if d.TripEnd {
-					cls += " trip-end"
-				}
-			}
+		// Trip bars (absolutely positioned)
+		for _, bar := range week.TripBars {
+			left := float64(bar.StartCol) * dayWidth
+			width := float64(bar.EndCol-bar.StartCol+1) * dayWidth
+			// Position below the day numbers
+			fmt.Fprintf(w, `<div class="trip-bar" style="left:%.4f%%;width:%.4f%%;top:28px;background:%s">%s</div>`,
+				left, width, bar.Color, bar.Name)
+		}
 
-			style := ""
-			if d.TripColor != "" {
-				style = fmt.Sprintf(` style="background:%s22"`, d.TripColor) // 22 = ~13% opacity hex
+		// Day cells
+		for _, d := range week.Days {
+			cls := "day"
+			if d.IsPast {
+				cls += " past"
 			}
-			if d.IsToday && d.TripColor != "" {
-				style = fmt.Sprintf(` style="background:%s44"`, d.TripColor) // slightly stronger for today
-			}
+			fmt.Fprintf(w, `<div class="%s">`, cls)
 
-			fmt.Fprintf(w, `<td class="%s"%s>`, cls, style)
-
+			// Day number
 			if d.Day == 1 {
-				fmt.Fprintf(w, `<div class="day-num"><span class="month-lbl">%s </span>%d</div>`, d.Month, d.Day)
+				fmt.Fprintf(w, `<span class="month-lbl">%s</span>`, d.Month)
+			}
+			if d.IsToday {
+				fmt.Fprintf(w, `<div class="day-num today">%d</div>`, d.Day)
 			} else {
 				fmt.Fprintf(w, `<div class="day-num">%d</div>`, d.Day)
 			}
 
-			// Trip label on first day of bar
-			if d.TripStart && d.TripName != "" {
-				fmt.Fprintf(w, `<div class="trip-label" style="color:%s">%s</div>`, d.TripColor, d.TripName)
+			// Activity label (below trip bar area)
+			if d.ActivityLabel != "" {
+				fmt.Fprintf(w, `<div class="act-label" style="margin-top:26px">%s</div>`, d.ActivityLabel)
+			} else if d.Location != "" && d.TripName == "" {
+				// Show location only for non-trip activities
+				fmt.Fprintf(w, `<div class="loc" style="margin-top:26px">%s</div>`, d.Location)
 			}
 
-			// Activity-specific location (overrides trip location)
-			if d.Location != "" && (!d.TripStart || d.Location != d.TripName) {
-				fmt.Fprintf(w, `<div class="loc">%s</div>`, d.Location)
-			}
-
-			// Activity type bar for non-trip activities
-			if d.Color != "" && d.TripColor == "" {
-				fmt.Fprintf(w, `<div class="bar" style="background:%s"></div>`, d.Color)
-			}
-
-			fmt.Fprint(w, "</td>")
+			fmt.Fprint(w, `</div>`)
 		}
-		fmt.Fprint(w, "</tr>")
+
+		fmt.Fprint(w, `</div>`)
 	}
 
-	fmt.Fprint(w, `</tbody></table>
-</body>
-</html>`)
+	fmt.Fprint(w, `</body></html>`)
 }
