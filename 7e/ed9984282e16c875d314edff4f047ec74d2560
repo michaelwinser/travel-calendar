@@ -1,0 +1,38 @@
+internal/app/parser_test.go
+  c4b81f6d41e4e10c 151,193-198
+internal/app/parser.go
+  c4b81f6d41e4e10c 310-313,315,328-333,342,353,355-364,367-372,374-375,378-386,389,391-410,589-597,649,652-657,659-670
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "7eed9984282e16c875d314edff4f047ec74d2560",
+  "prompts": {
+    "c4b81f6d41e4e10c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1068418b-2d23-4075-8b99-24178f7ad113",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 127,
+      "total_deletions": 102,
+      "accepted_lines": 101,
+      "overriden_lines": 0
+    },
+    "db0ccec4fd040162": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f91b5184-5d36-475e-a387-fb6a0cd69653",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 364,
+      "overriden_lines": 0
+    }
+  }
+}
