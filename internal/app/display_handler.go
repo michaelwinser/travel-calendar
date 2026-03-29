@@ -58,17 +58,65 @@ func (s *ActivityServer) HandleDisplay(w http.ResponseWriter, r *http.Request) {
 
 	tripMap := s.buildTripMap(p.UserID)
 
+	// Compute trip spans: tripID → {startDate, endDate, name, color, dominantLocation}
+	type tripSpan struct {
+		name      string
+		color     string
+		startDate string
+		endDate   string
+		location  string // dominant location
+	}
+	tripSpans := map[string]*tripSpan{}
+	for _, a := range activities {
+		if a.TripID == "" {
+			continue
+		}
+		t, ok := tripMap[a.TripID]
+		if !ok {
+			continue
+		}
+		span, exists := tripSpans[a.TripID]
+		if !exists {
+			span = &tripSpan{
+				name:      t.Name,
+				color:     t.Color,
+				startDate: a.StartDate,
+				endDate:   a.EndDate,
+			}
+			tripSpans[a.TripID] = span
+		}
+		if a.StartDate < span.startDate {
+			span.startDate = a.StartDate
+		}
+		if a.EndDate > span.endDate {
+			span.endDate = a.EndDate
+		}
+		if a.Location != "" {
+			span.location = a.Location // last one wins; good enough for display
+		}
+	}
+
+	// Build a lookup: date → tripSpan (for days within a trip but without an activity)
+	tripByDate := map[string]*tripSpan{}
+	for _, span := range tripSpans {
+		sd, _ := time.Parse("2006-01-02", span.startDate)
+		ed, _ := time.Parse("2006-01-02", span.endDate)
+		for d := sd; !d.After(ed); d = d.AddDate(0, 0, 1) {
+			tripByDate[d.Format("2006-01-02")] = span
+		}
+	}
+
 	// Current location
 	currentLoc := "Home"
 	currentTrip := ""
+	if span, ok := tripByDate[today]; ok {
+		currentLoc = span.location
+		currentTrip = span.name
+	}
+	// Override with specific activity location if available
 	for _, a := range activities {
-		if a.StartDate <= today && a.EndDate >= today {
-			if a.Location != "" {
-				currentLoc = a.Location
-			}
-			if t, ok := tripMap[a.TripID]; ok {
-				currentTrip = t.Name
-			}
+		if a.StartDate <= today && a.EndDate >= today && a.Location != "" {
+			currentLoc = a.Location
 			break
 		}
 	}
@@ -91,6 +139,16 @@ func (s *ActivityServer) HandleDisplay(w http.ResponseWriter, r *http.Request) {
 				IsPast:  dateStr < today,
 			}
 
+			// First: check if this date falls within a trip
+			if span, ok := tripByDate[dateStr]; ok {
+				di.TripName = span.name
+				di.Color = displayColor("travel", theme)
+				if span.location != "" {
+					di.Location = span.location
+				}
+			}
+
+			// Then: overlay specific activity data (more specific than trip)
 			for _, a := range activities {
 				if a.StartDate <= dateStr && a.EndDate >= dateStr {
 					if a.Location != "" {
@@ -98,8 +156,11 @@ func (s *ActivityServer) HandleDisplay(w http.ResponseWriter, r *http.Request) {
 					}
 					di.Type = a.Type
 					di.Color = displayColor(a.Type, theme)
-					if t, ok := tripMap[a.TripID]; ok {
-						di.TripName = t.Name
+					// Keep trip name from span if activity is part of a trip
+					if a.TripID != "" {
+						if t, ok := tripMap[a.TripID]; ok {
+							di.TripName = t.Name
+						}
 					}
 					break
 				}
