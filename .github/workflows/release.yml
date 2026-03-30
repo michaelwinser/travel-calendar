@@ -1,0 +1,172 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v2.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-cli:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            suffix: windows-amd64
+            ext: .exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        run: corepack enable && corepack prepare pnpm@latest --activate
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Build CLI
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: go build -ldflags="-s -w" -o travel-${{ matrix.suffix }}${{ matrix.ext }} .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: travel-${{ matrix.suffix }}
+          path: travel-${{ matrix.suffix }}${{ matrix.ext }}
+
+  build-desktop:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            suffix: desktop-darwin-arm64
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            suffix: desktop-windows-amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            suffix: desktop-linux-amd64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        run: corepack enable && corepack prepare pnpm@latest --activate
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install Linux desktop dependencies
+        if: matrix.goos == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Copy frontend to desktop
+        run: |
+          mkdir -p cmd/desktop/dist
+          cp -r frontend/dist/* cmd/desktop/dist/
+
+      - name: Build desktop app
+        working-directory: cmd/desktop
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: wails build -tags desktop -skipbindings
+
+      - name: Package artifact
+        run: |
+          if [ "${{ matrix.goos }}" = "darwin" ]; then
+            # macOS produces a .app bundle
+            tar -czf TravelCalendar-${{ matrix.suffix }}.tar.gz -C cmd/desktop/build/bin TravelCalendar.app 2>/dev/null || \
+            tar -czf TravelCalendar-${{ matrix.suffix }}.tar.gz -C cmd/desktop/build/bin TravelCalendar
+          elif [ "${{ matrix.goos }}" = "windows" ]; then
+            cp cmd/desktop/build/bin/TravelCalendar.exe TravelCalendar-${{ matrix.suffix }}.exe
+          else
+            cp cmd/desktop/build/bin/TravelCalendar TravelCalendar-${{ matrix.suffix }}
+          fi
+        shell: bash
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.suffix }}
+          path: TravelCalendar-${{ matrix.suffix }}*
+
+  release:
+    needs: [build-cli, build-desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git tag -l 'v2.*' --sort=-v:refname | sed -n '2p')
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="${PREV_TAG}..HEAD"
+          else
+            RANGE="HEAD"
+          fi
+          CHANGELOG=$(git log "$RANGE" --pretty=format:"- %s" --no-merges)
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body: |
+            ## Changes
+
+            ${{ steps.changelog.outputs.changelog }}
+          files: artifacts/*
