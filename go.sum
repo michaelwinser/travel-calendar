@@ -117,6 +117,8 @@ github.com/michaelwinser/appbase v0.1.3 h1:mAbSm19H2EroOKn+rQHG3tw2Sq562lvhnOzlg
 github.com/michaelwinser/appbase v0.1.3/go.mod h1:ERvrqxyU6XEXsWGvIyak+nc+I3LWYuYdoK4Qc9DDJPI=
 github.com/michaelwinser/appbase v0.1.5 h1:6ZtuyIRRqTXx3R70xUg8+ZA2O/zMgn1iivJrHKYdvPk=
 github.com/michaelwinser/appbase v0.1.5/go.mod h1:ERvrqxyU6XEXsWGvIyak+nc+I3LWYuYdoK4Qc9DDJPI=
+github.com/michaelwinser/appbase v0.1.6-0.20260330004913-b0e014fe5a13 h1:UwYh1xFvDoLRv7YfrzijK9kg1uPTbl2aUqT733GzTuQ=
+github.com/michaelwinser/appbase v0.1.6-0.20260330004913-b0e014fe5a13/go.mod h1:ERvrqxyU6XEXsWGvIyak+nc+I3LWYuYdoK4Qc9DDJPI=
 github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 h1:RWengNIwukTxcDr9M+97sNutRR1RKhG96O6jWumTTnw=
 github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826/go.mod h1:TaXosZuwdSHYgviHp1DAtfrULt5eUgsSMsZf+YrPgl8=
 github.com/ncruces/go-strftime v1.0.0 h1:HMFp8mLCTPp341M/ZnA4qaf7ZlsbTc+miZjCLOFAw7w=

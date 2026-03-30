@@ -6,7 +6,7 @@ require (
 	github.com/getkin/kin-openapi v0.134.0
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/google/uuid v1.6.0
-	github.com/michaelwinser/appbase v0.1.5
+	github.com/michaelwinser/appbase v0.1.6-0.20260330004913-b0e014fe5a13
 	github.com/oapi-codegen/runtime v1.3.0
 	github.com/spf13/cobra v1.10.2
 	github.com/wailsapp/wails/v2 v2.11.0

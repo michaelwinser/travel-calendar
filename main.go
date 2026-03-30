@@ -1516,6 +1516,7 @@ func showActivityCmd(cmd *cobra.Command, args []string) error {
 // --- Share link CLI commands ---
 
 func createShareLink(cmd *cobra.Command, args []string) error {
+	warnLocalSharing()
 	client, cleanup, err := apiClient(cmd)
 	if err != nil {
 		return err
@@ -1672,6 +1673,7 @@ func deleteShareLink(cmd *cobra.Command, args []string) error {
 // --- User-to-user share CLI commands ---
 
 func shareAdd(cmd *cobra.Command, args []string) error {
+	warnLocalSharing()
 	client, cleanup, err := apiClient(cmd)
 	if err != nil {
 		return err
@@ -3159,6 +3161,15 @@ func showInfo(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Override: DEV_USER_EMAIL=%s\n", email)
 	}
 	return nil
+}
+
+// warnLocalSharing prints a warning when sharing commands are used in local mode.
+func warnLocalSharing() {
+	if appcli.IsLocalMode {
+		fmt.Fprintln(os.Stderr, "Warning: sharing features are not meaningful in local single-user mode.")
+		fmt.Fprintln(os.Stderr, "Use --server to connect to a multi-user server.")
+		fmt.Fprintln(os.Stderr, "")
+	}
 }
 
 // resolveTripForCLI finds an existing trip by name or creates one.
