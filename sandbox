@@ -50,17 +50,6 @@ case "$1" in
         ;;
 esac
 
-# Resolve appbase sibling directory (needed until #142 removes this dependency)
-APPBASE_DIR=""
-if [ -d "$PROJECT_DIR/../appbase" ]; then
-    APPBASE_DIR="$(cd "$PROJECT_DIR/../appbase" && pwd)"
-fi
-
-APPBASE_FLAG=""
-if [ -n "$APPBASE_DIR" ]; then
-    APPBASE_FLAG="--read $APPBASE_DIR"
-fi
-
 GO_FLAG=""
 if [ -n "$GO_BIN_DIR" ] && [ "$GO_BIN_DIR" != "/usr/bin" ]; then
     GO_FLAG="--read $GO_BIN_DIR"
@@ -80,7 +69,6 @@ exec nono run \
     --allow "$HOME/go" \
     --read "$HOME/sdk" \
     --allow-bind 3001 \
-    $APPBASE_FLAG \
     $GO_FLAG \
     $EXEC_FLAG \
     -- "$@"
