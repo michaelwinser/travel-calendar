@@ -1,0 +1,27 @@
+CLAUDE.md
+  c4b81f6d41e4e10c 116
+main.go
+  c4b81f6d41e4e10c 3155
+internal/app/usecases_test.go
+  c4b81f6d41e4e10c 17,20,49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "a6d25d18a912371379e923489513dbaf5f9e507f",
+  "prompts": {
+    "c4b81f6d41e4e10c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1068418b-2d23-4075-8b99-24178f7ad113",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 5,
+      "total_deletions": 19,
+      "accepted_lines": 5,
+      "overriden_lines": 0
+    }
+  }
+}
