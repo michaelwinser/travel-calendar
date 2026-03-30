@@ -16,9 +16,27 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install appbase CLI
-        run: go install github.com/michaelwinser/appbase/cmd/appbase@latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
+      - name: Install pnpm
+        run: corepack enable && corepack prepare pnpm@latest --activate
+
+      # Frontend must build first — Go embeds frontend/dist/*
+      - name: Frontend install
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Frontend type check
+        working-directory: frontend
+        run: pnpm check
+
+      - name: Frontend build
+        working-directory: frontend
+        run: pnpm build
+
+      # Go checks (frontend/dist/ now exists for //go:embed)
       - name: Go vet
         run: go vet ./...
 
@@ -34,24 +52,9 @@ jobs:
         run: go test -v -count=1 ./...
 
       - name: Lint API (codegen drift)
-        run: appbase lint-api 2>/dev/null || true
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install pnpm
-        run: corepack enable && corepack prepare pnpm@latest --activate
-
-      - name: Frontend type check
-        working-directory: frontend
         run: |
-          pnpm install --frozen-lockfile
-          pnpm check
-
-      - name: Frontend build
-        working-directory: frontend
-        run: pnpm build
+          go install github.com/michaelwinser/appbase/cmd/appbase@latest
+          appbase lint-api 2>/dev/null || true
 
       - name: E2E smoke test
         run: tests/e2e/smoke-test.sh

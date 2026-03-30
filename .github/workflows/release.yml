@@ -107,7 +107,7 @@ jobs:
 
       - name: Copy frontend to desktop
         run: |
-          mkdir -p cmd/desktop/dist
+          mkdir -p cmd/desktop/dist cmd/desktop/frontend
           cp -r frontend/dist/* cmd/desktop/dist/
 
       - name: Build desktop app
