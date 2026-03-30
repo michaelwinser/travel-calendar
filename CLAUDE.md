@@ -138,6 +138,12 @@ The sandbox extends the `claude-code` profile with:
 - `~/go` (Go module cache) — read+write
 - Port 3001 binding (dev server)
 
+**Deploy runs outside the sandbox** — it needs gcloud credentials which are correctly blocked by nono's sensitive path policy:
+```bash
+# Deploy directly (not via ./sandbox)
+./dev deploy
+```
+
 Two audit layers are active:
 - **nono audit**: records every sandboxed session, capabilities granted, and commands run (`nono audit list`)
 - **Claude Code tool audit**: `.claude/hooks/audit-tool.sh` logs every tool call to `.claude/audit.jsonl`
