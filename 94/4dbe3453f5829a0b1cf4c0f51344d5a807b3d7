@@ -1,0 +1,23 @@
+dev
+  c4b81f6d41e4e10c 8-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "944dbe3453f5829a0b1cf4c0f51344d5a807b3d7",
+  "prompts": {
+    "c4b81f6d41e4e10c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1068418b-2d23-4075-8b99-24178f7ad113",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Michael Winser <github.com@public.winser.com>",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 14,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
