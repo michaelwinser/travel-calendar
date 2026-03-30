@@ -113,7 +113,7 @@ Identity: `./travel info` shows the current mode, user identity, and database pa
 
 Environment overrides:
 - `DEV_USER_EMAIL` — override the local-mode user identity
-- `TRAVEL_TEST_MODE=true` — accept `X-Test-User` header for API test auth (never in production)
+- `APPBASE_TEST_MODE=true` — accept `X-Test-User` header for API test auth (appbase feature, never in production)
 
 Config: `app.yaml` (loaded by appbase). Env var overrides still work (`STORE_TYPE`, `PORT`, etc).
 

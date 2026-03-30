@@ -65,11 +65,6 @@ func setup() error {
 		return err
 	}
 
-	// Auto-migrate: add any missing columns to existing tables.
-	if err := travelapp.MigrateSchema(app.DB()); err != nil {
-		return fmt.Errorf("schema migration: %w", err)
-	}
-
 	activities, err := travelapp.NewActivityStore(app.DB())
 	if err != nil {
 		return err
@@ -118,8 +113,6 @@ func setup() error {
 	if err != nil {
 		return err
 	}
-
-	// Test auth: deferred to appbase (see appbase feedback #12)
 
 	// Register API routes
 	activityServer = travelapp.NewActivityServer(activities, trips, parseHistory, shareLinks, shares, publicProfiles, places)
@@ -3159,7 +3152,7 @@ func showInfo(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("App:      %s\n", appName)
-	if os.Getenv("TRAVEL_TEST_MODE") == "true" {
+	if os.Getenv("APPBASE_TEST_MODE") == "true" {
 		fmt.Println("Test:     ENABLED (X-Test-User header accepted)")
 	}
 	if email := os.Getenv("DEV_USER_EMAIL"); email != "" {

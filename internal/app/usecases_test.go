@@ -4,22 +4,20 @@ import (
 	"net/http"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/michaelwinser/appbase"
-	"github.com/michaelwinser/appbase/auth"
 	"github.com/michaelwinser/travel-calendar/api"
 	harness "github.com/michaelwinser/appbase/testing"
 )
-
-var testSessions *auth.SessionStore
 
 func setupTestApp(t *testing.T) http.Handler {
 	t.Helper()
 	os.Setenv("STORE_TYPE", "sqlite")
 	os.Setenv("SQLITE_DB_PATH", ":memory:")
+	os.Setenv("APPBASE_TEST_MODE", "true")
 	t.Cleanup(func() {
 		os.Unsetenv("SQLITE_DB_PATH")
+		os.Unsetenv("APPBASE_TEST_MODE")
 	})
 
 	a, err := appbase.New(appbase.Config{Name: "travel-calendar", Quiet: true})
@@ -41,7 +39,6 @@ func setupTestApp(t *testing.T) http.Handler {
 	activityServer := &ActivityServer{store: store, parseHistory: ph}
 	api.HandlerFromMux(activityServer, a.Server().Router())
 
-	testSessions = a.Sessions()
 	return a.Server().Router()
 }
 
@@ -49,11 +46,7 @@ func TestUseCases(t *testing.T) {
 	h := harness.New(t, setupTestApp)
 
 	login := func(c *harness.Client) {
-		session, err := testSessions.Create("test@example.com", "test@example.com", 1*time.Hour)
-		if err != nil {
-			t.Fatal(err)
-		}
-		c.SetCookie(auth.CookieName, session.ID)
+		c.SetHeader("X-Test-User", "test@example.com")
 	}
 
 	// --- Authentication ---
