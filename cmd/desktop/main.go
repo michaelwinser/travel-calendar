@@ -53,8 +53,24 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	shareLinks, err := travelapp.NewShareLinkStore(app.DB())
+	if err != nil {
+		log.Fatal(err)
+	}
+	shares, err := travelapp.NewShareStore(app.DB())
+	if err != nil {
+		log.Fatal(err)
+	}
+	publicProfiles, err := travelapp.NewPublicProfileStore(app.DB())
+	if err != nil {
+		log.Fatal(err)
+	}
+	places, err := travelapp.NewPlaceStore(app.DB())
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	activityServer := travelapp.NewActivityServer(activities, trips, parseHistory)
+	activityServer := travelapp.NewActivityServer(activities, trips, parseHistory, shareLinks, shares, publicProfiles, places)
 	api.HandlerFromMux(activityServer, app.Server().Router())
 
 	wailsApp := &App{}
