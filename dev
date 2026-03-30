@@ -81,6 +81,14 @@ dev_ci() {
 }
 
 dev_deploy() {
+    # Sandbox gate: deploy needs cloud credentials that the sandbox correctly blocks
+    if [ -n "$NONO_CAP_FILE" ]; then
+        echo "Error: deploy cannot run inside a nono sandbox."
+        echo "The sandbox blocks cloud credentials (~/.config/gcloud) by design."
+        echo "Run ./dev deploy directly, outside the sandbox."
+        return 1
+    fi
+
     # Deploy gate: CI must pass before deploying
     echo "Running CI checks before deploy..."
     dev_ci || { echo "CI failed. Fix errors before deploying."; return 1; }
