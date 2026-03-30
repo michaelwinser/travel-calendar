@@ -72,7 +72,7 @@ jobs:
             goos: windows
             goarch: amd64
             suffix: desktop-windows-amd64
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             goos: linux
             goarch: amd64
             suffix: desktop-linux-amd64
@@ -98,7 +98,7 @@ jobs:
         if: matrix.goos == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
 
       - name: Build frontend
         working-directory: frontend
@@ -107,6 +107,7 @@ jobs:
           pnpm build
 
       - name: Copy frontend to desktop
+        shell: bash
         run: |
           mkdir -p cmd/desktop/dist cmd/desktop/frontend
           cp -r frontend/dist/* cmd/desktop/dist/
@@ -120,10 +121,15 @@ jobs:
 
       - name: Package artifact
         run: |
+          echo "Build output:"
+          ls -la cmd/desktop/build/bin/ || true
           if [ "${{ matrix.goos }}" = "darwin" ]; then
-            # macOS produces a .app bundle
-            tar -czf TravelCalendar-${{ matrix.suffix }}.tar.gz -C cmd/desktop/build/bin TravelCalendar.app 2>/dev/null || \
-            tar -czf TravelCalendar-${{ matrix.suffix }}.tar.gz -C cmd/desktop/build/bin TravelCalendar
+            # macOS: Wails produces .app bundle or bare binary
+            if [ -d "cmd/desktop/build/bin/TravelCalendar.app" ]; then
+              tar -czf TravelCalendar-${{ matrix.suffix }}.tar.gz -C cmd/desktop/build/bin TravelCalendar.app
+            else
+              tar -czf TravelCalendar-${{ matrix.suffix }}.tar.gz -C cmd/desktop/build/bin .
+            fi
           elif [ "${{ matrix.goos }}" = "windows" ]; then
             cp cmd/desktop/build/bin/TravelCalendar.exe TravelCalendar-${{ matrix.suffix }}.exe
           else
